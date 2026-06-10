@@ -27,9 +27,13 @@ fn candidate_paths() -> Vec<&'static str> {
     ]
 }
 
-/// Install the first available Japanese font as a fallback for both
-/// proportional and monospace families. Logs to stderr and continues if
-/// none is found (the UI still works, kanji will show as boxes).
+/// Install the first available Japanese font.
+///
+/// The Japanese font is made the *primary* proportional font (its Latin
+/// glyphs are used too). When CJK glyphs come from a fallback font, egui
+/// lays each glyph out with its own font's ascent, so kana/kanji sit
+/// visibly above the Latin baseline and get clipped in text inputs.
+/// Driving the whole row from one font's metrics fixes both.
 pub fn install_japanese_fonts(ctx: &egui::Context) {
     let Some((path, bytes)) = candidate_paths()
         .into_iter()
@@ -43,13 +47,18 @@ pub fn install_japanese_fonts(ctx: &egui::Context) {
     fonts
         .font_data
         .insert("japanese".to_owned(), Arc::new(egui::FontData::from_owned(bytes)));
-    for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
-        fonts
-            .families
-            .entry(family)
-            .or_default()
-            .push("japanese".to_owned());
-    }
+    fonts
+        .families
+        .entry(egui::FontFamily::Proportional)
+        .or_default()
+        .insert(0, "japanese".to_owned());
+    // Monospace keeps its default first (fixed-width Latin) with Japanese
+    // as fallback; the app renders no Japanese in monospace.
+    fonts
+        .families
+        .entry(egui::FontFamily::Monospace)
+        .or_default()
+        .push("japanese".to_owned());
     ctx.set_fonts(fonts);
     eprintln!("loaded Japanese font: {path}");
 }
