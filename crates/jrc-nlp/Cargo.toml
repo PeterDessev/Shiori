@@ -9,3 +9,4 @@ authors.workspace = true
 [dependencies]
 jrc-core.workspace = true
 thiserror.workspace = true
+lindera = { version = "3.0.7", features = ["embed-ipadic"] }
