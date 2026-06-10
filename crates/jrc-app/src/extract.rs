@@ -4,23 +4,89 @@
 
 use std::path::Path;
 
+use jrc_core::DocumentMeta;
+
 use crate::{AppError, Result};
+
+/// Text plus whatever descriptive metadata the format provided.
+#[derive(Debug, Clone, Default)]
+pub struct ExtractedDoc {
+    pub text: String,
+    /// Title/author/… with empty strings where the format had nothing.
+    pub meta: DocumentMeta,
+}
 
 /// Extract readable Japanese text from a file, chosen by extension.
 pub fn extract_text(path: &Path) -> Result<String> {
+    Ok(extract_document(path)?.text)
+}
+
+/// Extract text and metadata from a file, chosen by extension.
+pub fn extract_document(path: &Path) -> Result<ExtractedDoc> {
     let ext = path
         .extension()
         .map(|e| e.to_string_lossy().to_lowercase())
         .unwrap_or_default();
     match ext.as_str() {
-        "txt" | "md" | "text" | "" => Ok(decode_bytes(&std::fs::read(path)?)),
-        "html" | "htm" | "xhtml" => Ok(strip_html(&decode_bytes(&std::fs::read(path)?))),
-        "epub" => epub_text(path),
-        "pdf" => pdf_text(path),
+        "txt" | "md" | "text" | "" => {
+            let text = decode_bytes(&std::fs::read(path)?);
+            let meta = txt_metadata(&text);
+            Ok(ExtractedDoc { text, meta })
+        }
+        "html" | "htm" | "xhtml" => {
+            let html = decode_bytes(&std::fs::read(path)?);
+            let meta = DocumentMeta {
+                title: html_title(&html).unwrap_or_default(),
+                ..Default::default()
+            };
+            Ok(ExtractedDoc {
+                text: strip_html(&html),
+                meta,
+            })
+        }
+        "epub" => epub_document(path),
+        // PDF metadata is rarely populated and often mojibake; the title
+        // falls back to the filename at the import layer.
+        "pdf" => Ok(ExtractedDoc {
+            text: pdf_text(path)?,
+            meta: DocumentMeta::default(),
+        }),
         other => Err(AppError::Invalid(format!(
             "unsupported file type .{other} (supported: txt, md, html, epub, pdf)"
         ))),
     }
+}
+
+/// Aozora Bunko plain-text convention: line 1 is the title, line 2 the
+/// author, then a blank line before the body. Only trust it when the
+/// lines are short enough to plausibly be a heading — this is a prefill
+/// suggestion, not gospel; the import form remains editable.
+fn txt_metadata(text: &str) -> DocumentMeta {
+    let mut lines = text.lines().map(str::trim).filter(|l| !l.is_empty());
+    let (first, second) = (lines.next(), lines.next());
+    let mut meta = DocumentMeta::default();
+    if let Some(first) = first {
+        if first.chars().count() <= 40 && !first.ends_with('。') {
+            meta.title = first.to_string();
+            if let Some(second) = second {
+                if second.chars().count() <= 20 && !second.ends_with('。') {
+                    meta.author = second.to_string();
+                }
+            }
+        }
+    }
+    meta
+}
+
+/// Contents of the first `<title>` element, entity-decoded.
+fn html_title(html: &str) -> Option<String> {
+    let lower = html.to_lowercase();
+    let start = lower.find("<title")?;
+    let open_end = start + lower[start..].find('>')?;
+    let close = open_end + lower[open_end..].find("</title")?;
+    let raw = &html[open_end + 1..close];
+    let title = strip_html(raw).trim().to_string();
+    (!title.is_empty()).then_some(title)
 }
 
 /// Decode text bytes: UTF-8 (with or without BOM) when valid, otherwise
@@ -177,10 +243,24 @@ fn decode_entity(s: &str) -> (String, usize) {
     }
 }
 
-/// Concatenate the spine documents of an EPUB, stripped to text.
-fn epub_text(path: &Path) -> Result<String> {
+/// Concatenate the spine documents of an EPUB, stripped to text, plus its
+/// Dublin Core metadata.
+fn epub_document(path: &Path) -> Result<ExtractedDoc> {
     let mut doc = epub::doc::EpubDoc::new(path)
         .map_err(|e| AppError::Invalid(format!("could not open epub: {e}")))?;
+
+    let dc = |name: &str| {
+        doc.mdata(name)
+            .map(|item| item.value.trim().to_string())
+            .unwrap_or_default()
+    };
+    let meta = DocumentMeta {
+        title: dc("title"),
+        author: dc("creator"),
+        publisher: dc("publisher"),
+        published: dc("date"),
+    };
+
     let idrefs: Vec<String> = doc.spine.iter().map(|item| item.idref.clone()).collect();
     let mut parts = Vec::new();
     for idref in idrefs {
@@ -196,7 +276,10 @@ fn epub_text(path: &Path) -> Result<String> {
             "no readable text found in the epub".into(),
         ));
     }
-    Ok(parts.join("\n\n"))
+    Ok(ExtractedDoc {
+        text: parts.join("\n\n"),
+        meta,
+    })
 }
 
 /// Extract text from a PDF. pdf-extract can panic on malformed files, so
@@ -287,10 +370,11 @@ mod tests {
         .unwrap();
         z.start_file("content.opf", opts).unwrap();
         z.write_all(
-            br#"<?xml version="1.0"?>
+            r#"<?xml version="1.0"?>
             <package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="id">
               <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-                <dc:title>Test</dc:title><dc:identifier id="id">x</dc:identifier>
+                <dc:title>テスト本</dc:title><dc:identifier id="id">x</dc:identifier>
+                <dc:creator>テスト著者</dc:creator>
                 <dc:language>ja</dc:language>
               </metadata>
               <manifest>
@@ -298,7 +382,8 @@ mod tests {
                 <item id="c2" href="c2.xhtml" media-type="application/xhtml+xml"/>
               </manifest>
               <spine><itemref idref="c1"/><itemref idref="c2"/></spine>
-            </package>"#,
+            </package>"#
+                .as_bytes(),
         )
         .unwrap();
         z.start_file("c1.xhtml", opts).unwrap();
@@ -312,10 +397,36 @@ mod tests {
             .unwrap();
         z.finish().unwrap();
 
-        let text = extract_text(&path).unwrap();
-        let first = text.find("第一章。猫がいた。").expect("chapter 1 with ruby stripped");
-        let second = text.find("第二章。犬もいた。").expect("chapter 2");
+        let doc = extract_document(&path).unwrap();
+        let first = doc
+            .text
+            .find("第一章。猫がいた。")
+            .expect("chapter 1 with ruby stripped");
+        let second = doc.text.find("第二章。犬もいた。").expect("chapter 2");
         assert!(first < second, "spine order preserved");
+        assert_eq!(doc.meta.title, "テスト本");
+        assert_eq!(doc.meta.author, "テスト著者");
         std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn aozora_txt_heading_becomes_metadata() {
+        let text = "走れメロス\n太宰治\n\nメロスは激怒した。必ず、かの邪智暴虐の王を除かなければならぬと決意した。";
+        let meta = txt_metadata(text);
+        assert_eq!(meta.title, "走れメロス");
+        assert_eq!(meta.author, "太宰治");
+
+        // Ordinary prose must not be mistaken for a heading.
+        let prose = "メロスは激怒した。\n必ず、かの邪智暴虐の王を除かなければならぬと決意した。";
+        let meta = txt_metadata(prose);
+        assert_eq!(meta.title, "");
+        assert_eq!(meta.author, "");
+    }
+
+    #[test]
+    fn html_title_is_extracted() {
+        let html = "<html><head><title>太宰治 走れメロス</title></head><body>x</body></html>";
+        assert_eq!(html_title(html).as_deref(), Some("太宰治 走れメロス"));
+        assert_eq!(html_title("<html><body>no title</body></html>"), None);
     }
 }

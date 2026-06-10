@@ -5,7 +5,7 @@ use rusqlite::Connection;
 use crate::Result;
 
 /// Current schema version. Bump when adding migration steps.
-const SCHEMA_VERSION: i64 = 1;
+const SCHEMA_VERSION: i64 = 2;
 
 const SCHEMA_V1: &str = r#"
 CREATE TABLE IF NOT EXISTS meta (
@@ -16,6 +16,9 @@ CREATE TABLE IF NOT EXISTS meta (
 CREATE TABLE IF NOT EXISTS documents (
     id           INTEGER PRIMARY KEY,
     title        TEXT NOT NULL,
+    author       TEXT NOT NULL DEFAULT '',
+    publisher    TEXT NOT NULL DEFAULT '',
+    published    TEXT NOT NULL DEFAULT '',
     added_at     TEXT NOT NULL,
     content_hash TEXT NOT NULL UNIQUE
 );
@@ -96,23 +99,81 @@ CREATE INDEX IF NOT EXISTS idx_review_log_word ON review_log(word_id);
 "#;
 
 /// Bring the schema up to [`SCHEMA_VERSION`]. Idempotent.
+///
+/// The base DDL uses `IF NOT EXISTS` and already contains the latest
+/// column set, so fresh databases need no ALTERs; only databases stamped
+/// with an older version get the incremental steps.
 pub(crate) fn migrate(conn: &Connection) -> Result<()> {
     conn.execute_batch(SCHEMA_V1)?;
-    let current: Option<String> = conn
+    let stored: Option<String> = conn
         .query_row(
             "SELECT value FROM meta WHERE key = 'schema_version'",
             [],
             |r| r.get(0),
         )
         .ok();
-    let current: i64 = current.and_then(|v| v.parse().ok()).unwrap_or(0);
-    if current < SCHEMA_VERSION {
-        // Future versioned migration steps go here, gated on `current`.
-        conn.execute(
-            "INSERT INTO meta(key, value) VALUES ('schema_version', ?1)
-             ON CONFLICT(key) DO UPDATE SET value = ?1",
-            [SCHEMA_VERSION.to_string()],
-        )?;
+
+    // No version row means the batch above just created everything at the
+    // current shape; just stamp it.
+    if let Some(stored) = stored {
+        let current: i64 = stored.parse().unwrap_or(0);
+        if current < 2 {
+            // v2: document metadata columns.
+            conn.execute_batch(
+                "ALTER TABLE documents ADD COLUMN author    TEXT NOT NULL DEFAULT '';
+                 ALTER TABLE documents ADD COLUMN publisher TEXT NOT NULL DEFAULT '';
+                 ALTER TABLE documents ADD COLUMN published TEXT NOT NULL DEFAULT '';",
+            )?;
+        }
     }
+
+    conn.execute(
+        "INSERT INTO meta(key, value) VALUES ('schema_version', ?1)
+         ON CONFLICT(key) DO UPDATE SET value = ?1",
+        [SCHEMA_VERSION.to_string()],
+    )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A database created by schema v1 (no metadata columns) must gain
+    /// them on open.
+    #[test]
+    fn migrates_v1_documents_table() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+             CREATE TABLE documents (
+                 id           INTEGER PRIMARY KEY,
+                 title        TEXT NOT NULL,
+                 added_at     TEXT NOT NULL,
+                 content_hash TEXT NOT NULL UNIQUE
+             );
+             INSERT INTO meta(key, value) VALUES ('schema_version', '1');
+             INSERT INTO documents(title, added_at, content_hash)
+                 VALUES ('old doc', '2026-01-01T00:00:00Z', 'h1');",
+        )
+        .unwrap();
+
+        migrate(&conn).unwrap();
+
+        let author: String = conn
+            .query_row("SELECT author FROM documents WHERE title = 'old doc'", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(author, "");
+        let version: String = conn
+            .query_row("SELECT value FROM meta WHERE key = 'schema_version'", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(version, SCHEMA_VERSION.to_string());
+
+        // And running migrate again is a no-op.
+        migrate(&conn).unwrap();
+    }
 }

@@ -2,7 +2,8 @@
 
 use chrono::{DateTime, Utc};
 use jrc_core::{
-    Document, DocumentId, KnowledgeStatus, PartOfSpeech, Sentence, SentenceId, Token, WordId,
+    Document, DocumentId, DocumentMeta, KnowledgeStatus, PartOfSpeech, Sentence, SentenceId,
+    Token, WordId,
 };
 use rusqlite::params;
 
@@ -43,6 +44,17 @@ pub struct TokenRow {
     pub status: KnowledgeStatus,
 }
 
+fn row_to_document(r: &rusqlite::Row<'_>) -> rusqlite::Result<Document> {
+    Ok(Document {
+        id: DocumentId(r.get(0)?),
+        title: r.get(1)?,
+        author: r.get(2)?,
+        publisher: r.get(3)?,
+        published: r.get(4)?,
+        added_at: r.get(5)?,
+    })
+}
+
 impl Db {
     /// Id of the document with this content hash, if already imported.
     pub fn find_document_by_hash(&self, hash: &str) -> Result<Option<DocumentId>> {
@@ -65,7 +77,7 @@ impl Db {
     /// reference them.
     pub fn import_document(
         &self,
-        title: &str,
+        meta: &DocumentMeta,
         content_hash: &str,
         added_at: DateTime<Utc>,
         sentences: &[NewSentence],
@@ -73,8 +85,16 @@ impl Db {
         let tx = self.conn().unchecked_transaction()?;
 
         tx.execute(
-            "INSERT INTO documents(title, added_at, content_hash) VALUES (?1, ?2, ?3)",
-            params![title, added_at, content_hash],
+            "INSERT INTO documents(title, author, publisher, published, added_at, content_hash)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                meta.title,
+                meta.author,
+                meta.publisher,
+                meta.published,
+                added_at,
+                content_hash
+            ],
         )?;
         let doc_id = tx.last_insert_rowid();
 
@@ -134,15 +154,10 @@ impl Db {
     pub fn document(&self, id: DocumentId) -> Result<Document> {
         self.conn()
             .query_row(
-                "SELECT id, title, added_at FROM documents WHERE id = ?1",
+                "SELECT id, title, author, publisher, published, added_at
+                 FROM documents WHERE id = ?1",
                 [id.0],
-                |r| {
-                    Ok(Document {
-                        id: DocumentId(r.get(0)?),
-                        title: r.get(1)?,
-                        added_at: r.get(2)?,
-                    })
-                },
+                row_to_document,
             )
             .map_err(|e| match e {
                 rusqlite::Error::QueryReturnedNoRows => DbError::NotFound("document"),
@@ -153,7 +168,7 @@ impl Db {
     /// All documents, newest first, with sentence/token counts.
     pub fn list_documents(&self) -> Result<Vec<DocumentSummary>> {
         let mut stmt = self.conn().prepare(
-            "SELECT d.id, d.title, d.added_at,
+            "SELECT d.id, d.title, d.author, d.publisher, d.published, d.added_at,
                     (SELECT COUNT(*) FROM sentences s WHERE s.document_id = d.id),
                     (SELECT COUNT(*) FROM tokens t
                        JOIN sentences s ON s.id = t.sentence_id
@@ -163,13 +178,9 @@ impl Db {
         )?;
         let rows = stmt.query_map([], |r| {
             Ok(DocumentSummary {
-                document: Document {
-                    id: DocumentId(r.get(0)?),
-                    title: r.get(1)?,
-                    added_at: r.get(2)?,
-                },
-                sentence_count: r.get::<_, i64>(3)? as u32,
-                token_count: r.get::<_, i64>(4)? as u32,
+                document: row_to_document(r)?,
+                sentence_count: r.get::<_, i64>(6)? as u32,
+                token_count: r.get::<_, i64>(7)? as u32,
             })
         })?;
         Ok(rows.collect::<std::result::Result<_, _>>()?)
@@ -273,8 +284,17 @@ pub(crate) mod tests {
                 ],
             },
         ];
-        db.import_document("fixture", "hash-1", Utc::now(), &sentences)
-            .unwrap()
+        db.import_document(
+            &DocumentMeta {
+                title: "fixture".into(),
+                author: "fixture author".into(),
+                ..Default::default()
+            },
+            "hash-1",
+            Utc::now(),
+            &sentences,
+        )
+        .unwrap()
     }
 
     pub(crate) fn tok(
@@ -302,6 +322,8 @@ pub(crate) mod tests {
         let docs = db.list_documents().unwrap();
         assert_eq!(docs.len(), 1);
         assert_eq!(docs[0].document.title, "fixture");
+        assert_eq!(docs[0].document.author, "fixture author");
+        assert_eq!(docs[0].document.publisher, "");
         assert_eq!(docs[0].sentence_count, 2);
         assert_eq!(docs[0].token_count, 8);
 

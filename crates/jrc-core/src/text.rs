@@ -18,7 +18,32 @@ pub struct SentenceId(pub i64);
 pub struct Document {
     pub id: DocumentId,
     pub title: String,
+    /// Author name; empty when unknown.
+    pub author: String,
+    /// Publisher; empty when unknown.
+    pub publisher: String,
+    /// Publication date as free text (sources vary wildly); empty when
+    /// unknown.
+    pub published: String,
     pub added_at: DateTime<Utc>,
+}
+
+/// Descriptive metadata supplied when importing a document.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DocumentMeta {
+    pub title: String,
+    pub author: String,
+    pub publisher: String,
+    pub published: String,
+}
+
+impl DocumentMeta {
+    pub fn titled(title: impl Into<String>) -> Self {
+        Self {
+            title: title.into(),
+            ..Default::default()
+        }
+    }
 }
 
 /// One sentence of a document, with its position preserved.

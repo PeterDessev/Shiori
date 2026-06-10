@@ -1,7 +1,7 @@
 //! Text ingestion: analyze and store documents.
 
 use chrono::Utc;
-use jrc_core::DocumentId;
+use jrc_core::{DocumentId, DocumentMeta};
 use jrc_db::{NewSentence, NewToken};
 
 use crate::{App, AppError, Result};
@@ -12,8 +12,13 @@ impl App {
     /// Re-importing identical content returns the existing document instead
     /// of duplicating it.
     pub fn import_text(&self, title: &str, text: &str) -> Result<DocumentId> {
-        let title = title.trim();
-        if title.is_empty() {
+        self.import_text_meta(DocumentMeta::titled(title), text)
+    }
+
+    /// Like [`import_text`](Self::import_text), with full metadata.
+    pub fn import_text_meta(&self, mut meta: DocumentMeta, text: &str) -> Result<DocumentId> {
+        meta.title = meta.title.trim().to_string();
+        if meta.title.is_empty() {
             return Err(AppError::Invalid("document title must not be empty".into()));
         }
         let hash = content_hash(text);
@@ -49,18 +54,22 @@ impl App {
             ));
         }
 
-        Ok(self.db.import_document(title, &hash, Utc::now(), &sentences)?)
+        Ok(self.db.import_document(&meta, &hash, Utc::now(), &sentences)?)
     }
 
     /// Import a file from disk (txt/md, HTML, EPUB, or PDF — see
-    /// [`crate::extract`]), using the file stem as the default title.
+    /// [`crate::extract`]), auto-extracting metadata where the format
+    /// provides it and falling back to the file stem for the title.
     pub fn import_file(&self, path: &std::path::Path) -> Result<DocumentId> {
-        let text = crate::extract::extract_text(path)?;
-        let title = path
-            .file_stem()
-            .map(|s| s.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "Untitled".to_string());
-        self.import_text(&title, &text)
+        let extracted = crate::extract::extract_document(path)?;
+        let mut meta = extracted.meta;
+        if meta.title.trim().is_empty() {
+            meta.title = path
+                .file_stem()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "Untitled".to_string());
+        }
+        self.import_text_meta(meta, &extracted.text)
     }
 }
 

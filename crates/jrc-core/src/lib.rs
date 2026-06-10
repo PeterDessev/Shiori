@@ -9,5 +9,5 @@ pub mod text;
 pub mod word;
 
 pub use error::{Error, Result};
-pub use text::{Document, DocumentId, Sentence, SentenceId, Token};
+pub use text::{Document, DocumentId, DocumentMeta, Sentence, SentenceId, Token};
 pub use word::{KnowledgeStatus, PartOfSpeech, WordId, WordKey};
