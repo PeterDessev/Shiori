@@ -88,29 +88,74 @@ impl JrcGui {
                 action = self.dictionary_panel(ui, &mut explain_requested);
             });
 
-        // Page indicator + flip controls at the bottom.
+        // Progress strip + page controls at the bottom. The control
+        // cluster is centered on its own; the hint rides along to the
+        // right without affecting the centering.
         let mut flip: isize = 0;
         {
-            let (page, pages) = self
+            let (page, pages, progress) = self
                 .reader
                 .as_ref()
-                .map(|r| (r.current_page, r.page_count()))
-                .unwrap_or((0, 1));
+                .map(|r| {
+                    let page = r.current_page.min(r.page_count() - 1);
+                    // Fraction of sentences before the *end* of this page.
+                    let end_para = r
+                        .page_starts
+                        .get(page + 1)
+                        .copied()
+                        .unwrap_or(r.para_ranges.len());
+                    let end_sentence = if end_para >= r.para_ranges.len() {
+                        r.sentences.len()
+                    } else {
+                        r.para_ranges[end_para].0
+                    };
+                    let frac = end_sentence as f32 / r.sentences.len().max(1) as f32;
+                    (page, r.page_count(), frac)
+                })
+                .unwrap_or((0, 1, 0.0));
+
             egui::TopBottomPanel::bottom("reader-pages").show(ctx, |ui| {
+                ui.add_space(4.0);
+                // Thin book-progress indicator.
+                let (bar, _) = ui.allocate_exact_size(
+                    egui::vec2(ui.available_width(), 4.0),
+                    egui::Sense::hover(),
+                );
+                let painter = ui.painter();
+                painter.rect_filled(bar, 2.0, ui.visuals().faint_bg_color);
+                let mut filled = bar;
+                filled.set_width(bar.width() * progress.clamp(0.0, 1.0));
+                painter.rect_filled(filled, 2.0, ui.visuals().selection.bg_fill);
+
+                ui.add_space(4.0);
                 ui.horizontal(|ui| {
-                    ui.add_space((ui.available_width() - 260.0).max(0.0) / 2.0);
+                    let label = format!("page {} / {}", page + 1, pages);
+                    let label_width = ui
+                        .fonts(|f| {
+                            f.layout_no_wrap(
+                                label.clone(),
+                                egui::TextStyle::Body.resolve(ui.style()),
+                                egui::Color32::WHITE,
+                            )
+                        })
+                        .size()
+                        .x;
+                    let gap = ui.spacing().item_spacing.x;
+                    let cluster = 26.0 + gap + label_width + gap + 26.0;
+                    ui.add_space((ui.available_width() - cluster).max(0.0) / 2.0);
                     if ui.add_enabled(page > 0, egui::Button::new("◀")).clicked() {
                         flip = -1;
                     }
-                    ui.label(format!("page {} / {}", page + 1, pages));
+                    ui.label(label);
                     if ui
                         .add_enabled(page + 1 < pages, egui::Button::new("▶"))
                         .clicked()
                     {
                         flip = 1;
                     }
-                    ui.weak("· scroll or PgUp/PgDn");
+                    ui.weak("scroll or PgUp/PgDn");
                 });
+                ui.add_space(2.0);
             });
         }
 
@@ -127,19 +172,43 @@ impl JrcGui {
             ui.heading(&self.reader.as_ref().unwrap().doc.title);
             ui.add_space(8.0);
 
-            // (Re)compute pagination for the current layout size.
+            // (Re)compute pagination for the current layout size, by
+            // simulating the renderer's whole-token greedy wrap with
+            // measured per-token widths (a plain-text estimate breaks
+            // lines later than the renderer and cut text off the page).
             {
+                let font = egui::FontId::proportional(READER_FONT_SIZE);
+                let row_height = ui.fonts(|f| f.row_height(&font));
+
+                // One-time per-token width measurement.
+                if self.reader.as_ref().unwrap().token_widths.is_empty() {
+                    let widths: Vec<Vec<f32>> = {
+                        let reader = self.reader.as_ref().unwrap();
+                        reader
+                            .sentences
+                            .iter()
+                            .map(|view| {
+                                view.tokens
+                                    .iter()
+                                    .map(|row| {
+                                        ui.fonts(|f| {
+                                            f.layout_no_wrap(
+                                                row.token.surface.clone(),
+                                                font.clone(),
+                                                egui::Color32::WHITE,
+                                            )
+                                        })
+                                        .size()
+                                        .x
+                                    })
+                                    .collect()
+                            })
+                            .collect()
+                    };
+                    self.reader.as_mut().unwrap().token_widths = widths;
+                }
+
                 let avail = ui.available_size();
-                let fonts_layout = |text: String, wrap: f32| {
-                    ui.fonts(|f| {
-                        f.layout(
-                            text,
-                            egui::FontId::proportional(READER_FONT_SIZE),
-                            egui::Color32::WHITE,
-                            wrap,
-                        )
-                    })
-                };
                 let reader = self.reader.as_mut().unwrap();
                 let stale = reader.page_starts.is_empty()
                     || (reader.page_layout.0 - avail.x).abs() > 1.0
@@ -150,18 +219,27 @@ impl JrcGui {
                         .get(reader.current_page)
                         .copied()
                         .unwrap_or(0);
-                    let wrap = avail.x.max(120.0);
-                    let budget = (avail.y - 4.0).max(140.0);
+                    let wrap = (avail.x - 4.0).max(120.0);
+                    let budget = (avail.y - 8.0).max(140.0);
                     let mut starts = vec![0usize];
                     let mut acc = 0.0f32;
                     for (pi, (s0, s1)) in reader.para_ranges.iter().enumerate() {
-                        let text: String = reader.sentences[*s0..*s1]
-                            .iter()
-                            .map(|v| v.sentence.text.as_str())
-                            .collect();
-                        let galley = fonts_layout(text, wrap);
-                        let rows = galley.rows.len().max(1) as f32;
-                        let h = galley.size().y + (rows - 1.0) * ROW_GAP + PARA_GAP;
+                        // Greedy wrap, exactly like horizontal_wrapped
+                        // places non-wrapping labels.
+                        let mut rows = 1u32;
+                        let mut line = 0.0f32;
+                        for si in *s0..*s1 {
+                            for w in &reader.token_widths[si] {
+                                if line > 0.0 && line + w > wrap {
+                                    rows += 1;
+                                    line = *w;
+                                } else {
+                                    line += w;
+                                }
+                            }
+                        }
+                        let rows = rows as f32;
+                        let h = rows * row_height + (rows - 1.0) * ROW_GAP + PARA_GAP;
                         if acc + h > budget && pi > *starts.last().unwrap() {
                             starts.push(pi);
                             acc = 0.0;
@@ -171,6 +249,13 @@ impl JrcGui {
                     reader.page_starts = starts;
                     reader.page_layout = (avail.x, avail.y);
                     reader.current_page = reader.page_of_paragraph(current_para);
+                }
+
+                // Jump to the saved reading position once pages exist.
+                if let Some(sentence) = reader.pending_restore.take() {
+                    if let Some(&para) = reader.para_of_sentence.get(sentence) {
+                        reader.current_page = reader.page_of_paragraph(para);
+                    }
                 }
             }
 
@@ -203,7 +288,7 @@ impl JrcGui {
                             } else if show_unknown
                                 && japanese
                                 && row.status == KnowledgeStatus::Unknown
-                                && row.token.is_content_word()
+                                && row.token.pos.is_lexical()
                             {
                                 Some(unknown_fill)
                             } else {
@@ -251,10 +336,16 @@ impl JrcGui {
         });
 
         if flip != 0 {
+            let mut moved = false;
             if let Some(reader) = self.reader.as_mut() {
                 let pages = reader.page_count() as isize;
-                let target = (reader.current_page as isize + flip).clamp(0, pages - 1);
-                reader.current_page = target as usize;
+                let target =
+                    (reader.current_page as isize + flip).clamp(0, pages - 1) as usize;
+                moved = target != reader.current_page;
+                reader.current_page = target;
+            }
+            if moved {
+                self.persist_reading_position();
             }
         }
 
@@ -304,10 +395,16 @@ impl JrcGui {
         let (s, _, t) = selectable[next];
         self.select_token(s, t);
         // Follow the selection across page boundaries.
+        let mut moved = false;
         if let Some(reader) = self.reader.as_mut() {
             if let Some(&para) = reader.para_of_sentence.get(s) {
-                reader.current_page = reader.page_of_paragraph(para);
+                let page = reader.page_of_paragraph(para);
+                moved = page != reader.current_page;
+                reader.current_page = page;
             }
+        }
+        if moved {
+            self.persist_reading_position();
         }
     }
 
@@ -326,8 +423,18 @@ impl JrcGui {
         let phrase: String = group_tokens.iter().map(|t| t.surface.as_str()).collect();
         let inflection = jrc_nlp::analyze_inflection(&group_tokens);
         let word_id = view.tokens[t_idx].word_id;
+        // Nominal multi-token groups (低＋声, 日本語＋版) may exist in the
+        // dictionary as one word; verb chains never do.
+        let try_compound = group_tokens.len() > 1
+            && matches!(
+                group_tokens[0].pos,
+                jrc_core::PartOfSpeech::Noun
+                    | jrc_core::PartOfSpeech::ProperNoun
+                    | jrc_core::PartOfSpeech::AdjectivalNoun
+                    | jrc_core::PartOfSpeech::Prefix
+            );
 
-        let panel = self.load_word_panel(word_id, phrase, inflection);
+        let panel = self.load_word_panel(word_id, phrase, inflection, try_compound);
         if let Some(reader) = self.reader.as_mut() {
             reader.selected = Some((s_idx, g_idx));
             reader.panel = panel;
@@ -352,12 +459,17 @@ impl JrcGui {
             self.refresh_caches();
             // Refresh the panel so the status line is current.
             let current = self.reader.as_ref().and_then(|r| {
-                r.panel
-                    .as_ref()
-                    .map(|p| (p.word.id, p.phrase.clone(), p.inflection.clone()))
+                r.panel.as_ref().map(|p| {
+                    (
+                        p.word.id,
+                        p.phrase.clone(),
+                        p.inflection.clone(),
+                        p.compound.is_some(),
+                    )
+                })
             });
-            if let Some((word_id, phrase, inflection)) = current {
-                let panel = self.load_word_panel(word_id, phrase, inflection);
+            if let Some((word_id, phrase, inflection, had_compound)) = current {
+                let panel = self.load_word_panel(word_id, phrase, inflection, had_compound);
                 if let Some(reader) = self.reader.as_mut() {
                     reader.panel = panel;
                 }
@@ -387,11 +499,35 @@ impl JrcGui {
                     return;
                 };
 
-                // Headword with per-segment furigana above the kanji.
+                // Headword with per-segment furigana above the kanji. When
+                // the analyzer split a dictionary word (低声), the compound
+                // takes the headline and the clicked token becomes a
+                // component below.
                 ui.add_space(4.0);
-                ruby_headword(ui, &panel.word.key.lemma, &panel.word.key.reading);
-                if panel.phrase != panel.word.key.lemma {
-                    ui.label(format!("in text: {}", panel.phrase));
+                if let Some(compound) = &panel.compound {
+                    ruby_headword(ui, compound.headword(), compound.reading());
+                    ui.add_space(2.0);
+                    for (i, sense) in compound.senses.iter().take(3).enumerate() {
+                        let glosses: Vec<&str> =
+                            sense.gloss.iter().map(|g| g.text.as_str()).collect();
+                        if !glosses.is_empty() {
+                            ui.label(format!("{}. {}", i + 1, glosses.join("; ")));
+                        }
+                    }
+                    ui.add_space(6.0);
+                    ui.separator();
+                    ui.label(
+                        egui::RichText::new(format!(
+                            "component: {}",
+                            panel.word.key.lemma
+                        ))
+                        .strong(),
+                    );
+                } else {
+                    ruby_headword(ui, &panel.word.key.lemma, &panel.word.key.reading);
+                    if panel.phrase != panel.word.key.lemma {
+                        ui.label(format!("in text: {}", panel.phrase));
+                    }
                 }
                 ui.horizontal(|ui| {
                     ui.label(panel.word.key.pos.as_str());

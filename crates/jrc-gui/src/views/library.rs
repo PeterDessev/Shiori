@@ -50,7 +50,13 @@ impl JrcGui {
                     ui.weak("Import Japanese books or articles — txt, html (Aozora), epub, pdf.");
                 });
             } else {
-                self.documents_table(ui);
+                // Horizontal scroll keeps the action buttons reachable
+                // when the window is narrow.
+                egui::ScrollArea::horizontal()
+                    .auto_shrink([false, true])
+                    .show(ui, |ui| {
+                        self.documents_table(ui);
+                    });
             }
 
             // Drop-target overlay.
@@ -145,6 +151,7 @@ impl JrcGui {
             .column(Column::auto().at_least(90.0).clip(true)) // author
             .column(Column::auto().at_least(70.0)) // published
             .column(Column::auto().at_least(80.0)) // size
+            .column(Column::auto().at_least(72.0)) // progress
             .column(Column::auto().at_least(56.0)) // known
             .column(Column::auto().at_least(80.0)) // difficulty
             .column(Column::auto().at_least(72.0)) // new words
@@ -168,6 +175,11 @@ impl JrcGui {
                 row.col(|ui| {
                     if header(ui, "Size", SortKey::Size, sort_key, sort_asc) {
                         clicked_sort = Some(SortKey::Size);
+                    }
+                });
+                row.col(|ui| {
+                    if header(ui, "Progress", SortKey::Progress, sort_key, sort_asc) {
+                        clicked_sort = Some(SortKey::Progress);
                     }
                 });
                 row.col(|ui| {
@@ -216,6 +228,15 @@ impl JrcGui {
                                     summary.token_count, summary.sentence_count
                                 ),
                             );
+                        });
+                        row.col(|ui| {
+                            let frac = summary.document.last_sentence as f32
+                                / summary.sentence_count.max(1) as f32;
+                            if summary.document.last_sentence == 0 {
+                                ui.weak("—");
+                            } else {
+                                ui.label(format!("{:.0}%", (frac * 100.0).min(100.0)));
+                            }
                         });
                         row.col(|ui| match stats {
                             Some(s) => {
@@ -338,6 +359,12 @@ impl JrcGui {
                 order.sort_by(|a, b| lib[*a].document.published.cmp(&lib[*b].document.published))
             }
             SortKey::Size => order.sort_by_key(|i| lib[*i].token_count),
+            SortKey::Progress => order.sort_by(|a, b| {
+                let frac = |i: &usize| {
+                    lib[*i].document.last_sentence as f32 / lib[*i].sentence_count.max(1) as f32
+                };
+                frac(a).total_cmp(&frac(b))
+            }),
             SortKey::Known => order.sort_by(|a, b| known(a).total_cmp(&known(b))),
             SortKey::Difficulty => order.sort_by(|a, b| unknown(a).total_cmp(&unknown(b))),
             SortKey::NewWords => order.sort_by_key(new_words),

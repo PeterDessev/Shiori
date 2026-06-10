@@ -60,6 +60,9 @@ pub struct WordPanel {
     pub phrase: String,
     /// Grammar of the phrase tail, when conjugated.
     pub inflection: jrc_nlp::Inflection,
+    /// Dictionary entry for the whole phrase when the analyzer split a
+    /// word JMdict knows as one (低声 = 低＋声).
+    pub compound: Option<DictEntry>,
 }
 
 pub struct ReaderState {
@@ -83,6 +86,12 @@ pub struct ReaderState {
     pub current_page: usize,
     /// (width, height) the pages were computed for.
     pub page_layout: (f32, f32),
+    /// Rendered width of every token (lazy; pagination simulates the real
+    /// whole-token wrap with these).
+    pub token_widths: Vec<Vec<f32>>,
+    /// Sentence index to jump to once pages are computed (restores the
+    /// saved reading position).
+    pub pending_restore: Option<usize>,
 }
 
 impl ReaderState {
@@ -174,6 +183,7 @@ pub enum SortKey {
     Author,
     Published,
     Size,
+    Progress,
     Known,
     Difficulty,
     NewWords,
@@ -210,6 +220,8 @@ pub struct JrcGui {
     pub sort_asc: bool,
     /// Theme applied to the egui context (to detect setting changes).
     applied_theme: Option<Theme>,
+    /// Where to return when the getting-started page is closed.
+    pub welcome_return: Option<View>,
 }
 
 pub fn default_data_dir() -> PathBuf {
@@ -268,6 +280,7 @@ impl JrcGui {
             sort_key: SortKey::default(),
             sort_asc: true,
             applied_theme: None,
+            welcome_return: None,
         }
     }
 
@@ -290,14 +303,23 @@ impl JrcGui {
         self.explainer = self.settings.build_explainer();
     }
 
-    /// Dismiss the getting-started page permanently.
+    /// Dismiss the getting-started page, returning to wherever the user
+    /// was before opening it.
     pub fn finish_onboarding(&mut self) {
         self.settings.onboarded = true;
         self.settings_draft.onboarded = true;
         if let Err(e) = self.settings.save(&self.data_dir) {
             self.error = Some(format!("could not save settings: {e}"));
         }
-        self.view = View::Library;
+        self.view = self.welcome_return.take().unwrap_or(View::Library);
+    }
+
+    /// Open the getting-started page, remembering where to come back to.
+    pub fn open_welcome(&mut self) {
+        if self.view != View::Welcome {
+            self.welcome_return = Some(self.view);
+        }
+        self.view = View::Welcome;
     }
 
     /// Run a closure against the app, routing failures to the error toast.
@@ -449,6 +471,8 @@ impl JrcGui {
             }
             let groups = compute_groups(&sentences);
             let (para_ranges, para_of_sentence) = paragraph_structure(&sentences);
+            let pending_restore =
+                (doc.last_sentence > 0).then_some(doc.last_sentence as usize);
             Ok(ReaderState {
                 doc,
                 sentences,
@@ -462,6 +486,8 @@ impl JrcGui {
                 page_starts: Vec::new(),
                 current_page: 0,
                 page_layout: (0.0, 0.0),
+                token_widths: Vec::new(),
+                pending_restore,
             })
         }) {
             self.reader = Some(state);
@@ -489,24 +515,47 @@ impl JrcGui {
     }
 
     /// Load the dictionary panel for a word within its phrase context.
+    /// `try_compound` additionally looks the whole phrase up as one
+    /// dictionary word (for analyzer-split compounds).
     pub fn load_word_panel(
         &mut self,
         word_id: WordId,
         phrase: String,
         inflection: jrc_nlp::Inflection,
+        try_compound: bool,
     ) -> Option<WordPanel> {
         self.with_app(|app| {
             let word = app.db().word(word_id)?;
             let entry = app.dictionary_entry_for(&word)?;
             let rank = app.db().frequency_rank(&word.key.lemma)?;
+            let compound = if try_compound && phrase != word.key.lemma {
+                app.lookup_compound(&phrase)?
+            } else {
+                None
+            };
             Ok(WordPanel {
                 word,
                 entry,
                 rank,
                 phrase,
                 inflection,
+                compound,
             })
         })
+    }
+
+    /// Remember the first sentence of the current reader page as the
+    /// user's position in the open document.
+    pub fn persist_reading_position(&mut self) {
+        let Some(reader) = self.reader.as_ref() else { return };
+        let page = reader.current_page.min(reader.page_count() - 1);
+        let para = reader.page_starts.get(page).copied().unwrap_or(0);
+        let Some(&(s0, _)) = reader.para_ranges.get(para) else { return };
+        let doc_id = reader.doc.id;
+        self.with_app(|app| Ok(app.db().set_reading_position(doc_id, s0 as u32)?));
+        if let Some(reader) = self.reader.as_mut() {
+            reader.doc.last_sentence = s0 as u32;
+        }
     }
 
     pub fn open_mining(&mut self, doc_id: DocumentId, title: String) {
@@ -753,10 +802,14 @@ impl JrcGui {
             });
 
         if let Some(view) = nav {
-            if view == View::Review {
-                self.load_review_queue();
+            match view {
+                View::Welcome => self.open_welcome(),
+                View::Review => {
+                    self.load_review_queue();
+                    self.view = view;
+                }
+                _ => self.view = view,
             }
-            self.view = view;
         }
     }
 }

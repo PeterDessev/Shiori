@@ -162,7 +162,7 @@ impl JrcGui {
                     ui.label("Dictionary: JMdict © EDRDG (via jmdict-simplified).");
                     ui.label("Frequency list: Leeds corpus derived (CC BY).");
                     if ui.button("Show getting-started guide").clicked() {
-                        self.view = crate::app::View::Welcome;
+                        self.open_welcome();
                     }
                 });
         });

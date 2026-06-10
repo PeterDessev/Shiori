@@ -128,17 +128,44 @@ impl JrcGui {
             ui.add_space(30.0);
 
             ui.vertical_centered(|ui| {
-                // Front: the sentence the word was mined from.
+                // Front: the sentence the word was mined from, with the
+                // target word highlighted in place, framed by its
+                // neighboring sentences in gray.
                 match &item.sentence {
-                    Some(sentence) => {
-                        ui.label(egui::RichText::new(&sentence.text).size(26.0));
-                        ui.add_space(10.0);
-                        ui.label(
-                            egui::RichText::new(format!("→ {}", item.word.key.lemma))
-                                .size(22.0)
-                                .strong()
-                                .color(egui::Color32::from_rgb(80, 140, 240)),
-                        );
+                    Some(_) => {
+                        let max_width = ui.available_width().min(760.0);
+                        ui.set_max_width(max_width);
+                        if let Some(prev) = &item.prev_text {
+                            ui.label(
+                                egui::RichText::new(prev)
+                                    .size(17.0)
+                                    .color(ui.visuals().weak_text_color()),
+                            );
+                            ui.add_space(6.0);
+                        }
+                        let accent = egui::Color32::from_rgb(80, 140, 240);
+                        ui.horizontal_wrapped(|ui| {
+                            ui.spacing_mut().item_spacing.x = 0.0;
+                            for row in &item.sentence_tokens {
+                                let mut text =
+                                    egui::RichText::new(&row.token.surface).size(26.0);
+                                if row.word_id == item.word.id {
+                                    text = text.underline().strong().color(accent);
+                                }
+                                ui.add(
+                                    egui::Label::new(text)
+                                        .wrap_mode(egui::TextWrapMode::Extend),
+                                );
+                            }
+                        });
+                        if let Some(next) = &item.next_text {
+                            ui.add_space(6.0);
+                            ui.label(
+                                egui::RichText::new(next)
+                                    .size(17.0)
+                                    .color(ui.visuals().weak_text_color()),
+                            );
+                        }
                     }
                     None => {
                         ui.label(
