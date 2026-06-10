@@ -86,26 +86,14 @@ impl App {
                 }
             }
         }
-        let best = pick_best(&candidates, &word.key.reading);
+        let best =
+            jrc_dict::pick_best_entry(candidates.iter(), &word.key.lemma, &word.key.reading)
+                .cloned();
         if let Some(entry) = &best {
             self.db.set_word_dict_seq(word.id, Some(entry.seq()))?;
         }
         Ok(best)
     }
-}
-
-/// Same preference order as `jrc_dict::Dictionary::lookup_best`, applied to
-/// candidates fetched from the database (common-first ordering preserved).
-fn pick_best(candidates: &[DictEntry], reading: &str) -> Option<DictEntry> {
-    let reading_matches =
-        |e: &DictEntry| !reading.is_empty() && e.kana.iter().any(|k| k.text == reading);
-    candidates
-        .iter()
-        .find(|e| reading_matches(e) && e.is_common())
-        .or_else(|| candidates.iter().find(|e| reading_matches(e)))
-        .or_else(|| candidates.iter().find(|e| e.is_common()))
-        .or_else(|| candidates.first())
-        .cloned()
 }
 
 /// Usefulness of learning a word: grows with in-document occurrences and

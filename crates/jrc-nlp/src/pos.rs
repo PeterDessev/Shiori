@@ -13,10 +13,12 @@ pub fn map_pos(major: &str, sub: &str) -> PartOfSpeech {
             "形容動詞語幹" | "ナイ形容詞語幹" => PartOfSpeech::AdjectivalNoun,
             _ => PartOfSpeech::Noun,
         },
-        // 非自立 verbs (e.g. いる in 〜ている) function as auxiliaries; they
-        // would otherwise flood vocabulary mining with false "unknown" hits.
+        // 非自立 verbs (e.g. いる in 〜ている) function as auxiliaries, and
+        // 接尾 verbs (れる/られる/せる) are bound suffixes; both would
+        // otherwise flood vocabulary mining with false "unknown" hits.
         "動詞" => match sub {
             "非自立" => PartOfSpeech::AuxiliaryVerb,
+            "接尾" => PartOfSpeech::Suffix,
             _ => PartOfSpeech::Verb,
         },
         "形容詞" => PartOfSpeech::Adjective,
@@ -45,6 +47,7 @@ mod tests {
         assert_eq!(map_pos("名詞", "形容動詞語幹"), PartOfSpeech::AdjectivalNoun);
         assert_eq!(map_pos("動詞", "自立"), PartOfSpeech::Verb);
         assert_eq!(map_pos("動詞", "非自立"), PartOfSpeech::AuxiliaryVerb);
+        assert_eq!(map_pos("動詞", "接尾"), PartOfSpeech::Suffix);
         assert_eq!(map_pos("形容詞", "自立"), PartOfSpeech::Adjective);
         assert_eq!(map_pos("助詞", "係助詞"), PartOfSpeech::Particle);
         assert_eq!(map_pos("助動詞", "*"), PartOfSpeech::AuxiliaryVerb);

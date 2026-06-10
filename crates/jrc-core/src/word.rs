@@ -38,7 +38,8 @@ pub enum PartOfSpeech {
 
 impl PartOfSpeech {
     /// Content words are the ones worth learning as vocabulary; function
-    /// words (particles, auxiliaries, symbols) are tracked but never mined.
+    /// words (particles, auxiliaries, symbols) and bound morphemes
+    /// (prefixes/suffixes like 的・化) are tracked but never mined.
     pub fn is_content_word(self) -> bool {
         !matches!(
             self,
@@ -46,6 +47,8 @@ impl PartOfSpeech {
                 | PartOfSpeech::AuxiliaryVerb
                 | PartOfSpeech::Symbol
                 | PartOfSpeech::Number
+                | PartOfSpeech::Prefix
+                | PartOfSpeech::Suffix
                 | PartOfSpeech::Unknown
         )
     }

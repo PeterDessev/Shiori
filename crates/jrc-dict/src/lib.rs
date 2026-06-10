@@ -13,7 +13,7 @@ pub mod register;
 mod types;
 
 pub use frequency::FrequencyList;
-pub use lookup::Dictionary;
+pub use lookup::{pick_best_entry, Dictionary};
 pub use types::{DictEntry, Form, JmdictFile, Sense};
 
 /// Errors produced while acquiring or reading dictionary data.
