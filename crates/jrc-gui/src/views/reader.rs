@@ -15,6 +15,10 @@ use crate::settings::shortcut_pressed;
 use crate::views::{tight_highlight_rect, unknown_fill};
 
 const READER_FONT_SIZE: f32 = 21.0;
+/// Vertical gap after each paragraph.
+const PARA_GAP: f32 = 14.0;
+/// Extra spacing horizontal_wrapped inserts between wrapped rows.
+const ROW_GAP: f32 = 8.0;
 
 /// Action chosen in the dictionary panel.
 enum WordAction {
@@ -84,89 +88,175 @@ impl JrcGui {
                 action = self.dictionary_panel(ui, &mut explain_requested);
             });
 
+        // Page indicator + flip controls at the bottom.
+        let mut flip: isize = 0;
+        {
+            let (page, pages) = self
+                .reader
+                .as_ref()
+                .map(|r| (r.current_page, r.page_count()))
+                .unwrap_or((0, 1));
+            egui::TopBottomPanel::bottom("reader-pages").show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.add_space((ui.available_width() - 260.0).max(0.0) / 2.0);
+                    if ui.add_enabled(page > 0, egui::Button::new("◀")).clicked() {
+                        flip = -1;
+                    }
+                    ui.label(format!("page {} / {}", page + 1, pages));
+                    if ui
+                        .add_enabled(page + 1 < pages, egui::Button::new("▶"))
+                        .clicked()
+                    {
+                        flip = 1;
+                    }
+                    ui.weak("· scroll or PgUp/PgDn");
+                });
+            });
+        }
+
+        // Scroll wheel and PageUp/PageDown flip pages, e-reader style.
+        let scroll_y = ctx.input(|i| i.raw_scroll_delta.y);
+        if scroll_y < -8.0 || ctx.input(|i| i.key_pressed(egui::Key::PageDown)) {
+            flip = 1;
+        } else if scroll_y > 8.0 || ctx.input(|i| i.key_pressed(egui::Key::PageUp)) {
+            flip = -1;
+        }
+
         let show_unknown = self.settings.show_unknown_highlights;
         egui::CentralPanel::default().show(ctx, |ui| {
-            let reader = self.reader.as_ref().unwrap();
-            ui.heading(&reader.doc.title);
+            ui.heading(&self.reader.as_ref().unwrap().doc.title);
             ui.add_space(8.0);
-            egui::ScrollArea::vertical()
-                .auto_shrink([false; 2])
-                .show(ui, |ui| {
-                    // Render each paragraph as one flowing wrapped block.
-                    let mut s_idx = 0;
-                    while s_idx < reader.sentences.len() {
-                        let paragraph = reader.sentences[s_idx].sentence.paragraph;
-                        let para_end = reader.sentences[s_idx..]
-                            .iter()
-                            .position(|v| v.sentence.paragraph != paragraph)
-                            .map(|off| s_idx + off)
-                            .unwrap_or(reader.sentences.len());
 
-                        ui.horizontal_wrapped(|ui| {
-                            ui.spacing_mut().item_spacing.x = 0.0;
-                            ui.spacing_mut().item_spacing.y = 8.0;
-                            let selection_fill = ui.visuals().selection.bg_fill;
-                            let unknown_fill = unknown_fill(ui.visuals());
-                            for si in s_idx..para_end {
-                                let view = &reader.sentences[si];
-                                for (ti, row) in view.tokens.iter().enumerate() {
-                                    let group = reader.group_of(si, ti);
-                                    let selected = match (reader.selected, group) {
-                                        (Some((ss, sg)), Some(g)) => ss == si && sg == g,
-                                        _ => false,
-                                    };
-                                    let fill = if selected {
-                                        Some(selection_fill)
-                                    } else if show_unknown
-                                        && row.status == KnowledgeStatus::Unknown
-                                        && row.token.is_content_word()
-                                    {
-                                        Some(unknown_fill)
-                                    } else {
-                                        None
-                                    };
-                                    let text = egui::RichText::new(&row.token.surface)
-                                        .size(READER_FONT_SIZE);
-                                    let clickable =
-                                        jrc_nlp::kana::is_japanese(&row.token.surface);
-                                    // Reserve a paint slot *under* the text,
-                                    // then fill it once the rect is known —
-                                    // tight around the glyphs, opaque so
-                                    // adjacent tokens never double up.
-                                    let bg_slot = ui.painter().add(egui::Shape::Noop);
-                                    let response = ui.add(
-                                        egui::Label::new(text).sense(if clickable {
-                                            egui::Sense::click()
-                                        } else {
-                                            egui::Sense::hover()
-                                        }),
-                                    );
-                                    if let Some(fill) = fill {
-                                        let rect = tight_highlight_rect(
-                                            response.rect,
-                                            READER_FONT_SIZE,
-                                        );
-                                        ui.painter().set(
-                                            bg_slot,
-                                            egui::Shape::rect_filled(rect, 0.0, fill),
-                                        );
-                                    }
-                                    if clickable {
-                                        let response = response
-                                            .on_hover_cursor(egui::CursorIcon::PointingHand);
-                                        if response.clicked() {
-                                            clicked = Some((si, ti));
-                                        }
-                                    }
+            // (Re)compute pagination for the current layout size.
+            {
+                let avail = ui.available_size();
+                let fonts_layout = |text: String, wrap: f32| {
+                    ui.fonts(|f| {
+                        f.layout(
+                            text,
+                            egui::FontId::proportional(READER_FONT_SIZE),
+                            egui::Color32::WHITE,
+                            wrap,
+                        )
+                    })
+                };
+                let reader = self.reader.as_mut().unwrap();
+                let stale = reader.page_starts.is_empty()
+                    || (reader.page_layout.0 - avail.x).abs() > 1.0
+                    || (reader.page_layout.1 - avail.y).abs() > 1.0;
+                if stale {
+                    let current_para = reader
+                        .page_starts
+                        .get(reader.current_page)
+                        .copied()
+                        .unwrap_or(0);
+                    let wrap = avail.x.max(120.0);
+                    let budget = (avail.y - 4.0).max(140.0);
+                    let mut starts = vec![0usize];
+                    let mut acc = 0.0f32;
+                    for (pi, (s0, s1)) in reader.para_ranges.iter().enumerate() {
+                        let text: String = reader.sentences[*s0..*s1]
+                            .iter()
+                            .map(|v| v.sentence.text.as_str())
+                            .collect();
+                        let galley = fonts_layout(text, wrap);
+                        let rows = galley.rows.len().max(1) as f32;
+                        let h = galley.size().y + (rows - 1.0) * ROW_GAP + PARA_GAP;
+                        if acc + h > budget && pi > *starts.last().unwrap() {
+                            starts.push(pi);
+                            acc = 0.0;
+                        }
+                        acc += h;
+                    }
+                    reader.page_starts = starts;
+                    reader.page_layout = (avail.x, avail.y);
+                    reader.current_page = reader.page_of_paragraph(current_para);
+                }
+            }
+
+            let reader = self.reader.as_ref().unwrap();
+            let page = reader.current_page.min(reader.page_count() - 1);
+            let para_begin = reader.page_starts.get(page).copied().unwrap_or(0);
+            let para_end = reader
+                .page_starts
+                .get(page + 1)
+                .copied()
+                .unwrap_or(reader.para_ranges.len());
+
+            for (s0, s1) in &reader.para_ranges[para_begin..para_end] {
+                ui.horizontal_wrapped(|ui| {
+                    ui.spacing_mut().item_spacing.x = 0.0;
+                    ui.spacing_mut().item_spacing.y = ROW_GAP;
+                    let selection_fill = ui.visuals().selection.bg_fill;
+                    let unknown_fill = unknown_fill(ui.visuals());
+                    for si in *s0..*s1 {
+                        let view = &reader.sentences[si];
+                        for (ti, row) in view.tokens.iter().enumerate() {
+                            let group = reader.group_of(si, ti);
+                            let selected = match (reader.selected, group) {
+                                (Some((ss, sg)), Some(g)) => ss == si && sg == g,
+                                _ => false,
+                            };
+                            let japanese = jrc_nlp::kana::is_japanese(&row.token.surface);
+                            let fill = if selected {
+                                Some(selection_fill)
+                            } else if show_unknown
+                                && japanese
+                                && row.status == KnowledgeStatus::Unknown
+                                && row.token.is_content_word()
+                            {
+                                Some(unknown_fill)
+                            } else {
+                                None
+                            };
+                            let text =
+                                egui::RichText::new(&row.token.surface).size(READER_FONT_SIZE);
+                            // Tokens never wrap internally: a label that
+                            // breaks across lines reports a full-width
+                            // union rect, which painted highlights as
+                            // page-wide bars.
+                            let label = egui::Label::new(text)
+                                .wrap_mode(egui::TextWrapMode::Extend)
+                                .sense(if japanese {
+                                    egui::Sense::click()
+                                } else {
+                                    egui::Sense::hover()
+                                });
+                            // Reserve a paint slot *under* the text, fill
+                            // it once the rect is known — tight around the
+                            // glyphs, opaque so adjacent tokens in one
+                            // phrase never double up.
+                            let bg_slot = ui.painter().add(egui::Shape::Noop);
+                            let response = ui.add(label);
+                            if let Some(fill) = fill {
+                                let rect =
+                                    tight_highlight_rect(response.rect, READER_FONT_SIZE);
+                                ui.painter().set(
+                                    bg_slot,
+                                    egui::Shape::rect_filled(rect, 0.0, fill),
+                                );
+                            }
+                            if japanese {
+                                let response =
+                                    response.on_hover_cursor(egui::CursorIcon::PointingHand);
+                                if response.clicked() {
+                                    clicked = Some((si, ti));
                                 }
                             }
-                        });
-                        ui.add_space(14.0);
-                        s_idx = para_end;
+                        }
                     }
-                    ui.add_space(20.0);
                 });
+                ui.add_space(PARA_GAP);
+            }
         });
+
+        if flip != 0 {
+            if let Some(reader) = self.reader.as_mut() {
+                let pages = reader.page_count() as isize;
+                let target = (reader.current_page as isize + flip).clamp(0, pages - 1);
+                reader.current_page = target as usize;
+            }
+        }
 
         if let Some((s_idx, t_idx)) = clicked {
             self.select_token(s_idx, t_idx);
@@ -213,6 +303,12 @@ impl JrcGui {
         };
         let (s, _, t) = selectable[next];
         self.select_token(s, t);
+        // Follow the selection across page boundaries.
+        if let Some(reader) = self.reader.as_mut() {
+            if let Some(&para) = reader.para_of_sentence.get(s) {
+                reader.current_page = reader.page_of_paragraph(para);
+            }
+        }
     }
 
     /// Select the phrase group containing a clicked token and load the
@@ -291,18 +387,9 @@ impl JrcGui {
                     return;
                 };
 
-                // Headword with furigana above it.
+                // Headword with per-segment furigana above the kanji.
                 ui.add_space(4.0);
-                ui.vertical(|ui| {
-                    ui.spacing_mut().item_spacing.y = 0.0;
-                    let reading = &panel.word.key.reading;
-                    if !reading.is_empty() && reading != &panel.word.key.lemma {
-                        ui.label(egui::RichText::new(reading).size(13.0).weak());
-                    }
-                    ui.label(
-                        egui::RichText::new(&panel.word.key.lemma).size(30.0).strong(),
-                    );
-                });
+                ruby_headword(ui, &panel.word.key.lemma, &panel.word.key.reading);
                 if panel.phrase != panel.word.key.lemma {
                     ui.label(format!("in text: {}", panel.phrase));
                 }
@@ -447,5 +534,57 @@ impl JrcGui {
             });
 
         action
+    }
+}
+
+/// Draw a headword with furigana positioned over the kanji run it reads,
+/// not clumped over the whole word: 食(た)べる, 引(ひ)き出(だ)し.
+fn ruby_headword(ui: &mut egui::Ui, lemma: &str, reading: &str) {
+    let segments = jrc_nlp::ruby_segments(lemma, reading);
+    let big_font = egui::FontId::proportional(30.0);
+    let small_font = egui::FontId::proportional(12.0);
+    let text_color = ui.visuals().strong_text_color();
+    let weak_color = ui.visuals().weak_text_color();
+
+    let big_galleys: Vec<_> = segments
+        .iter()
+        .map(|s| ui.fonts(|f| f.layout_no_wrap(s.text.clone(), big_font.clone(), text_color)))
+        .collect();
+    let furi_galleys: Vec<_> = segments
+        .iter()
+        .map(|s| {
+            s.furigana
+                .as_ref()
+                .map(|t| ui.fonts(|f| f.layout_no_wrap(t.clone(), small_font.clone(), weak_color)))
+        })
+        .collect();
+
+    let furi_height = 14.0;
+    let big_height = big_galleys
+        .iter()
+        .map(|g| g.size().y)
+        .fold(0.0f32, f32::max);
+    // Each segment is as wide as the wider of its text and its furigana.
+    let seg_widths: Vec<f32> = big_galleys
+        .iter()
+        .zip(&furi_galleys)
+        .map(|(b, f)| b.size().x.max(f.as_ref().map(|f| f.size().x).unwrap_or(0.0)))
+        .collect();
+    let total_width: f32 = seg_widths.iter().sum();
+
+    let (rect, _) = ui.allocate_exact_size(
+        egui::vec2(total_width, furi_height + big_height),
+        egui::Sense::hover(),
+    );
+    let painter = ui.painter();
+    let mut x = rect.left();
+    for ((big, furi), width) in big_galleys.into_iter().zip(furi_galleys).zip(seg_widths) {
+        if let Some(furi) = furi {
+            let fx = x + (width - furi.size().x) / 2.0;
+            painter.galley(egui::pos2(fx, rect.top()), furi, weak_color);
+        }
+        let bx = x + (width - big.size().x) / 2.0;
+        painter.galley(egui::pos2(bx, rect.top() + furi_height), big, text_color);
+        x += width;
     }
 }

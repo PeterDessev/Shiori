@@ -20,8 +20,6 @@ pub enum Msg {
     Progress(String),
     DownloadDone(Result<DataStatus, String>),
     ImportDone(Result<DocumentId, String>),
-    /// A picked file finished text/metadata extraction (filename, result).
-    ExtractDone(String, Result<jrc_app::extract::ExtractedDoc, String>),
     Explained(Result<String, String>),
     Feedback(Result<String, String>),
 }
@@ -74,6 +72,17 @@ pub struct ReaderState {
     pub panel: Option<WordPanel>,
     pub explanation: Option<String>,
     pub explaining: bool,
+    /// Sentence-index ranges forming each paragraph, in order.
+    pub para_ranges: Vec<(usize, usize)>,
+    /// Paragraph index of each sentence.
+    pub para_of_sentence: Vec<usize>,
+    /// Page boundaries as indices into `para_ranges`; page `i` covers
+    /// `para_ranges[page_starts[i]..page_starts[i+1]]`. Rebuilt lazily
+    /// whenever the layout size changes.
+    pub page_starts: Vec<usize>,
+    pub current_page: usize,
+    /// (width, height) the pages were computed for.
+    pub page_layout: (f32, f32),
 }
 
 impl ReaderState {
@@ -84,6 +93,37 @@ impl ReaderState {
             .iter()
             .position(|(s, e)| (*s..*e).contains(&t_idx))
     }
+
+    pub fn page_count(&self) -> usize {
+        self.page_starts.len().max(1)
+    }
+
+    /// Page containing the given paragraph.
+    pub fn page_of_paragraph(&self, para: usize) -> usize {
+        self.page_starts
+            .iter()
+            .rposition(|&p| p <= para)
+            .unwrap_or_default()
+    }
+}
+
+/// Group consecutive same-paragraph sentences into ranges.
+fn paragraph_structure(sentences: &[SentenceView]) -> (Vec<(usize, usize)>, Vec<usize>) {
+    let mut ranges = Vec::new();
+    let mut of_sentence = Vec::with_capacity(sentences.len());
+    let mut start = 0;
+    for i in 0..sentences.len() {
+        let boundary = i + 1 == sentences.len()
+            || sentences[i + 1].sentence.paragraph != sentences[i].sentence.paragraph;
+        if boundary {
+            ranges.push((start, i + 1));
+            for _ in start..=i {
+                of_sentence.push(ranges.len() - 1);
+            }
+            start = i + 1;
+        }
+    }
+    (ranges, of_sentence)
 }
 
 /// Compute phrase groups for each sentence.
@@ -119,35 +159,10 @@ pub struct ProductionState {
     pub waiting: bool,
 }
 
-/// An extracted file waiting for the user to confirm the import.
-pub struct PendingFile {
-    pub name: String,
-    pub text: String,
-}
-
-#[derive(Default)]
-pub struct ImportState {
-    pub title: String,
-    pub author: String,
-    pub publisher: String,
-    pub published: String,
-    /// Pasted text (used when no file is pending).
-    pub text: String,
-    /// Extracted file content (takes precedence over pasted text).
-    pub file: Option<PendingFile>,
-    /// True while a picked file is being extracted in the background.
-    pub extracting: bool,
-}
-
-impl ImportState {
-    pub fn meta(&self) -> jrc_core::DocumentMeta {
-        jrc_core::DocumentMeta {
-            title: self.title.trim().to_string(),
-            author: self.author.trim().to_string(),
-            publisher: self.publisher.trim().to_string(),
-            published: self.published.trim().to_string(),
-        }
-    }
+/// Per-document metadata being edited in the library dialog.
+pub struct MetaEdit {
+    pub id: DocumentId,
+    pub meta: jrc_core::DocumentMeta,
 }
 
 /// Library column to sort by.
@@ -172,8 +187,8 @@ pub struct JrcGui {
     pub phase: Phase,
     pub progress: Vec<String>,
     pub error: Option<String>,
-    /// Set while a background import runs; gates db-touching UI.
-    pub importing: bool,
+    /// Number of background import jobs in flight.
+    pub import_jobs: usize,
     pub view: View,
 
     // Cached queries, refreshed on events rather than per-frame.
@@ -181,7 +196,7 @@ pub struct JrcGui {
     pub doc_stats: HashMap<i64, DocStats>,
     pub due_count: u64,
 
-    pub import: ImportState,
+    pub meta_edit: Option<MetaEdit>,
     pub reader: Option<ReaderState>,
     pub mining: MiningState,
     pub review: ReviewState,
@@ -232,7 +247,7 @@ impl JrcGui {
             phase: Phase::Starting,
             progress: Vec::new(),
             error: None,
-            importing: false,
+            import_jobs: 0,
             view: if settings.onboarded {
                 View::Library
             } else {
@@ -241,7 +256,7 @@ impl JrcGui {
             library: Vec::new(),
             doc_stats: HashMap::new(),
             due_count: 0,
-            import: ImportState::default(),
+            meta_edit: None,
             reader: None,
             mining: MiningState::default(),
             review: ReviewState::default(),
@@ -350,45 +365,10 @@ impl JrcGui {
                     self.error = Some(format!("download failed: {e}"));
                 }
                 Msg::ImportDone(result) => {
-                    self.importing = false;
+                    self.import_jobs = self.import_jobs.saturating_sub(1);
                     match result {
-                        Ok(_) => {
-                            self.import = ImportState::default();
-                            self.refresh_caches();
-                        }
+                        Ok(_) => self.refresh_caches(),
                         Err(e) => self.error = Some(format!("import failed: {e}")),
-                    }
-                }
-                Msg::ExtractDone(name, result) => {
-                    self.import.extracting = false;
-                    match result {
-                        Ok(extracted) => {
-                            // Prefill empty fields only; never clobber what
-                            // the user already typed.
-                            let m = extracted.meta;
-                            let stem = std::path::Path::new(&name)
-                                .file_stem()
-                                .map(|s| s.to_string_lossy().into_owned())
-                                .unwrap_or_default();
-                            if self.import.title.trim().is_empty() {
-                                self.import.title =
-                                    if m.title.is_empty() { stem } else { m.title };
-                            }
-                            if self.import.author.trim().is_empty() {
-                                self.import.author = m.author;
-                            }
-                            if self.import.publisher.trim().is_empty() {
-                                self.import.publisher = m.publisher;
-                            }
-                            if self.import.published.trim().is_empty() {
-                                self.import.published = m.published;
-                            }
-                            self.import.file = Some(PendingFile {
-                                name,
-                                text: extracted.text,
-                            });
-                        }
-                        Err(e) => self.error = Some(format!("could not read {name}: {e}")),
                     }
                 }
                 Msg::Explained(result) => {
@@ -437,44 +417,25 @@ impl JrcGui {
         });
     }
 
-    /// Import text with metadata in the background.
-    pub fn start_import(
-        &mut self,
-        ctx: &egui::Context,
-        meta: jrc_core::DocumentMeta,
-        text: String,
-    ) {
+    /// Import files in the background, one job per file. Extraction,
+    /// metadata, and the archival copy into `<data>/books` all happen in
+    /// `App::import_file`.
+    pub fn start_import_files(&mut self, ctx: &egui::Context, paths: Vec<std::path::PathBuf>) {
         let Some(app) = self.app.clone() else { return };
-        self.importing = true;
-        let tx = self.tx.clone();
-        let ctx = ctx.clone();
-        std::thread::spawn(move || {
-            let result = match app.lock() {
-                Ok(guard) => guard.import_text_meta(meta, &text).map_err(|e| e.to_string()),
-                Err(_) => Err("app lock poisoned".to_string()),
-            };
-            let _ = tx.send(Msg::ImportDone(result));
-            ctx.request_repaint();
-        });
-    }
-
-    /// Extract text + metadata from a picked file in the background; the
-    /// result lands in the import form for review before importing.
-    pub fn start_extract(&mut self, ctx: &egui::Context, path: std::path::PathBuf) {
-        self.import.extracting = true;
-        self.import.file = None;
-        let tx = self.tx.clone();
-        let ctx = ctx.clone();
-        std::thread::spawn(move || {
-            let name = path
-                .file_name()
-                .map(|s| s.to_string_lossy().into_owned())
-                .unwrap_or_else(|| "file".to_string());
-            let result =
-                jrc_app::extract::extract_document(&path).map_err(|e| e.to_string());
-            let _ = tx.send(Msg::ExtractDone(name, result));
-            ctx.request_repaint();
-        });
+        for path in paths {
+            self.import_jobs += 1;
+            let app = app.clone();
+            let tx = self.tx.clone();
+            let ctx = ctx.clone();
+            std::thread::spawn(move || {
+                let result = match app.lock() {
+                    Ok(guard) => guard.import_file(&path).map_err(|e| e.to_string()),
+                    Err(_) => Err("app lock poisoned".to_string()),
+                };
+                let _ = tx.send(Msg::ImportDone(result));
+                ctx.request_repaint();
+            });
+        }
     }
 
     /// Open a document in the reader.
@@ -487,6 +448,7 @@ impl JrcGui {
                 sentences.push(SentenceView { sentence, tokens });
             }
             let groups = compute_groups(&sentences);
+            let (para_ranges, para_of_sentence) = paragraph_structure(&sentences);
             Ok(ReaderState {
                 doc,
                 sentences,
@@ -495,6 +457,11 @@ impl JrcGui {
                 panel: None,
                 explanation: None,
                 explaining: false,
+                para_ranges,
+                para_of_sentence,
+                page_starts: Vec::new(),
+                current_page: 0,
+                page_layout: (0.0, 0.0),
             })
         }) {
             self.reader = Some(state);
@@ -644,51 +611,21 @@ impl eframe::App for JrcGui {
             Phase::Ready => {}
         }
 
-        egui::TopBottomPanel::top("topbar").show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.heading("読書");
-                ui.separator();
-                ui.selectable_value(&mut self.view, View::Library, "Library");
-                let reader_label = match &self.reader {
-                    Some(r) => format!("Reading: {}", truncate_title(&r.doc.title, 18)),
-                    None => "Reader".to_string(),
-                };
-                ui.add_enabled_ui(self.reader.is_some(), |ui| {
-                    ui.selectable_value(&mut self.view, View::Reader, reader_label);
-                });
-                ui.add_enabled_ui(self.mining.doc_id.is_some(), |ui| {
-                    ui.selectable_value(&mut self.view, View::Mining, "Mining");
-                });
-                let review_label = if self.due_count > 0 {
-                    format!("Review ({})", self.due_count)
-                } else {
-                    "Review".to_string()
-                };
-                if ui
-                    .selectable_value(&mut self.view, View::Review, review_label)
-                    .clicked()
-                {
-                    self.load_review_queue();
-                }
-                ui.selectable_value(&mut self.view, View::Stats, "Stats");
-                ui.selectable_value(&mut self.view, View::Production, "Production");
-                ui.selectable_value(&mut self.view, View::Settings, "Settings");
-
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui
-                        .button("❓")
-                        .on_hover_text("Getting started guide")
-                        .clicked()
-                    {
-                        self.view = View::Welcome;
-                    }
-                    if self.importing {
-                        ui.spinner();
-                        ui.label("importing…");
-                    }
-                });
+        // Drag-and-drop import: accepted on the library page.
+        if self.view == View::Library {
+            let dropped: Vec<std::path::PathBuf> = ctx.input(|i| {
+                i.raw
+                    .dropped_files
+                    .iter()
+                    .filter_map(|f| f.path.clone())
+                    .collect()
             });
-        });
+            if !dropped.is_empty() {
+                self.start_import_files(ctx, dropped);
+            }
+        }
+
+        self.show_nav_rail(ctx);
 
         if let Some(error) = self.error.clone() {
             egui::TopBottomPanel::bottom("errorbar").show(ctx, |ui| {
@@ -710,6 +647,116 @@ impl eframe::App for JrcGui {
             View::Stats => self.show_stats(ctx),
             View::Production => self.show_production(ctx),
             View::Settings => self.show_settings(ctx),
+        }
+    }
+}
+
+impl JrcGui {
+    /// VS-Code-style icon rail on the left edge.
+    fn show_nav_rail(&mut self, ctx: &egui::Context) {
+        fn item(
+            ui: &mut egui::Ui,
+            selected: bool,
+            icon: &str,
+            tip: String,
+            enabled: bool,
+        ) -> bool {
+            ui.add_enabled(
+                enabled,
+                egui::SelectableLabel::new(selected, egui::RichText::new(icon).size(22.0)),
+            )
+            .on_hover_text(tip)
+            .clicked()
+        }
+
+        let mut nav: Option<View> = None;
+        egui::SidePanel::left("nav-rail")
+            .resizable(false)
+            .exact_width(46.0)
+            .show(ctx, |ui| {
+                ui.add_space(6.0);
+                ui.vertical_centered(|ui| {
+                    if item(ui, self.view == View::Library, "📚", "Library".into(), true) {
+                        nav = Some(View::Library);
+                    }
+                    let reader_tip = match &self.reader {
+                        Some(r) => format!("Reading: {}", truncate_title(&r.doc.title, 24)),
+                        None => "Reader (open a document from the library)".into(),
+                    };
+                    if item(
+                        ui,
+                        self.view == View::Reader,
+                        "📖",
+                        reader_tip,
+                        self.reader.is_some(),
+                    ) {
+                        nav = Some(View::Reader);
+                    }
+                    if item(
+                        ui,
+                        self.view == View::Mining,
+                        "⛏",
+                        "Vocabulary mining".into(),
+                        self.mining.doc_id.is_some(),
+                    ) {
+                        nav = Some(View::Mining);
+                    }
+                    let review_tip = if self.due_count > 0 {
+                        format!("Review — {} due", self.due_count)
+                    } else {
+                        "Review — nothing due".into()
+                    };
+                    if item(ui, self.view == View::Review, "🔁", review_tip, true) {
+                        nav = Some(View::Review);
+                    }
+                    if self.due_count > 0 {
+                        ui.label(
+                            egui::RichText::new(self.due_count.to_string())
+                                .small()
+                                .color(egui::Color32::from_rgb(80, 160, 220)),
+                        );
+                    }
+                    if item(ui, self.view == View::Stats, "📊", "Statistics".into(), true) {
+                        nav = Some(View::Stats);
+                    }
+                    if item(
+                        ui,
+                        self.view == View::Production,
+                        "✏",
+                        "Production practice".into(),
+                        true,
+                    ) {
+                        nav = Some(View::Production);
+                    }
+                    if item(ui, self.view == View::Settings, "⚙", "Settings".into(), true) {
+                        nav = Some(View::Settings);
+                    }
+                });
+
+                ui.with_layout(egui::Layout::bottom_up(egui::Align::Center), |ui| {
+                    ui.add_space(8.0);
+                    if item(
+                        ui,
+                        self.view == View::Welcome,
+                        "❓",
+                        "Getting started guide".into(),
+                        true,
+                    ) {
+                        nav = Some(View::Welcome);
+                    }
+                    if self.import_jobs > 0 {
+                        ui.spinner();
+                        ui.label(egui::RichText::new(self.import_jobs.to_string()).small())
+                            .on_hover_text("imports in progress");
+                    }
+                });
+            });
+
+        if let Some(view) = nav {
+            if view == View::Review {
+                self.load_review_queue();
+            }
+            self.view = view;
         }
     }
 }

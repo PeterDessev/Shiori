@@ -16,21 +16,22 @@ impl JrcGui {
                          feedback in Production mode. Everything else works without it.",
                     );
                     ui.add_space(6.0);
+                    let field_width = (ui.available_width() - 160.0).clamp(240.0, 520.0);
                     egui::Grid::new("llm-grid").spacing([10.0, 8.0]).show(ui, |ui| {
                         ui.label("Anthropic API key:");
-                        ui.add(
+                        ui.add_sized(
+                            [field_width, 22.0],
                             egui::TextEdit::singleline(
                                 &mut self.settings_draft.anthropic_api_key,
                             )
                             .password(true)
-                            .hint_text("sk-ant-…")
-                            .desired_width(360.0),
+                            .hint_text("sk-ant-…"),
                         );
                         ui.end_row();
                         ui.label("Model:");
-                        ui.add(
-                            egui::TextEdit::singleline(&mut self.settings_draft.llm_model)
-                                .desired_width(360.0),
+                        ui.add_sized(
+                            [field_width, 22.0],
+                            egui::TextEdit::singleline(&mut self.settings_draft.llm_model),
                         );
                         ui.end_row();
                     });
@@ -91,8 +92,9 @@ impl JrcGui {
                             let field =
                                 |ui: &mut egui::Ui, label: &str, value: &mut String| {
                                     ui.label(label);
-                                    ui.add(
-                                        egui::TextEdit::singleline(value).desired_width(110.0),
+                                    ui.add_sized(
+                                        [160.0, 20.0],
+                                        egui::TextEdit::singleline(value),
                                     );
                                     if crate::settings::is_valid_key_name(value) {
                                         ui.label("");
