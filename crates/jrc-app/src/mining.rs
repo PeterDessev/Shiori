@@ -1,6 +1,6 @@
 //! Vocabulary mining: which unknown words are most worth learning?
 
-use jrc_core::{DocumentId, KnowledgeStatus, Sentence, WordId};
+use jrc_core::{DocumentId, KnowledgeStatus, Sentence};
 use jrc_db::WordRow;
 use jrc_dict::DictEntry;
 use jrc_nlp::is_kana_only;

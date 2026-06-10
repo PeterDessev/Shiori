@@ -9,7 +9,14 @@ authors.workspace = true
 [dependencies]
 jrc-core.workspace = true
 jrc-app.workspace = true
+jrc-db.workspace = true
+jrc-dict.workspace = true
+jrc-srs.workspace = true
 jrc-llm.workspace = true
+eframe = "0.31"
+rfd = "0.15"
+dirs = "6"
+chrono.workspace = true
 
 [[bin]]
 name = "jrc"
