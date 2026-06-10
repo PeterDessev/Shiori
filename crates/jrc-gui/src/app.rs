@@ -78,22 +78,12 @@ pub struct ReviewState {
     pub revealed: bool,
 }
 
+#[derive(Default)]
 pub struct ProductionState {
     pub prompt_idx: usize,
     pub text: String,
     pub feedback: Option<String>,
     pub waiting: bool,
-}
-
-impl Default for ProductionState {
-    fn default() -> Self {
-        Self {
-            prompt_idx: 0,
-            text: String::new(),
-            feedback: None,
-            waiting: false,
-        }
-    }
 }
 
 #[derive(Default)]

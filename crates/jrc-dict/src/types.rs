@@ -139,7 +139,7 @@ impl DictEntry {
         self.senses
             .iter()
             .flat_map(|s| s.related.iter())
-            .filter_map(render_xref)
+            .filter_map(|x| render_xref(x))
             .collect()
     }
 
@@ -148,12 +148,12 @@ impl DictEntry {
         self.senses
             .iter()
             .flat_map(|s| s.antonym.iter())
-            .filter_map(render_xref)
+            .filter_map(|x| render_xref(x))
             .collect()
     }
 }
 
-fn render_xref(xref: &Vec<serde_json::Value>) -> Option<String> {
+fn render_xref(xref: &[serde_json::Value]) -> Option<String> {
     let parts: Vec<&str> = xref.iter().filter_map(|v| v.as_str()).collect();
     if parts.is_empty() {
         None

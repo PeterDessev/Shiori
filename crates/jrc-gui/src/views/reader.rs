@@ -142,9 +142,7 @@ impl JrcGui {
         explain_requested: &mut bool,
     ) -> Option<WordAction> {
         let mut action = None;
-        let Some(reader) = self.reader.as_ref() else {
-            return None;
-        };
+        let reader = self.reader.as_ref()?;
 
         egui::ScrollArea::vertical()
             .auto_shrink([false; 2])
@@ -177,8 +175,7 @@ impl JrcGui {
                 match &panel.entry {
                     Some(entry) => {
                         // Register / nuance chips.
-                        let profile =
-                            UsageProfile::from_misc_codes(entry.misc_codes().into_iter());
+                        let profile = UsageProfile::from_misc_codes(entry.misc_codes());
                         if !profile.is_neutral() || !profile.notes.is_empty() {
                             ui.horizontal_wrapped(|ui| {
                                 for reg in &profile.registers {

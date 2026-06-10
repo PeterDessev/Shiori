@@ -436,8 +436,10 @@ mod tests {
 
     #[test]
     fn maximum_interval_is_enforced() {
-        let mut config = SchedulerConfig::default();
-        config.maximum_interval_days = 30.0;
+        let config = SchedulerConfig {
+            maximum_interval_days: 30.0,
+            ..Default::default()
+        };
         let s = Scheduler::new(config);
         assert_eq!(s.next_interval_days(10_000.0), 30.0);
     }

@@ -76,8 +76,7 @@ impl JrcGui {
                     }
                     if let Some(entry) = &item.entry {
                         ui.label(egui::RichText::new(entry.short_gloss()).size(18.0));
-                        let profile =
-                            UsageProfile::from_misc_codes(entry.misc_codes().into_iter());
+                        let profile = UsageProfile::from_misc_codes(entry.misc_codes());
                         if !profile.is_neutral() {
                             let labels: Vec<&str> =
                                 profile.registers.iter().map(|r| r.label()).collect();

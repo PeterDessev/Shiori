@@ -231,9 +231,7 @@ fn honorific_register_is_surfaced() {
         .find(|c| c.word.key.lemma == "召し上がる")
         .expect("召し上がりました lemmatizes to 召し上がる");
     let entry = meshiagaru.entry.as_ref().unwrap();
-    let profile = jrc_dict::register::UsageProfile::from_misc_codes(
-        entry.misc_codes().into_iter(),
-    );
+    let profile = jrc_dict::register::UsageProfile::from_misc_codes(entry.misc_codes());
     assert_eq!(
         profile.registers,
         vec![jrc_dict::register::Register::Honorific]
