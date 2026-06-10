@@ -1,0 +1,43 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/jrc-core",
+    "crates/jrc-nlp",
+    "crates/jrc-srs",
+    "crates/jrc-dict",
+    "crates/jrc-db",
+    "crates/jrc-app",
+    "crates/jrc-llm",
+    "crates/jrc-gui",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = ""
+authors = ["Peter Dessev <peter.dessev@gmail.com>"]
+
+[workspace.dependencies]
+jrc-core = { path = "crates/jrc-core" }
+jrc-nlp = { path = "crates/jrc-nlp" }
+jrc-srs = { path = "crates/jrc-srs" }
+jrc-dict = { path = "crates/jrc-dict" }
+jrc-db = { path = "crates/jrc-db" }
+jrc-app = { path = "crates/jrc-app" }
+jrc-llm = { path = "crates/jrc-llm" }
+
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", features = ["serde"] }
+tracing = "0.1"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
+# The embedded morphological dictionary is slow to build unoptimized; always
+# optimize heavy dependencies even in dev builds.
+[profile.dev.package."*"]
+opt-level = 2

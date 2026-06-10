@@ -1,0 +1,16 @@
+[package]
+name = "jrc-gui"
+description = "Desktop GUI for the Japanese Reading Companion"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+jrc-core.workspace = true
+jrc-app.workspace = true
+jrc-llm.workspace = true
+
+[[bin]]
+name = "jrc"
+path = "src/main.rs"

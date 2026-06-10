@@ -1,0 +1,12 @@
+[package]
+name = "jrc-srs"
+description = "FSRS spaced-repetition scheduler"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+jrc-core.workspace = true
+serde.workspace = true
+chrono.workspace = true
