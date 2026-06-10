@@ -10,6 +10,9 @@ pub fn map_pos(major: &str, sub: &str) -> PartOfSpeech {
             "代名詞" => PartOfSpeech::Pronoun,
             "数" => PartOfSpeech::Number,
             "接尾" => PartOfSpeech::Suffix,
+            // Dependent nouns (の・こと・よう・ため…) are grammar, not
+            // vocabulary; they would otherwise top every mining list.
+            "非自立" => PartOfSpeech::DependentNoun,
             "形容動詞語幹" | "ナイ形容詞語幹" => PartOfSpeech::AdjectivalNoun,
             _ => PartOfSpeech::Noun,
         },
@@ -45,6 +48,7 @@ mod tests {
         assert_eq!(map_pos("名詞", "代名詞"), PartOfSpeech::Pronoun);
         assert_eq!(map_pos("名詞", "数"), PartOfSpeech::Number);
         assert_eq!(map_pos("名詞", "形容動詞語幹"), PartOfSpeech::AdjectivalNoun);
+        assert_eq!(map_pos("名詞", "非自立"), PartOfSpeech::DependentNoun);
         assert_eq!(map_pos("動詞", "自立"), PartOfSpeech::Verb);
         assert_eq!(map_pos("動詞", "非自立"), PartOfSpeech::AuxiliaryVerb);
         assert_eq!(map_pos("動詞", "接尾"), PartOfSpeech::Suffix);

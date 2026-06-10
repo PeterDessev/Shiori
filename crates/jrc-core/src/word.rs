@@ -17,6 +17,9 @@ pub enum PartOfSpeech {
     Noun,
     ProperNoun,
     Pronoun,
+    /// Dependent noun (名詞,非自立): grammaticalized nominalizers like
+    /// の・こと・よう・ため that only occur bound to a clause.
+    DependentNoun,
     Verb,
     /// い-adjective.
     Adjective,
@@ -49,6 +52,7 @@ impl PartOfSpeech {
                 | PartOfSpeech::Number
                 | PartOfSpeech::Prefix
                 | PartOfSpeech::Suffix
+                | PartOfSpeech::DependentNoun
                 | PartOfSpeech::Unknown
         )
     }
@@ -59,6 +63,7 @@ impl PartOfSpeech {
             PartOfSpeech::Noun => "noun",
             PartOfSpeech::ProperNoun => "proper_noun",
             PartOfSpeech::Pronoun => "pronoun",
+            PartOfSpeech::DependentNoun => "dependent_noun",
             PartOfSpeech::Verb => "verb",
             PartOfSpeech::Adjective => "adjective",
             PartOfSpeech::AdjectivalNoun => "adjectival_noun",
@@ -82,6 +87,7 @@ impl PartOfSpeech {
             "noun" => PartOfSpeech::Noun,
             "proper_noun" => PartOfSpeech::ProperNoun,
             "pronoun" => PartOfSpeech::Pronoun,
+            "dependent_noun" => PartOfSpeech::DependentNoun,
             "verb" => PartOfSpeech::Verb,
             "adjective" => PartOfSpeech::Adjective,
             "adjectival_noun" => PartOfSpeech::AdjectivalNoun,
@@ -168,6 +174,7 @@ mod tests {
             PartOfSpeech::Noun,
             PartOfSpeech::ProperNoun,
             PartOfSpeech::Pronoun,
+            PartOfSpeech::DependentNoun,
             PartOfSpeech::Verb,
             PartOfSpeech::Adjective,
             PartOfSpeech::AdjectivalNoun,

@@ -76,8 +76,9 @@ impl Dictionary {
 ///
 /// - +4 if a kana form matches the reading (行った→いった picks 行く),
 /// - +3 if the lemma is written in kana only and the entry is marked
-///   "usually written using kana alone" — こと should resolve to 事
-///   (thing), not 琴 (the zither), even though both are common,
+///   "usually written using kana alone" or has no kanji spelling at all —
+///   こと should resolve to 事 (thing), not 琴 (the zither), and と to the
+///   particle, not 土 ("Turkey"), even though all are common,
 /// - +2 if any form is marked common.
 ///
 /// Ties keep the first candidate (callers pass common-first ordering).
@@ -93,7 +94,7 @@ pub fn pick_best_entry<'a>(
         if !reading.is_empty() && entry.kana.iter().any(|k| k.text == reading) {
             score += 4;
         }
-        if kana_only_lemma && entry.misc_codes().contains(&"uk") {
+        if kana_only_lemma && (entry.kanji.is_empty() || entry.misc_codes().contains(&"uk")) {
             score += 3;
         }
         if entry.is_common() {
@@ -199,6 +200,31 @@ mod tests {
         // A kanji lemma still resolves normally.
         let hit = d.lookup_best("琴", "こと").unwrap();
         assert_eq!(hit.id, "1240650");
+    }
+
+    #[test]
+    fn kana_only_lemma_prefers_kanji_less_entry() {
+        // と must resolve to the particle (an entry with no kanji forms),
+        // not to 土 (an abbreviation read と meaning "Turkey").
+        let json = r#"{
+          "version": "test",
+          "tags": {},
+          "words": [
+            {"id": "100",
+             "kanji": [{"common": true, "text": "土", "tags": []}],
+             "kana": [{"common": true, "text": "と", "tags": []}],
+             "sense": [{"partOfSpeech": ["n"], "misc": ["abbr"],
+                        "gloss": [{"text": "Turkey"}]}]},
+            {"id": "200",
+             "kanji": [],
+             "kana": [{"common": true, "text": "と", "tags": []}],
+             "sense": [{"partOfSpeech": ["prt"], "misc": [],
+                        "gloss": [{"text": "if; when; and; with"}]}]}
+          ]
+        }"#;
+        let d = Dictionary::parse(json).unwrap();
+        let hit = d.lookup_best("と", "と").unwrap();
+        assert_eq!(hit.id, "200");
     }
 
     #[test]

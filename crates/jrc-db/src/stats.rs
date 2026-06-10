@@ -17,8 +17,8 @@ pub struct StatusCount {
 /// SQL fragment matching `PartOfSpeech::is_content_word` — function words
 /// are excluded from comprehension statistics. Keep in sync with
 /// `jrc_core::PartOfSpeech::is_content_word` (verified by test below).
-const NON_CONTENT_POS: &str =
-    "('particle', 'auxiliary_verb', 'symbol', 'number', 'prefix', 'suffix', 'unknown')";
+const NON_CONTENT_POS: &str = "('particle', 'auxiliary_verb', 'symbol', 'number', 'prefix', \
+                               'suffix', 'dependent_noun', 'unknown')";
 
 impl Db {
     /// Status breakdown over the *content words* of a document.
@@ -55,6 +55,7 @@ mod tests {
             PartOfSpeech::Noun,
             PartOfSpeech::ProperNoun,
             PartOfSpeech::Pronoun,
+            PartOfSpeech::DependentNoun,
             PartOfSpeech::Verb,
             PartOfSpeech::Adjective,
             PartOfSpeech::AdjectivalNoun,
