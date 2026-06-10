@@ -833,11 +833,13 @@ dependencies = [
 name = "jrc-app"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "jrc-core",
  "jrc-db",
  "jrc-dict",
  "jrc-nlp",
  "jrc-srs",
+ "serde_json",
  "thiserror",
 ]
 

@@ -6,7 +6,7 @@
 //! original context.
 
 mod analyzer;
-mod kana;
+pub mod kana;
 mod pos;
 mod segment;
 

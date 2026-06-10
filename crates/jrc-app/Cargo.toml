@@ -13,3 +13,5 @@ jrc-srs.workspace = true
 jrc-dict.workspace = true
 jrc-db.workspace = true
 thiserror.workspace = true
+chrono.workspace = true
+serde_json.workspace = true
