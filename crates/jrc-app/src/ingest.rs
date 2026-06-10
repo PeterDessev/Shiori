@@ -60,6 +60,9 @@ impl App {
     /// Import a file from disk (txt/md, HTML, EPUB, or PDF — see
     /// [`crate::extract`]), auto-extracting metadata where the format
     /// provides it and falling back to the file stem for the title.
+    ///
+    /// The original file is copied into `<data_dir>/books/` so the library
+    /// survives the source being moved or deleted.
     pub fn import_file(&self, path: &std::path::Path) -> Result<DocumentId> {
         let extracted = crate::extract::extract_document(path)?;
         let mut meta = extracted.meta;
@@ -69,7 +72,20 @@ impl App {
                 .map(|s| s.to_string_lossy().into_owned())
                 .unwrap_or_else(|| "Untitled".to_string());
         }
-        self.import_text_meta(meta, &extracted.text)
+        let id = self.import_text_meta(meta, &extracted.text)?;
+
+        // Best-effort archival copy; the text itself is already in the
+        // database, so a failed copy must not fail the import.
+        let books = self.data_dir().join("books");
+        if std::fs::create_dir_all(&books).is_ok() {
+            if let Some(name) = path.file_name() {
+                let dest = books.join(format!("{}-{}", id.0, name.to_string_lossy()));
+                if !dest.exists() {
+                    let _ = std::fs::copy(path, &dest);
+                }
+            }
+        }
+        Ok(id)
     }
 }
 

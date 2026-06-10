@@ -186,6 +186,19 @@ impl Db {
         Ok(rows.collect::<std::result::Result<_, _>>()?)
     }
 
+    /// Update a document's descriptive metadata.
+    pub fn update_document_meta(&self, id: DocumentId, meta: &DocumentMeta) -> Result<()> {
+        let n = self.conn().execute(
+            "UPDATE documents SET title = ?2, author = ?3, publisher = ?4, published = ?5
+             WHERE id = ?1",
+            params![id.0, meta.title, meta.author, meta.publisher, meta.published],
+        )?;
+        if n == 0 {
+            return Err(DbError::NotFound("document"));
+        }
+        Ok(())
+    }
+
     pub fn delete_document(&self, id: DocumentId) -> Result<()> {
         self.conn()
             .execute("DELETE FROM documents WHERE id = ?1", [id.0])?;
@@ -349,6 +362,31 @@ pub(crate) mod tests {
         let cat0 = t0.iter().find(|t| t.token.surface == "猫").unwrap();
         let cat1 = t1.iter().find(|t| t.token.surface == "猫").unwrap();
         assert_eq!(cat0.word_id, cat1.word_id);
+    }
+
+    #[test]
+    fn metadata_can_be_edited() {
+        let db = Db::open_in_memory().unwrap();
+        let doc_id = import_fixture(&db);
+        db.update_document_meta(
+            doc_id,
+            &DocumentMeta {
+                title: "新タイトル".into(),
+                author: "新著者".into(),
+                publisher: "出版社".into(),
+                published: "2024".into(),
+            },
+        )
+        .unwrap();
+        let doc = db.document(doc_id).unwrap();
+        assert_eq!(doc.title, "新タイトル");
+        assert_eq!(doc.author, "新著者");
+        assert_eq!(doc.publisher, "出版社");
+        assert_eq!(doc.published, "2024");
+
+        assert!(db
+            .update_document_meta(DocumentId(999), &DocumentMeta::default())
+            .is_err());
     }
 
     #[test]
