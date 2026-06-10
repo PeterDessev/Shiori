@@ -52,9 +52,10 @@ impl App {
         Ok(self.db.import_document(title, &hash, Utc::now(), &sentences)?)
     }
 
-    /// Import a text file (UTF-8) from disk, using the file stem as title.
+    /// Import a file from disk (txt/md, HTML, EPUB, or PDF — see
+    /// [`crate::extract`]), using the file stem as the default title.
     pub fn import_file(&self, path: &std::path::Path) -> Result<DocumentId> {
-        let text = std::fs::read_to_string(path)?;
+        let text = crate::extract::extract_text(path)?;
         let title = path
             .file_stem()
             .map(|s| s.to_string_lossy().into_owned())

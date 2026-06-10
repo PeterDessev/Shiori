@@ -6,6 +6,7 @@
 //! statistics.
 
 mod data;
+pub mod extract;
 mod ingest;
 mod mining;
 mod review;

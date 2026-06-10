@@ -15,3 +15,9 @@ jrc-db.workspace = true
 thiserror.workspace = true
 chrono.workspace = true
 serde_json.workspace = true
+epub = "2"
+pdf-extract = "0.10"
+encoding_rs = "0.8"
+
+[dev-dependencies]
+zip = "2"
