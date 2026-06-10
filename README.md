@@ -47,6 +47,23 @@ cargo run --release -p jrc-gui
 On first launch the app downloads JMdict and a frequency list into its data
 directory. A Japanese-capable system font is picked up automatically.
 
+## Development
+
+```sh
+cargo test --workspace                                # full test suite
+cargo clippy --workspace --all-targets -- -D warnings # lints
+```
+
+An end-to-end smoke run against real data (downloads JMdict on first use,
+cached afterwards):
+
+```sh
+cargo run -p jrc-app --example smoke -- <data-dir> <utf8-text-file> "<title>"
+```
+
+The first build downloads and embeds the IPADIC morphological dictionary
+(via lindera), which takes a few minutes once.
+
 ## Data sources
 
 - [JMdict](https://www.edrdg.org/jmdict/j_jmdict.html) — © EDRDG, used under
