@@ -6,11 +6,13 @@
 //! original context.
 
 mod analyzer;
+pub mod inflection;
 pub mod kana;
 mod pos;
 mod segment;
 
 pub use analyzer::{AnalyzedParagraph, AnalyzedSentence, AnalyzedText, Analyzer};
+pub use inflection::{analyze_inflection, phrase_groups, Inflection};
 pub use kana::{is_kana_only, katakana_to_hiragana};
 pub use segment::{split_paragraphs, split_sentences};
 
