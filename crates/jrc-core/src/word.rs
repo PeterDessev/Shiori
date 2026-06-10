@@ -57,6 +57,14 @@ impl PartOfSpeech {
         )
     }
 
+    /// Lexical morphemes: everything a reader might want to look up,
+    /// including bound prefixes/suffixes (低 in 低声). Broader than
+    /// [`is_content_word`](Self::is_content_word), which excludes bound
+    /// morphemes from mining and statistics.
+    pub fn is_lexical(self) -> bool {
+        self.is_content_word() || matches!(self, PartOfSpeech::Prefix | PartOfSpeech::Suffix)
+    }
+
     /// Stable string form used for persistence.
     pub fn as_str(self) -> &'static str {
         match self {
