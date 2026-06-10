@@ -7,9 +7,10 @@ happens to teach.
 
 ## What it does
 
-- **Text ingestion** — import books, articles, or any Japanese text. The app
-  parses it to the morpheme level while preserving sentence and paragraph
-  context.
+- **Text ingestion** — import books, articles, or any Japanese text: paste,
+  `.txt`/`.md` (UTF-8 or Shift_JIS), `.html` (Aozora Bunko pages — furigana
+  ruby is stripped), `.epub`, and `.pdf`. The app parses everything to the
+  morpheme level while preserving sentence and paragraph context.
 - **Vocabulary mining** — unknown words are identified, looked up in JMdict,
   and ranked by how useful they are to learn (corpus frequency × document
   frequency).
@@ -20,6 +21,9 @@ happens to teach.
   (formal, colloquial, archaic, literary, …) and cross-references.
 - **Reading difficulty stats** — for every document in the library: how much
   you already know, what is just out of reach, and what to read next.
+- **Conjugation-aware reading** — clicking 読んでいる selects the whole
+  conjugated phrase and the panel explains the form (te-iru, polite past,
+  passive, causative, …) component by component.
 - **LLM explanations (optional)** — connect an LLM backend to explain *why* a
   sentence is constructed the way it is, and to get naturalness feedback on
   your own writing (production mode). The app is fully functional without it.
