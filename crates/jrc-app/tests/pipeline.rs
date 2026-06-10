@@ -195,6 +195,37 @@ fn marking_known_and_ignored_moves_stats() {
 }
 
 #[test]
+fn forgotten_words_reenter_rotation() {
+    let app = app();
+    let doc = app.import_text("テスト", TEXT).unwrap();
+    let candidates = app.mining_candidates(doc).unwrap();
+    let neko = candidates.iter().find(|c| c.word.key.lemma == "猫").unwrap();
+    let (word_id, sentence_id) = (neko.word.id, neko.sentence.id);
+
+    // Learn it, answer until it is well known, then mark it known.
+    app.start_learning(word_id, sentence_id).unwrap();
+    app.answer_review(word_id, Rating::Easy).unwrap();
+    app.mark_known(word_id).unwrap();
+    assert_eq!(
+        app.db().word(word_id).unwrap().status,
+        KnowledgeStatus::Known
+    );
+    assert_eq!(app.due_count().unwrap(), 0);
+
+    // Forgot it: a fresh card is due immediately, status back to learning.
+    app.mark_forgotten(word_id, Some(sentence_id)).unwrap();
+    assert_eq!(
+        app.db().word(word_id).unwrap().status,
+        KnowledgeStatus::Learning
+    );
+    assert_eq!(app.due_count().unwrap(), 1);
+    let queue = app.due_reviews(10).unwrap();
+    assert_eq!(queue[0].word.id, word_id);
+    assert_eq!(queue[0].card.state, CardState::New, "fresh card, not the old one");
+    assert!(queue[0].sentence.is_some(), "context sentence preserved");
+}
+
+#[test]
 fn recommendations_prefer_sweet_spot() {
     let app = app();
     // Document A: will be made ~fully known (comfortable).

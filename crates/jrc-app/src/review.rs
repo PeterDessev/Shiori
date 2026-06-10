@@ -56,6 +56,18 @@ impl App {
         Ok(())
     }
 
+    /// "I forgot this": put a previously known word back into rotation
+    /// with a fresh card due immediately. Keeps the old context sentence
+    /// when no new one is given.
+    pub fn mark_forgotten(&self, word_id: WordId, sentence_id: Option<SentenceId>) -> Result<()> {
+        let existing = self.db.card(word_id)?;
+        let sentence = sentence_id.or(existing.and_then(|c| c.sentence_id));
+        self.db
+            .upsert_card(word_id, sentence, &Card::new(Utc::now()))?;
+        self.db.set_word_status(word_id, KnowledgeStatus::Learning)?;
+        Ok(())
+    }
+
     /// The review queue: due cards with their context, most overdue first.
     pub fn due_reviews(&self, limit: u32) -> Result<Vec<ReviewItem>> {
         let now = Utc::now();
