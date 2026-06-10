@@ -12,7 +12,7 @@ use jrc_db::{DocumentSummary, TokenRow, WordRow};
 use jrc_dict::DictEntry;
 use jrc_llm::Explainer;
 
-use crate::settings::Settings;
+use crate::settings::{Settings, Theme};
 
 /// Messages posted back from background threads.
 pub enum Msg {
@@ -20,6 +20,8 @@ pub enum Msg {
     Progress(String),
     DownloadDone(Result<DataStatus, String>),
     ImportDone(Result<DocumentId, String>),
+    /// A picked file finished text/metadata extraction (filename, result).
+    ExtractDone(String, Result<jrc_app::extract::ExtractedDoc, String>),
     Explained(Result<String, String>),
     Feedback(Result<String, String>),
 }
@@ -117,10 +119,49 @@ pub struct ProductionState {
     pub waiting: bool,
 }
 
+/// An extracted file waiting for the user to confirm the import.
+pub struct PendingFile {
+    pub name: String,
+    pub text: String,
+}
+
 #[derive(Default)]
 pub struct ImportState {
     pub title: String,
+    pub author: String,
+    pub publisher: String,
+    pub published: String,
+    /// Pasted text (used when no file is pending).
     pub text: String,
+    /// Extracted file content (takes precedence over pasted text).
+    pub file: Option<PendingFile>,
+    /// True while a picked file is being extracted in the background.
+    pub extracting: bool,
+}
+
+impl ImportState {
+    pub fn meta(&self) -> jrc_core::DocumentMeta {
+        jrc_core::DocumentMeta {
+            title: self.title.trim().to_string(),
+            author: self.author.trim().to_string(),
+            publisher: self.publisher.trim().to_string(),
+            published: self.published.trim().to_string(),
+        }
+    }
+}
+
+/// Library column to sort by.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SortKey {
+    #[default]
+    Added,
+    Title,
+    Author,
+    Published,
+    Size,
+    Known,
+    Difficulty,
+    NewWords,
 }
 
 pub struct JrcGui {
@@ -150,6 +191,10 @@ pub struct JrcGui {
     pub settings: Settings,
     /// Editable copy shown in the settings view (saved explicitly).
     pub settings_draft: Settings,
+    pub sort_key: SortKey,
+    pub sort_asc: bool,
+    /// Theme applied to the egui context (to detect setting changes).
+    applied_theme: Option<Theme>,
 }
 
 pub fn default_data_dir() -> PathBuf {
@@ -205,6 +250,19 @@ impl JrcGui {
             data_dir,
             settings_draft: settings.clone(),
             settings,
+            sort_key: SortKey::default(),
+            sort_asc: true,
+            applied_theme: None,
+        }
+    }
+
+    fn apply_theme(&mut self, ctx: &egui::Context) {
+        if self.applied_theme != Some(self.settings.theme) {
+            ctx.set_visuals(match self.settings.theme {
+                Theme::Dark => egui::Visuals::dark(),
+                Theme::Light => egui::Visuals::light(),
+            });
+            self.applied_theme = Some(self.settings.theme);
         }
     }
 
@@ -301,6 +359,38 @@ impl JrcGui {
                         Err(e) => self.error = Some(format!("import failed: {e}")),
                     }
                 }
+                Msg::ExtractDone(name, result) => {
+                    self.import.extracting = false;
+                    match result {
+                        Ok(extracted) => {
+                            // Prefill empty fields only; never clobber what
+                            // the user already typed.
+                            let m = extracted.meta;
+                            let stem = std::path::Path::new(&name)
+                                .file_stem()
+                                .map(|s| s.to_string_lossy().into_owned())
+                                .unwrap_or_default();
+                            if self.import.title.trim().is_empty() {
+                                self.import.title =
+                                    if m.title.is_empty() { stem } else { m.title };
+                            }
+                            if self.import.author.trim().is_empty() {
+                                self.import.author = m.author;
+                            }
+                            if self.import.publisher.trim().is_empty() {
+                                self.import.publisher = m.publisher;
+                            }
+                            if self.import.published.trim().is_empty() {
+                                self.import.published = m.published;
+                            }
+                            self.import.file = Some(PendingFile {
+                                name,
+                                text: extracted.text,
+                            });
+                        }
+                        Err(e) => self.error = Some(format!("could not read {name}: {e}")),
+                    }
+                }
                 Msg::Explained(result) => {
                     if let Some(reader) = &mut self.reader {
                         reader.explaining = false;
@@ -347,18 +437,42 @@ impl JrcGui {
         });
     }
 
-    /// Import pasted text (or a file's contents) in the background.
-    pub fn start_import(&mut self, ctx: &egui::Context, title: String, text: String) {
+    /// Import text with metadata in the background.
+    pub fn start_import(
+        &mut self,
+        ctx: &egui::Context,
+        meta: jrc_core::DocumentMeta,
+        text: String,
+    ) {
         let Some(app) = self.app.clone() else { return };
         self.importing = true;
         let tx = self.tx.clone();
         let ctx = ctx.clone();
         std::thread::spawn(move || {
             let result = match app.lock() {
-                Ok(guard) => guard.import_text(&title, &text).map_err(|e| e.to_string()),
+                Ok(guard) => guard.import_text_meta(meta, &text).map_err(|e| e.to_string()),
                 Err(_) => Err("app lock poisoned".to_string()),
             };
             let _ = tx.send(Msg::ImportDone(result));
+            ctx.request_repaint();
+        });
+    }
+
+    /// Extract text + metadata from a picked file in the background; the
+    /// result lands in the import form for review before importing.
+    pub fn start_extract(&mut self, ctx: &egui::Context, path: std::path::PathBuf) {
+        self.import.extracting = true;
+        self.import.file = None;
+        let tx = self.tx.clone();
+        let ctx = ctx.clone();
+        std::thread::spawn(move || {
+            let name = path
+                .file_name()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "file".to_string());
+            let result =
+                jrc_app::extract::extract_document(&path).map_err(|e| e.to_string());
+            let _ = tx.send(Msg::ExtractDone(name, result));
             ctx.request_repaint();
         });
     }
@@ -507,6 +621,7 @@ impl JrcGui {
 
 impl eframe::App for JrcGui {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.apply_theme(ctx);
         self.handle_messages();
 
         match self.phase {

@@ -52,6 +52,22 @@ impl JrcGui {
                     });
 
                     ui.add_space(14.0);
+                    ui.heading("Appearance");
+                    ui.horizontal(|ui| {
+                        ui.label("Theme:");
+                        ui.selectable_value(
+                            &mut self.settings_draft.theme,
+                            crate::settings::Theme::Dark,
+                            "Dark",
+                        );
+                        ui.selectable_value(
+                            &mut self.settings_draft.theme,
+                            crate::settings::Theme::Light,
+                            "Light",
+                        );
+                    });
+
+                    ui.add_space(14.0);
                     ui.heading("Reader");
                     ui.checkbox(
                         &mut self.settings_draft.show_unknown_highlights,
@@ -61,7 +77,57 @@ impl JrcGui {
                              tint on unknown vocabulary as well.");
 
                     ui.add_space(14.0);
-                    let dirty = settings_differ(&self.settings, &self.settings_draft);
+                    ui.heading("Keyboard shortcuts");
+                    ui.weak(
+                        "Key names: letters and digits (K, 1), Space, Enter, ArrowLeft, \
+                         ArrowRight, ArrowUp, ArrowDown, Tab, Escape, F1–F12.",
+                    );
+                    ui.add_space(4.0);
+                    egui::Grid::new("shortcut-grid")
+                        .num_columns(4)
+                        .spacing([10.0, 6.0])
+                        .show(ui, |ui| {
+                            let sc = &mut self.settings_draft.shortcuts;
+                            let field =
+                                |ui: &mut egui::Ui, label: &str, value: &mut String| {
+                                    ui.label(label);
+                                    ui.add(
+                                        egui::TextEdit::singleline(value).desired_width(110.0),
+                                    );
+                                    if crate::settings::is_valid_key_name(value) {
+                                        ui.label("");
+                                    } else {
+                                        ui.colored_label(
+                                            egui::Color32::from_rgb(220, 90, 90),
+                                            "unknown key",
+                                        );
+                                    }
+                                };
+                            field(ui, "Review · show answer", &mut sc.review_reveal);
+                            ui.end_row();
+                            field(ui, "Review · correct", &mut sc.review_correct);
+                            ui.end_row();
+                            field(ui, "Review · incorrect", &mut sc.review_incorrect);
+                            ui.end_row();
+                            field(ui, "Reader · next word", &mut sc.reader_next);
+                            ui.end_row();
+                            field(ui, "Reader · previous word", &mut sc.reader_prev);
+                            ui.end_row();
+                            field(ui, "Reader · learn word", &mut sc.reader_learn);
+                            ui.end_row();
+                            field(ui, "Reader · mark known", &mut sc.reader_known);
+                            ui.end_row();
+                            field(ui, "Reader · ignore word", &mut sc.reader_ignore);
+                            ui.end_row();
+                            field(ui, "Reader · explain sentence", &mut sc.reader_explain);
+                            ui.end_row();
+                        });
+                    if ui.button("Reset shortcuts to defaults").clicked() {
+                        self.settings_draft.shortcuts = Default::default();
+                    }
+
+                    ui.add_space(14.0);
+                    let dirty = self.settings != self.settings_draft;
                     ui.horizontal(|ui| {
                         if ui
                             .add_enabled(dirty, egui::Button::new("💾 Save settings"))
@@ -99,10 +165,4 @@ impl JrcGui {
                 });
         });
     }
-}
-
-fn settings_differ(a: &crate::settings::Settings, b: &crate::settings::Settings) -> bool {
-    a.anthropic_api_key != b.anthropic_api_key
-        || a.llm_model != b.llm_model
-        || a.show_unknown_highlights != b.show_unknown_highlights
 }

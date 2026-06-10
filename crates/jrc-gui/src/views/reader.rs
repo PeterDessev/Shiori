@@ -11,7 +11,10 @@ use jrc_core::{KnowledgeStatus, WordId};
 use jrc_dict::register::UsageProfile;
 
 use crate::app::JrcGui;
-use crate::views::{SELECTION_FILL, UNKNOWN_FILL};
+use crate::settings::shortcut_pressed;
+use crate::views::{tight_highlight_rect, unknown_fill};
+
+const READER_FONT_SIZE: f32 = 21.0;
 
 /// Action chosen in the dictionary panel.
 enum WordAction {
@@ -34,6 +37,45 @@ impl JrcGui {
         let mut action: Option<WordAction> = None;
         let mut clicked: Option<(usize, usize)> = None; // (sentence, token)
         let mut explain_requested = false;
+
+        // Keyboard shortcuts (ignored while a text field has focus).
+        let shortcuts = self.settings.shortcuts.clone();
+        if shortcut_pressed(ctx, &shortcuts.reader_next) {
+            self.navigate_selection(1);
+        } else if shortcut_pressed(ctx, &shortcuts.reader_prev) {
+            self.navigate_selection(-1);
+        }
+        if let Some(reader) = self.reader.as_ref() {
+            if let Some(panel) = &reader.panel {
+                let sentence_id = reader
+                    .selected
+                    .and_then(|(s, _)| reader.sentences.get(s))
+                    .map(|v| v.sentence.id);
+                if shortcut_pressed(ctx, &shortcuts.reader_learn)
+                    && panel.word.status != KnowledgeStatus::Learning
+                {
+                    if let Some(sid) = sentence_id {
+                        action = Some(WordAction::Learn(panel.word.id, sid));
+                    }
+                }
+                if shortcut_pressed(ctx, &shortcuts.reader_known)
+                    && panel.word.status != KnowledgeStatus::Known
+                {
+                    action = Some(WordAction::Known(panel.word.id));
+                }
+                if shortcut_pressed(ctx, &shortcuts.reader_ignore)
+                    && panel.word.status != KnowledgeStatus::Ignored
+                {
+                    action = Some(WordAction::Ignore(panel.word.id));
+                }
+                if shortcut_pressed(ctx, &shortcuts.reader_explain)
+                    && self.explainer.is_available()
+                    && !reader.explaining
+                {
+                    explain_requested = true;
+                }
+            }
+        }
 
         egui::SidePanel::right("dict-panel")
             .resizable(true)
@@ -63,6 +105,8 @@ impl JrcGui {
                         ui.horizontal_wrapped(|ui| {
                             ui.spacing_mut().item_spacing.x = 0.0;
                             ui.spacing_mut().item_spacing.y = 8.0;
+                            let selection_fill = ui.visuals().selection.bg_fill;
+                            let unknown_fill = unknown_fill(ui.visuals());
                             for si in s_idx..para_end {
                                 let view = &reader.sentences[si];
                                 for (ti, row) in view.tokens.iter().enumerate() {
@@ -71,18 +115,25 @@ impl JrcGui {
                                         (Some((ss, sg)), Some(g)) => ss == si && sg == g,
                                         _ => false,
                                     };
-                                    let mut text =
-                                        egui::RichText::new(&row.token.surface).size(21.0);
-                                    if selected {
-                                        text = text.background_color(SELECTION_FILL);
+                                    let fill = if selected {
+                                        Some(selection_fill)
                                     } else if show_unknown
                                         && row.status == KnowledgeStatus::Unknown
                                         && row.token.is_content_word()
                                     {
-                                        text = text.background_color(UNKNOWN_FILL);
-                                    }
+                                        Some(unknown_fill)
+                                    } else {
+                                        None
+                                    };
+                                    let text = egui::RichText::new(&row.token.surface)
+                                        .size(READER_FONT_SIZE);
                                     let clickable =
                                         jrc_nlp::kana::is_japanese(&row.token.surface);
+                                    // Reserve a paint slot *under* the text,
+                                    // then fill it once the rect is known —
+                                    // tight around the glyphs, opaque so
+                                    // adjacent tokens never double up.
+                                    let bg_slot = ui.painter().add(egui::Shape::Noop);
                                     let response = ui.add(
                                         egui::Label::new(text).sense(if clickable {
                                             egui::Sense::click()
@@ -90,6 +141,16 @@ impl JrcGui {
                                             egui::Sense::hover()
                                         }),
                                     );
+                                    if let Some(fill) = fill {
+                                        let rect = tight_highlight_rect(
+                                            response.rect,
+                                            READER_FONT_SIZE,
+                                        );
+                                        ui.painter().set(
+                                            bg_slot,
+                                            egui::Shape::rect_filled(rect, 0.0, fill),
+                                        );
+                                    }
                                     if clickable {
                                         let response = response
                                             .on_hover_cursor(egui::CursorIcon::PointingHand);
@@ -116,6 +177,42 @@ impl JrcGui {
         if let Some(action) = action {
             self.apply_word_action(action);
         }
+    }
+
+    /// Move the selection to the next/previous selectable phrase group.
+    fn navigate_selection(&mut self, delta: isize) {
+        let Some(reader) = self.reader.as_ref() else { return };
+        // Ordered list of (sentence, group, first-token) for every group
+        // that contains Japanese.
+        let mut selectable: Vec<(usize, usize, usize)> = Vec::new();
+        for (s, groups) in reader.groups.iter().enumerate() {
+            for (g, (start, end)) in groups.iter().enumerate() {
+                let has_japanese = reader.sentences[s].tokens[*start..*end]
+                    .iter()
+                    .any(|r| jrc_nlp::kana::is_japanese(&r.token.surface));
+                if has_japanese {
+                    selectable.push((s, g, *start));
+                }
+            }
+        }
+        if selectable.is_empty() {
+            return;
+        }
+        let current = reader
+            .selected
+            .and_then(|(ss, sg)| selectable.iter().position(|(s, g, _)| *s == ss && *g == sg));
+        let next = match current {
+            Some(pos) => (pos as isize + delta).rem_euclid(selectable.len() as isize) as usize,
+            None => {
+                if delta >= 0 {
+                    0
+                } else {
+                    selectable.len() - 1
+                }
+            }
+        };
+        let (s, _, t) = selectable[next];
+        self.select_token(s, t);
     }
 
     /// Select the phrase group containing a clicked token and load the
@@ -194,18 +291,20 @@ impl JrcGui {
                     return;
                 };
 
-                // Phrase + dictionary form.
+                // Headword with furigana above it.
                 ui.add_space(4.0);
-                ui.label(egui::RichText::new(&panel.phrase).size(30.0).strong());
-                if panel.phrase != panel.word.key.lemma {
-                    ui.label(format!("dictionary form: {}", panel.word.key.lemma));
-                }
-                if !panel.word.key.reading.is_empty()
-                    && panel.word.key.reading != panel.word.key.lemma
-                {
+                ui.vertical(|ui| {
+                    ui.spacing_mut().item_spacing.y = 0.0;
+                    let reading = &panel.word.key.reading;
+                    if !reading.is_empty() && reading != &panel.word.key.lemma {
+                        ui.label(egui::RichText::new(reading).size(13.0).weak());
+                    }
                     ui.label(
-                        egui::RichText::new(format!("（{}）", panel.word.key.reading)).size(18.0),
+                        egui::RichText::new(&panel.word.key.lemma).size(30.0).strong(),
                     );
+                });
+                if panel.phrase != panel.word.key.lemma {
+                    ui.label(format!("in text: {}", panel.phrase));
                 }
                 ui.horizontal(|ui| {
                     ui.label(panel.word.key.pos.as_str());

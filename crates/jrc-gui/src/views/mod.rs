@@ -10,13 +10,26 @@ mod setup;
 mod stats;
 mod welcome;
 
+use eframe::egui;
 use eframe::egui::Color32;
 
-/// The single selection-highlight color used in the reader.
-pub const SELECTION_FILL: Color32 = Color32::from_rgba_premultiplied(45, 80, 135, 110);
+/// A background rect that hugs the text instead of filling the whole text
+/// row. Label rects span the full line height (ascent + descent + line
+/// gap), which reads as highlight bleeding far below the glyphs.
+pub fn tight_highlight_rect(rect: egui::Rect, font_size: f32) -> egui::Rect {
+    let height = (font_size * 1.22).min(rect.height());
+    egui::Rect::from_center_size(rect.center(), egui::vec2(rect.width(), height))
+}
 
-/// Optional tint for unknown words (off by default, Settings toggle).
-pub const UNKNOWN_FILL: Color32 = Color32::from_rgba_premultiplied(90, 70, 25, 80);
+/// Theme-aware tint for unknown words. Opaque, so adjacent token rects
+/// never double up where they meet.
+pub fn unknown_fill(visuals: &egui::Visuals) -> Color32 {
+    if visuals.dark_mode {
+        Color32::from_rgb(84, 63, 24)
+    } else {
+        Color32::from_rgb(255, 236, 195)
+    }
+}
 
 /// Human duration like "10m", "3.5h", "12d".
 pub fn human_duration(d: chrono::Duration) -> String {

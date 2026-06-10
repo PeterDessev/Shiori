@@ -1,4 +1,5 @@
-//! Review view: due cards, always shown in their source sentence.
+//! Review view: due cards shown in their source sentence, answered with a
+//! simple correct/incorrect judgment (FSRS Good/Again underneath).
 
 use chrono::Utc;
 use eframe::egui;
@@ -6,11 +7,98 @@ use jrc_dict::register::UsageProfile;
 use jrc_srs::Rating;
 
 use crate::app::JrcGui;
+use crate::settings::shortcut_pressed;
 use crate::views::human_duration;
 
 impl JrcGui {
     pub fn show_review(&mut self, ctx: &egui::Context) {
         let mut answered: Option<Rating> = None;
+
+        // Keyboard shortcuts.
+        let shortcuts = self.settings.shortcuts.clone();
+        if !self.review.queue.is_empty() {
+            if !self.review.revealed {
+                if shortcut_pressed(ctx, &shortcuts.review_reveal) {
+                    self.review.revealed = true;
+                }
+            } else {
+                if shortcut_pressed(ctx, &shortcuts.review_correct) {
+                    answered = Some(Rating::Good);
+                }
+                if shortcut_pressed(ctx, &shortcuts.review_incorrect) {
+                    answered = Some(Rating::Again);
+                }
+            }
+        }
+
+        // Action bar pinned to the bottom of the screen.
+        if !self.review.queue.is_empty() {
+            egui::TopBottomPanel::bottom("review-actions")
+                .min_height(76.0)
+                .show(ctx, |ui| {
+                    ui.add_space(10.0);
+                    ui.vertical_centered(|ui| {
+                        if !self.review.revealed {
+                            if ui
+                                .add_sized(
+                                    [260.0, 44.0],
+                                    egui::Button::new(format!(
+                                        "Show answer  ({})",
+                                        shortcuts.review_reveal
+                                    )),
+                                )
+                                .clicked()
+                            {
+                                self.review.revealed = true;
+                            }
+                        } else {
+                            let item = &self.review.queue[0];
+                            let now = Utc::now();
+                            let scheduler = jrc_srs::Scheduler::default();
+                            let again = scheduler.review(&item.card, Rating::Again, now);
+                            let good = scheduler.review(&item.card, Rating::Good, now);
+                            ui.horizontal(|ui| {
+                                let total = 2.0 * 200.0 + 16.0;
+                                ui.add_space((ui.available_width() - total).max(0.0) / 2.0);
+                                if ui
+                                    .add_sized(
+                                        [200.0, 48.0],
+                                        egui::Button::new(
+                                            egui::RichText::new(format!(
+                                                "✗ Incorrect ({})\n{}",
+                                                shortcuts.review_incorrect,
+                                                human_duration(again.due - now)
+                                            ))
+                                            .color(egui::Color32::from_rgb(220, 90, 90)),
+                                        ),
+                                    )
+                                    .clicked()
+                                {
+                                    answered = Some(Rating::Again);
+                                }
+                                ui.add_space(16.0);
+                                if ui
+                                    .add_sized(
+                                        [200.0, 48.0],
+                                        egui::Button::new(
+                                            egui::RichText::new(format!(
+                                                "✓ Correct ({})\n{}",
+                                                shortcuts.review_correct,
+                                                human_duration(good.due - now)
+                                            ))
+                                            .color(egui::Color32::from_rgb(110, 180, 110)),
+                                        ),
+                                    )
+                                    .clicked()
+                                {
+                                    answered = Some(Rating::Good);
+                                }
+                            });
+                        }
+                    });
+                    ui.add_space(10.0);
+                });
+        }
 
         egui::CentralPanel::default().show(ctx, |ui| {
             if self.review.queue.is_empty() {
@@ -37,40 +125,32 @@ impl JrcGui {
                     item.card.lapses
                 ));
             });
-            ui.add_space(24.0);
+            ui.add_space(30.0);
 
-            // Front: the sentence with the word emphasized; the word alone
-            // if the source sentence is gone.
             ui.vertical_centered(|ui| {
+                // Front: the sentence the word was mined from.
                 match &item.sentence {
                     Some(sentence) => {
-                        let lemma = &item.word.key.lemma;
-                        // Render sentence with the target word underlined where it
-                        // (or its surface form) appears.
                         ui.label(egui::RichText::new(&sentence.text).size(26.0));
-                        ui.add_space(8.0);
+                        ui.add_space(10.0);
                         ui.label(
-                            egui::RichText::new(format!("→ {lemma}"))
+                            egui::RichText::new(format!("→ {}", item.word.key.lemma))
                                 .size(22.0)
                                 .strong()
                                 .color(egui::Color32::from_rgb(80, 140, 240)),
                         );
                     }
                     None => {
-                        ui.label(egui::RichText::new(&item.word.key.lemma).size(34.0).strong());
+                        ui.label(
+                            egui::RichText::new(&item.word.key.lemma).size(34.0).strong(),
+                        );
                     }
                 }
 
-                ui.add_space(20.0);
-
-                if !self.review.revealed {
-                    if ui
-                        .add_sized([200.0, 36.0], egui::Button::new("Show answer"))
-                        .clicked()
-                    {
-                        self.review.revealed = true;
-                    }
-                } else {
+                if self.review.revealed {
+                    ui.add_space(22.0);
+                    ui.separator();
+                    ui.add_space(12.0);
                     if !item.word.key.reading.is_empty() {
                         ui.label(egui::RichText::new(&item.word.key.reading).size(22.0));
                     }
@@ -83,45 +163,6 @@ impl JrcGui {
                             ui.weak(labels.join(" · "));
                         }
                     }
-                    ui.add_space(18.0);
-
-                    // Rating buttons with interval previews.
-                    let now = Utc::now();
-                    let scheduler = self
-                        .app
-                        .as_ref()
-                        .map(|_| jrc_srs::Scheduler::default())
-                        .unwrap_or_default();
-                    ui.horizontal(|ui| {
-                        ui.spacing_mut().item_spacing.x = 10.0;
-                        ui.with_layout(
-                            egui::Layout::left_to_right(egui::Align::Center)
-                                .with_main_align(egui::Align::Center),
-                            |ui| {
-                                for (rating, label, color) in [
-                                    (Rating::Again, "Again", egui::Color32::from_rgb(220, 90, 90)),
-                                    (Rating::Hard, "Hard", egui::Color32::from_rgb(230, 160, 60)),
-                                    (Rating::Good, "Good", egui::Color32::from_rgb(110, 180, 110)),
-                                    (Rating::Easy, "Easy", egui::Color32::from_rgb(80, 160, 220)),
-                                ] {
-                                    let preview = scheduler.review(&item.card, rating, now);
-                                    let interval = human_duration(preview.due - now);
-                                    let text = format!("{label}\n{interval}");
-                                    if ui
-                                        .add_sized(
-                                            [90.0, 44.0],
-                                            egui::Button::new(
-                                                egui::RichText::new(text).color(color),
-                                            ),
-                                        )
-                                        .clicked()
-                                    {
-                                        answered = Some(rating);
-                                    }
-                                }
-                            },
-                        );
-                    });
                 }
             });
         });
