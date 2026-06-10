@@ -20,6 +20,12 @@ pub struct ReviewItem {
     /// The sentence the word was mined from. Cards always show the word in
     /// context; this is only `None` if the source document was deleted.
     pub sentence: Option<Sentence>,
+    /// Tokens of that sentence, so the target word can be highlighted
+    /// in place.
+    pub sentence_tokens: Vec<jrc_db::TokenRow>,
+    /// Text of the sentences immediately before/after, for extra context.
+    pub prev_text: Option<String>,
+    pub next_text: Option<String>,
     pub entry: Option<DictEntry>,
 }
 
@@ -78,11 +84,28 @@ impl App {
                 Some(id) => self.db.sentence(id).ok(),
                 None => None,
             };
+            let mut sentence_tokens = Vec::new();
+            let mut prev_text = None;
+            let mut next_text = None;
+            if let Some(s) = &sentence {
+                sentence_tokens = self.db.sentence_tokens(s.id)?;
+                prev_text = self
+                    .db
+                    .sentence_at(s.document_id, s.index as i64 - 1)?
+                    .map(|p| p.text);
+                next_text = self
+                    .db
+                    .sentence_at(s.document_id, s.index as i64 + 1)?
+                    .map(|n| n.text);
+            }
             let entry = self.dictionary_entry_for(&word)?;
             items.push(ReviewItem {
                 word,
                 card: row.card,
                 sentence,
+                sentence_tokens,
+                prev_text,
+                next_text,
                 entry,
             });
         }

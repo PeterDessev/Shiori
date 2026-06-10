@@ -5,7 +5,7 @@ use rusqlite::Connection;
 use crate::Result;
 
 /// Current schema version. Bump when adding migration steps.
-const SCHEMA_VERSION: i64 = 2;
+const SCHEMA_VERSION: i64 = 3;
 
 const SCHEMA_V1: &str = r#"
 CREATE TABLE IF NOT EXISTS meta (
@@ -14,13 +14,14 @@ CREATE TABLE IF NOT EXISTS meta (
 );
 
 CREATE TABLE IF NOT EXISTS documents (
-    id           INTEGER PRIMARY KEY,
-    title        TEXT NOT NULL,
-    author       TEXT NOT NULL DEFAULT '',
-    publisher    TEXT NOT NULL DEFAULT '',
-    published    TEXT NOT NULL DEFAULT '',
-    added_at     TEXT NOT NULL,
-    content_hash TEXT NOT NULL UNIQUE
+    id            INTEGER PRIMARY KEY,
+    title         TEXT NOT NULL,
+    author        TEXT NOT NULL DEFAULT '',
+    publisher     TEXT NOT NULL DEFAULT '',
+    published     TEXT NOT NULL DEFAULT '',
+    last_sentence INTEGER NOT NULL DEFAULT 0,
+    added_at      TEXT NOT NULL,
+    content_hash  TEXT NOT NULL UNIQUE
 );
 
 CREATE TABLE IF NOT EXISTS sentences (
@@ -125,6 +126,12 @@ pub(crate) fn migrate(conn: &Connection) -> Result<()> {
                  ALTER TABLE documents ADD COLUMN published TEXT NOT NULL DEFAULT '';",
             )?;
         }
+        if current < 3 {
+            // v3: reading position.
+            conn.execute_batch(
+                "ALTER TABLE documents ADD COLUMN last_sentence INTEGER NOT NULL DEFAULT 0;",
+            )?;
+        }
     }
 
     conn.execute(
@@ -166,6 +173,14 @@ mod tests {
             })
             .unwrap();
         assert_eq!(author, "");
+        let last_sentence: i64 = conn
+            .query_row(
+                "SELECT last_sentence FROM documents WHERE title = 'old doc'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(last_sentence, 0);
         let version: String = conn
             .query_row("SELECT value FROM meta WHERE key = 'schema_version'", [], |r| {
                 r.get(0)

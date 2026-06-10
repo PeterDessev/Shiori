@@ -96,6 +96,24 @@ impl App {
     }
 }
 
+impl App {
+    /// Look up an arbitrary surface string in the dictionary — used for
+    /// analyzer-split compounds like 低声 (prefix 低 + noun 声) that JMdict
+    /// knows as one word.
+    pub fn lookup_compound(&self, surface: &str) -> Result<Option<DictEntry>> {
+        let seqs = self.db.dict_lookup_seqs(surface)?;
+        let mut candidates = Vec::with_capacity(seqs.len());
+        for seq in seqs {
+            if let Some(json) = self.db.dict_entry_json(seq)? {
+                if let Ok(entry) = serde_json::from_str::<DictEntry>(&json) {
+                    candidates.push(entry);
+                }
+            }
+        }
+        Ok(jrc_dict::pick_best_entry(candidates.iter(), surface, "").cloned())
+    }
+}
+
 /// Usefulness of learning a word: grows with in-document occurrences and
 /// with corpus frequency (low rank). Words absent from the frequency list
 /// rank below equally-frequent listed words.

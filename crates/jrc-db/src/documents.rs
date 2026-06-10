@@ -51,7 +51,8 @@ fn row_to_document(r: &rusqlite::Row<'_>) -> rusqlite::Result<Document> {
         author: r.get(2)?,
         publisher: r.get(3)?,
         published: r.get(4)?,
-        added_at: r.get(5)?,
+        last_sentence: r.get::<_, i64>(5)? as u32,
+        added_at: r.get(6)?,
     })
 }
 
@@ -154,7 +155,7 @@ impl Db {
     pub fn document(&self, id: DocumentId) -> Result<Document> {
         self.conn()
             .query_row(
-                "SELECT id, title, author, publisher, published, added_at
+                "SELECT id, title, author, publisher, published, last_sentence, added_at
                  FROM documents WHERE id = ?1",
                 [id.0],
                 row_to_document,
@@ -168,7 +169,8 @@ impl Db {
     /// All documents, newest first, with sentence/token counts.
     pub fn list_documents(&self) -> Result<Vec<DocumentSummary>> {
         let mut stmt = self.conn().prepare(
-            "SELECT d.id, d.title, d.author, d.publisher, d.published, d.added_at,
+            "SELECT d.id, d.title, d.author, d.publisher, d.published, d.last_sentence,
+                    d.added_at,
                     (SELECT COUNT(*) FROM sentences s WHERE s.document_id = d.id),
                     (SELECT COUNT(*) FROM tokens t
                        JOIN sentences s ON s.id = t.sentence_id
@@ -179,11 +181,47 @@ impl Db {
         let rows = stmt.query_map([], |r| {
             Ok(DocumentSummary {
                 document: row_to_document(r)?,
-                sentence_count: r.get::<_, i64>(6)? as u32,
-                token_count: r.get::<_, i64>(7)? as u32,
+                sentence_count: r.get::<_, i64>(7)? as u32,
+                token_count: r.get::<_, i64>(8)? as u32,
             })
         })?;
         Ok(rows.collect::<std::result::Result<_, _>>()?)
+    }
+
+    /// Remember where the user is in a document (first sentence of the
+    /// current page).
+    pub fn set_reading_position(&self, id: DocumentId, sentence_index: u32) -> Result<()> {
+        self.conn().execute(
+            "UPDATE documents SET last_sentence = ?2 WHERE id = ?1",
+            params![id.0, sentence_index as i64],
+        )?;
+        Ok(())
+    }
+
+    /// The sentence at a given position of a document, if any.
+    pub fn sentence_at(&self, document: DocumentId, index: i64) -> Result<Option<Sentence>> {
+        if index < 0 {
+            return Ok(None);
+        }
+        let result = self.conn().query_row(
+            "SELECT id, document_id, idx, paragraph, text
+             FROM sentences WHERE document_id = ?1 AND idx = ?2",
+            params![document.0, index],
+            |r| {
+                Ok(Sentence {
+                    id: SentenceId(r.get(0)?),
+                    document_id: DocumentId(r.get(1)?),
+                    index: r.get::<_, i64>(2)? as u32,
+                    paragraph: r.get::<_, i64>(3)? as u32,
+                    text: r.get(4)?,
+                })
+            },
+        );
+        match result {
+            Ok(s) => Ok(Some(s)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
     }
 
     /// Update a document's descriptive metadata.
@@ -362,6 +400,22 @@ pub(crate) mod tests {
         let cat0 = t0.iter().find(|t| t.token.surface == "猫").unwrap();
         let cat1 = t1.iter().find(|t| t.token.surface == "猫").unwrap();
         assert_eq!(cat0.word_id, cat1.word_id);
+    }
+
+    #[test]
+    fn reading_position_roundtrip_and_sentence_at() {
+        let db = Db::open_in_memory().unwrap();
+        let doc_id = import_fixture(&db);
+        assert_eq!(db.document(doc_id).unwrap().last_sentence, 0);
+
+        db.set_reading_position(doc_id, 1).unwrap();
+        assert_eq!(db.document(doc_id).unwrap().last_sentence, 1);
+        assert_eq!(db.list_documents().unwrap()[0].document.last_sentence, 1);
+
+        let s = db.sentence_at(doc_id, 1).unwrap().unwrap();
+        assert_eq!(s.text, "その猫は走る。");
+        assert!(db.sentence_at(doc_id, -1).unwrap().is_none());
+        assert!(db.sentence_at(doc_id, 99).unwrap().is_none());
     }
 
     #[test]

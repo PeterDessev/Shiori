@@ -25,6 +25,8 @@ pub struct Document {
     /// Publication date as free text (sources vary wildly); empty when
     /// unknown.
     pub published: String,
+    /// Index of the first sentence of the page the user last read.
+    pub last_sentence: u32,
     pub added_at: DateTime<Utc>,
 }
 
