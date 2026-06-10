@@ -867,6 +867,7 @@ dependencies = [
  "chrono",
  "jrc-core",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
