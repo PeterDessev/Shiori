@@ -4,6 +4,7 @@
 
 mod app;
 mod fonts;
+mod settings;
 mod views;
 
 fn main() -> eframe::Result {

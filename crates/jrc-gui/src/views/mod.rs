@@ -8,23 +8,15 @@ mod review;
 mod settings;
 mod setup;
 mod stats;
+mod welcome;
 
 use eframe::egui::Color32;
-use jrc_core::KnowledgeStatus;
 
-/// Background tint for a token by knowledge status. Function words get no
-/// tint at all — they are not vocabulary.
-pub fn status_fill(status: KnowledgeStatus, is_content: bool) -> Option<Color32> {
-    if !is_content {
-        return None;
-    }
-    match status {
-        KnowledgeStatus::Unknown => Some(Color32::from_rgba_unmultiplied(235, 150, 50, 70)),
-        KnowledgeStatus::Learning => Some(Color32::from_rgba_unmultiplied(80, 140, 240, 70)),
-        KnowledgeStatus::Known => None,
-        KnowledgeStatus::Ignored => Some(Color32::from_rgba_unmultiplied(128, 128, 128, 50)),
-    }
-}
+/// The single selection-highlight color used in the reader.
+pub const SELECTION_FILL: Color32 = Color32::from_rgba_premultiplied(45, 80, 135, 110);
+
+/// Optional tint for unknown words (off by default, Settings toggle).
+pub const UNKNOWN_FILL: Color32 = Color32::from_rgba_premultiplied(90, 70, 25, 80);
 
 /// Human duration like "10m", "3.5h", "12d".
 pub fn human_duration(d: chrono::Duration) -> String {

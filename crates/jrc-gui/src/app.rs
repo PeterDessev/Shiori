@@ -12,6 +12,8 @@ use jrc_db::{DocumentSummary, TokenRow, WordRow};
 use jrc_dict::DictEntry;
 use jrc_llm::Explainer;
 
+use crate::settings::Settings;
+
 /// Messages posted back from background threads.
 pub enum Msg {
     AppOpened(Result<Box<App>, String>),
@@ -33,6 +35,7 @@ pub enum Phase {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum View {
+    Welcome,
     Library,
     Reader,
     Mining,
@@ -53,16 +56,44 @@ pub struct WordPanel {
     pub word: WordRow,
     pub entry: Option<DictEntry>,
     pub rank: Option<u32>,
+    /// Surface of the whole selected phrase (e.g. 読んでいる).
+    pub phrase: String,
+    /// Grammar of the phrase tail, when conjugated.
+    pub inflection: jrc_nlp::Inflection,
 }
 
 pub struct ReaderState {
     pub doc: Document,
     pub sentences: Vec<SentenceView>,
-    /// (sentence index, token index) of the selected token.
+    /// Per sentence: phrase groups as (start, end) token ranges.
+    pub groups: Vec<Vec<(usize, usize)>>,
+    /// (sentence index, group index) of the selected phrase.
     pub selected: Option<(usize, usize)>,
     pub panel: Option<WordPanel>,
     pub explanation: Option<String>,
     pub explaining: bool,
+}
+
+impl ReaderState {
+    /// Index of the group containing token `t_idx` of sentence `s_idx`.
+    pub fn group_of(&self, s_idx: usize, t_idx: usize) -> Option<usize> {
+        self.groups
+            .get(s_idx)?
+            .iter()
+            .position(|(s, e)| (*s..*e).contains(&t_idx))
+    }
+}
+
+/// Compute phrase groups for each sentence.
+fn compute_groups(sentences: &[SentenceView]) -> Vec<Vec<(usize, usize)>> {
+    sentences
+        .iter()
+        .map(|view| {
+            let tokens: Vec<jrc_core::Token> =
+                view.tokens.iter().map(|r| r.token.clone()).collect();
+            jrc_nlp::phrase_groups(&tokens)
+        })
+        .collect()
 }
 
 #[derive(Default)]
@@ -116,6 +147,9 @@ pub struct JrcGui {
     pub production: ProductionState,
     pub data_status: Option<DataStatus>,
     pub data_dir: PathBuf,
+    pub settings: Settings,
+    /// Editable copy shown in the settings view (saved explicitly).
+    pub settings_draft: Settings,
 }
 
 pub fn default_data_dir() -> PathBuf {
@@ -128,6 +162,7 @@ impl JrcGui {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let (tx, rx) = channel();
         let data_dir = default_data_dir();
+        let settings = Settings::load(&data_dir);
 
         // Opening the app deserializes the embedded NLP dictionary — keep
         // it off the first frame.
@@ -148,12 +183,16 @@ impl JrcGui {
             tx,
             rx,
             app: None,
-            explainer: Arc::from(jrc_llm::explainer_from_env()),
+            explainer: settings.build_explainer(),
             phase: Phase::Starting,
             progress: Vec::new(),
             error: None,
             importing: false,
-            view: View::Library,
+            view: if settings.onboarded {
+                View::Library
+            } else {
+                View::Welcome
+            },
             library: Vec::new(),
             doc_stats: HashMap::new(),
             due_count: 0,
@@ -164,7 +203,28 @@ impl JrcGui {
             production: ProductionState::default(),
             data_status: None,
             data_dir,
+            settings_draft: settings.clone(),
+            settings,
         }
+    }
+
+    /// Persist the settings draft and apply it (rebuilds the LLM backend).
+    pub fn apply_settings(&mut self) {
+        self.settings = self.settings_draft.clone();
+        if let Err(e) = self.settings.save(&self.data_dir) {
+            self.error = Some(format!("could not save settings: {e}"));
+        }
+        self.explainer = self.settings.build_explainer();
+    }
+
+    /// Dismiss the getting-started page permanently.
+    pub fn finish_onboarding(&mut self) {
+        self.settings.onboarded = true;
+        self.settings_draft.onboarded = true;
+        if let Err(e) = self.settings.save(&self.data_dir) {
+            self.error = Some(format!("could not save settings: {e}"));
+        }
+        self.view = View::Library;
     }
 
     /// Run a closure against the app, routing failures to the error toast.
@@ -312,9 +372,11 @@ impl JrcGui {
                 let tokens = app.db().sentence_tokens(sentence.id)?;
                 sentences.push(SentenceView { sentence, tokens });
             }
+            let groups = compute_groups(&sentences);
             Ok(ReaderState {
                 doc,
                 sentences,
+                groups,
                 selected: None,
                 panel: None,
                 explanation: None,
@@ -340,17 +402,29 @@ impl JrcGui {
             Ok(out)
         });
         if let (Some(reader), Some(sentences)) = (self.reader.as_mut(), refreshed) {
+            reader.groups = compute_groups(&sentences);
             reader.sentences = sentences;
         }
     }
 
-    /// Load the dictionary panel for a word.
-    pub fn load_word_panel(&mut self, word_id: WordId) -> Option<WordPanel> {
+    /// Load the dictionary panel for a word within its phrase context.
+    pub fn load_word_panel(
+        &mut self,
+        word_id: WordId,
+        phrase: String,
+        inflection: jrc_nlp::Inflection,
+    ) -> Option<WordPanel> {
         self.with_app(|app| {
             let word = app.db().word(word_id)?;
             let entry = app.dictionary_entry_for(&word)?;
             let rank = app.db().frequency_rank(&word.key.lemma)?;
-            Ok(WordPanel { word, entry, rank })
+            Ok(WordPanel {
+                word,
+                entry,
+                rank,
+                phrase,
+                inflection,
+            })
         })
     }
 
@@ -383,10 +457,15 @@ impl JrcGui {
     /// Request an LLM explanation of the selected sentence.
     pub fn request_explanation(&mut self, ctx: &egui::Context) {
         let Some(reader) = &mut self.reader else { return };
-        let Some((s_idx, t_idx)) = reader.selected else { return };
+        let Some((s_idx, g_idx)) = reader.selected else { return };
         let Some(view) = reader.sentences.get(s_idx) else { return };
         let sentence = view.sentence.text.clone();
-        let focus = view.tokens.get(t_idx).map(|t| t.token.lemma.clone());
+        let focus = reader
+            .groups
+            .get(s_idx)
+            .and_then(|g| g.get(g_idx))
+            .and_then(|(start, _)| view.tokens.get(*start))
+            .map(|t| t.token.lemma.clone());
 
         reader.explaining = true;
         reader.explanation = None;
@@ -480,12 +559,19 @@ impl eframe::App for JrcGui {
                 ui.selectable_value(&mut self.view, View::Production, "Production");
                 ui.selectable_value(&mut self.view, View::Settings, "Settings");
 
-                if self.importing {
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui
+                        .button("❓")
+                        .on_hover_text("Getting started guide")
+                        .clicked()
+                    {
+                        self.view = View::Welcome;
+                    }
+                    if self.importing {
                         ui.spinner();
                         ui.label("importing…");
-                    });
-                }
+                    }
+                });
             });
         });
 
@@ -501,6 +587,7 @@ impl eframe::App for JrcGui {
         }
 
         match self.view {
+            View::Welcome => self.show_welcome(ctx),
             View::Library => self.show_library(ctx),
             View::Reader => self.show_reader(ctx),
             View::Mining => self.show_mining(ctx),

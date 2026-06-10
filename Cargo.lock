@@ -2326,8 +2326,11 @@ dependencies = [
  "jrc-db",
  "jrc-dict",
  "jrc-llm",
+ "jrc-nlp",
  "jrc-srs",
  "rfd",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

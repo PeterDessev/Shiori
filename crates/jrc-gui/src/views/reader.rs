@@ -1,12 +1,17 @@
-//! Reader view: the text with tokens tinted by knowledge status, plus a
-//! dictionary side panel for the selected word.
+//! Reader view: flowing paragraphs of clickable text with a dictionary
+//! side panel for the selected phrase.
+//!
+//! Phrases (conjugated verbs with their endings, noun+suffix compounds)
+//! are selected as a unit, highlighted in a single color, and the panel
+//! explains the conjugation. No permanent per-status tinting — an optional
+//! settings toggle can mark unknown words.
 
 use eframe::egui;
 use jrc_core::{KnowledgeStatus, WordId};
 use jrc_dict::register::UsageProfile;
 
 use crate::app::JrcGui;
-use crate::views::status_fill;
+use crate::views::{SELECTION_FILL, UNKNOWN_FILL};
 
 /// Action chosen in the dictionary panel.
 enum WordAction {
@@ -14,6 +19,7 @@ enum WordAction {
     Known(WordId),
     Ignore(WordId),
     Reset(WordId),
+    Forgot(WordId, Option<jrc_core::SentenceId>),
 }
 
 impl JrcGui {
@@ -26,111 +32,141 @@ impl JrcGui {
         }
 
         let mut action: Option<WordAction> = None;
-        let mut clicked_token: Option<(usize, usize)> = None;
+        let mut clicked: Option<(usize, usize)> = None; // (sentence, token)
         let mut explain_requested = false;
 
         egui::SidePanel::right("dict-panel")
             .resizable(true)
-            .default_width(330.0)
+            .default_width(340.0)
             .show(ctx, |ui| {
                 action = self.dictionary_panel(ui, &mut explain_requested);
             });
 
+        let show_unknown = self.settings.show_unknown_highlights;
         egui::CentralPanel::default().show(ctx, |ui| {
             let reader = self.reader.as_ref().unwrap();
             ui.heading(&reader.doc.title);
-            ui.add_space(6.0);
+            ui.add_space(8.0);
             egui::ScrollArea::vertical()
                 .auto_shrink([false; 2])
                 .show(ui, |ui| {
-                    let mut last_paragraph = u32::MAX;
-                    for (s_idx, view) in reader.sentences.iter().enumerate() {
-                        if view.sentence.paragraph != last_paragraph {
-                            if last_paragraph != u32::MAX {
-                                ui.add_space(10.0);
-                            }
-                            last_paragraph = view.sentence.paragraph;
-                        }
+                    // Render each paragraph as one flowing wrapped block.
+                    let mut s_idx = 0;
+                    while s_idx < reader.sentences.len() {
+                        let paragraph = reader.sentences[s_idx].sentence.paragraph;
+                        let para_end = reader.sentences[s_idx..]
+                            .iter()
+                            .position(|v| v.sentence.paragraph != paragraph)
+                            .map(|off| s_idx + off)
+                            .unwrap_or(reader.sentences.len());
+
                         ui.horizontal_wrapped(|ui| {
                             ui.spacing_mut().item_spacing.x = 0.0;
-                            for (t_idx, row) in view.tokens.iter().enumerate() {
-                                let selected = reader.selected == Some((s_idx, t_idx));
-                                let mut text = egui::RichText::new(&row.token.surface).size(20.0);
-                                if let Some(fill) =
-                                    status_fill(row.status, row.token.is_content_word())
-                                {
-                                    text = text.background_color(fill);
-                                }
-                                if selected {
-                                    text = text
-                                        .underline()
-                                        .background_color(egui::Color32::from_rgba_unmultiplied(
-                                            160, 120, 240, 90,
-                                        ));
-                                }
-                                let response = ui.add(
-                                    egui::Label::new(text).sense(egui::Sense::click()),
-                                );
-                                if response.clicked() && row.token.is_content_word() {
-                                    clicked_token = Some((s_idx, t_idx));
-                                }
-                                if row.token.is_content_word() {
-                                    response.on_hover_text(format!(
-                                        "{}（{}）",
-                                        row.token.lemma, row.token.reading
-                                    ));
+                            ui.spacing_mut().item_spacing.y = 8.0;
+                            for si in s_idx..para_end {
+                                let view = &reader.sentences[si];
+                                for (ti, row) in view.tokens.iter().enumerate() {
+                                    let group = reader.group_of(si, ti);
+                                    let selected = match (reader.selected, group) {
+                                        (Some((ss, sg)), Some(g)) => ss == si && sg == g,
+                                        _ => false,
+                                    };
+                                    let mut text =
+                                        egui::RichText::new(&row.token.surface).size(21.0);
+                                    if selected {
+                                        text = text.background_color(SELECTION_FILL);
+                                    } else if show_unknown
+                                        && row.status == KnowledgeStatus::Unknown
+                                        && row.token.is_content_word()
+                                    {
+                                        text = text.background_color(UNKNOWN_FILL);
+                                    }
+                                    let clickable =
+                                        jrc_nlp::kana::is_japanese(&row.token.surface);
+                                    let response = ui.add(
+                                        egui::Label::new(text).sense(if clickable {
+                                            egui::Sense::click()
+                                        } else {
+                                            egui::Sense::hover()
+                                        }),
+                                    );
+                                    if clickable {
+                                        let response = response
+                                            .on_hover_cursor(egui::CursorIcon::PointingHand);
+                                        if response.clicked() {
+                                            clicked = Some((si, ti));
+                                        }
+                                    }
                                 }
                             }
                         });
+                        ui.add_space(14.0);
+                        s_idx = para_end;
                     }
                     ui.add_space(20.0);
                 });
         });
 
-        if let Some((s_idx, t_idx)) = clicked_token {
-            let word_id = self
-                .reader
-                .as_ref()
-                .and_then(|r| r.sentences.get(s_idx))
-                .and_then(|v| v.tokens.get(t_idx))
-                .map(|row| row.word_id);
-            if let Some(word_id) = word_id {
-                let panel = self.load_word_panel(word_id);
-                if let Some(reader) = self.reader.as_mut() {
-                    reader.selected = Some((s_idx, t_idx));
-                    reader.panel = panel;
-                    reader.explanation = None;
-                }
-            }
+        if let Some((s_idx, t_idx)) = clicked {
+            self.select_token(s_idx, t_idx);
         }
-
         if explain_requested {
             self.request_explanation(ctx);
         }
-
         if let Some(action) = action {
-            let result = match action {
-                WordAction::Learn(word, sentence) => {
-                    self.with_app(|app| app.start_learning(word, sentence))
-                }
-                WordAction::Known(word) => self.with_app(|app| app.mark_known(word)),
-                WordAction::Ignore(word) => self.with_app(|app| app.ignore_word(word)),
-                WordAction::Reset(word) => self.with_app(|app| app.reset_word(word)),
-            };
-            if result.is_some() {
-                self.refresh_reader_tokens();
-                self.refresh_caches();
-                // Refresh the panel so the status line is current.
-                let word_id = self
-                    .reader
+            self.apply_word_action(action);
+        }
+    }
+
+    /// Select the phrase group containing a clicked token and load the
+    /// panel for that token's word.
+    fn select_token(&mut self, s_idx: usize, t_idx: usize) {
+        let Some(reader) = self.reader.as_ref() else { return };
+        let Some(g_idx) = reader.group_of(s_idx, t_idx) else { return };
+        let (start, end) = reader.groups[s_idx][g_idx];
+        let view = &reader.sentences[s_idx];
+
+        let group_tokens: Vec<jrc_core::Token> = view.tokens[start..end]
+            .iter()
+            .map(|r| r.token.clone())
+            .collect();
+        let phrase: String = group_tokens.iter().map(|t| t.surface.as_str()).collect();
+        let inflection = jrc_nlp::analyze_inflection(&group_tokens);
+        let word_id = view.tokens[t_idx].word_id;
+
+        let panel = self.load_word_panel(word_id, phrase, inflection);
+        if let Some(reader) = self.reader.as_mut() {
+            reader.selected = Some((s_idx, g_idx));
+            reader.panel = panel;
+            reader.explanation = None;
+        }
+    }
+
+    fn apply_word_action(&mut self, action: WordAction) {
+        let result = match action {
+            WordAction::Learn(word, sentence) => {
+                self.with_app(|app| app.start_learning(word, sentence))
+            }
+            WordAction::Known(word) => self.with_app(|app| app.mark_known(word)),
+            WordAction::Ignore(word) => self.with_app(|app| app.ignore_word(word)),
+            WordAction::Reset(word) => self.with_app(|app| app.reset_word(word)),
+            WordAction::Forgot(word, sentence) => {
+                self.with_app(|app| app.mark_forgotten(word, sentence))
+            }
+        };
+        if result.is_some() {
+            self.refresh_reader_tokens();
+            self.refresh_caches();
+            // Refresh the panel so the status line is current.
+            let current = self.reader.as_ref().and_then(|r| {
+                r.panel
                     .as_ref()
-                    .and_then(|r| r.panel.as_ref())
-                    .map(|p| p.word.id);
-                if let Some(word_id) = word_id {
-                    let panel = self.load_word_panel(word_id);
-                    if let Some(reader) = self.reader.as_mut() {
-                        reader.panel = panel;
-                    }
+                    .map(|p| (p.word.id, p.phrase.clone(), p.inflection.clone()))
+            });
+            if let Some((word_id, phrase, inflection)) = current {
+                let panel = self.load_word_panel(word_id, phrase, inflection);
+                if let Some(reader) = self.reader.as_mut() {
+                    reader.panel = panel;
                 }
             }
         }
@@ -149,18 +185,27 @@ impl JrcGui {
             .show(ui, |ui| {
                 let Some(panel) = &reader.panel else {
                     ui.add_space(8.0);
-                    ui.weak("Click a highlighted word in the text to look it up.");
-                    ui.add_space(12.0);
-                    legend(ui);
+                    ui.weak("Click any word in the text to look it up.");
+                    ui.add_space(6.0);
+                    ui.weak(
+                        "Conjugated verbs are selected with their endings, and the \
+                         panel explains the form.",
+                    );
                     return;
                 };
 
+                // Phrase + dictionary form.
                 ui.add_space(4.0);
-                ui.label(egui::RichText::new(&panel.word.key.lemma).size(30.0).strong());
+                ui.label(egui::RichText::new(&panel.phrase).size(30.0).strong());
+                if panel.phrase != panel.word.key.lemma {
+                    ui.label(format!("dictionary form: {}", panel.word.key.lemma));
+                }
                 if !panel.word.key.reading.is_empty()
                     && panel.word.key.reading != panel.word.key.lemma
                 {
-                    ui.label(egui::RichText::new(format!("（{}）", panel.word.key.reading)).size(18.0));
+                    ui.label(
+                        egui::RichText::new(format!("（{}）", panel.word.key.reading)).size(18.0),
+                    );
                 }
                 ui.horizontal(|ui| {
                     ui.label(panel.word.key.pos.as_str());
@@ -170,23 +215,34 @@ impl JrcGui {
                 if let Some(rank) = panel.rank {
                     ui.label(format!("corpus frequency rank: #{rank}"));
                 }
+
+                // Conjugation/form information.
+                if !panel.inflection.is_plain() {
+                    ui.add_space(8.0);
+                    ui.group(|ui| {
+                        ui.label(egui::RichText::new("Form").strong());
+                        if let Some(summary) = &panel.inflection.summary {
+                            ui.label(summary);
+                        }
+                        for part in &panel.inflection.parts {
+                            ui.weak(part);
+                        }
+                    });
+                }
                 ui.add_space(6.0);
 
                 match &panel.entry {
                     Some(entry) => {
-                        // Register / nuance chips.
                         let profile = UsageProfile::from_misc_codes(entry.misc_codes());
                         if !profile.is_neutral() || !profile.notes.is_empty() {
                             ui.horizontal_wrapped(|ui| {
                                 for reg in &profile.registers {
                                     ui.label(
-                                        egui::RichText::new(reg.label())
-                                            .small()
-                                            .background_color(
-                                                egui::Color32::from_rgba_unmultiplied(
-                                                    200, 120, 60, 70,
-                                                ),
+                                        egui::RichText::new(reg.label()).small().background_color(
+                                            egui::Color32::from_rgba_unmultiplied(
+                                                200, 120, 60, 70,
                                             ),
+                                        ),
                                     );
                                 }
                                 for note in &profile.notes {
@@ -247,9 +303,15 @@ impl JrcGui {
                             }
                         }
                     }
-                    if panel.word.status != KnowledgeStatus::Known
-                        && ui.button("✔ Known").clicked()
-                    {
+                    if panel.word.status == KnowledgeStatus::Known {
+                        if ui
+                            .button("↺ Forgot this")
+                            .on_hover_text("Put it back into review rotation")
+                            .clicked()
+                        {
+                            action = Some(WordAction::Forgot(panel.word.id, sentence_id));
+                        }
+                    } else if ui.button("✔ Known").clicked() {
                         action = Some(WordAction::Known(panel.word.id));
                     }
                     if panel.word.status != KnowledgeStatus::Ignored
@@ -281,29 +343,10 @@ impl JrcGui {
                         ui.label(explanation);
                     }
                 } else {
-                    ui.weak("Set ANTHROPIC_API_KEY and restart to enable LLM explanations.");
+                    ui.weak("Add an API key in Settings to enable LLM explanations.");
                 }
             });
 
         action
-    }
-}
-
-fn legend(ui: &mut egui::Ui) {
-    ui.label(egui::RichText::new("Legend").strong());
-    for (status, label) in [
-        (KnowledgeStatus::Unknown, "unknown — not yet studied"),
-        (KnowledgeStatus::Learning, "learning — in the SRS"),
-        (KnowledgeStatus::Known, "known — no highlight"),
-        (KnowledgeStatus::Ignored, "ignored"),
-    ] {
-        ui.horizontal(|ui| {
-            let mut sample = egui::RichText::new("　例　");
-            if let Some(fill) = status_fill(status, true) {
-                sample = sample.background_color(fill);
-            }
-            ui.label(sample);
-            ui.label(label);
-        });
     }
 }
