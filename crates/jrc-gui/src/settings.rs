@@ -214,7 +214,36 @@ pub struct Settings {
     pub furigana_first_x: u32,
     /// Show example sentences from other books on review cards.
     pub review_examples: bool,
+    /// How hard the chat partner's Japanese pushes the user.
+    pub chat_challenge: ChatChallenge,
     pub shortcuts: Shortcuts,
+}
+
+/// Persisted form of the production-chat challenge dial.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ChatChallenge {
+    Match,
+    Push,
+    Immerse,
+}
+
+impl ChatChallenge {
+    pub fn label(self) -> &'static str {
+        match self {
+            ChatChallenge::Match => "Match my level",
+            ChatChallenge::Push => "Push me a little",
+            ChatChallenge::Immerse => "Full immersion",
+        }
+    }
+
+    pub fn to_llm(self) -> jrc_llm::Challenge {
+        match self {
+            ChatChallenge::Match => jrc_llm::Challenge::Match,
+            ChatChallenge::Push => jrc_llm::Challenge::Push,
+            ChatChallenge::Immerse => jrc_llm::Challenge::Immerse,
+        }
+    }
 }
 
 impl Default for Settings {
@@ -237,6 +266,7 @@ impl Default for Settings {
             furigana: FuriganaMode::None,
             furigana_first_x: 3,
             review_examples: true,
+            chat_challenge: ChatChallenge::Push,
             shortcuts: Shortcuts::default(),
         }
     }

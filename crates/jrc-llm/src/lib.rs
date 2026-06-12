@@ -6,11 +6,16 @@
 //! provided live backend talks to the Anthropic Messages API over HTTP.
 
 mod anthropic;
+pub mod chat;
 mod ollama;
 mod openai_compat;
 mod prompts;
 
 pub use anthropic::AnthropicExplainer;
+pub use chat::{
+    chat_system_prompt, parse_chat_response, AnnotationSeverity, Challenge, ChatAnnotation,
+    ChatMessage, ChatRole, ChatTurnOutcome,
+};
 pub use ollama::{
     OllamaClient, OllamaExplainer, OllamaModel, PullProgress, DEFAULT_OLLAMA_URL,
 };
@@ -58,6 +63,13 @@ pub trait Explainer: Send + Sync {
 
     /// Feedback on the naturalness of user-written Japanese.
     fn production_feedback(&self, prompt: &str, user_text: &str) -> Result<String, LlmError>;
+
+    /// One turn of free conversation: a system prompt plus the message
+    /// history, returning the model's raw text.
+    fn chat(&self, system: &str, history: &[ChatMessage]) -> Result<String, LlmError> {
+        let _ = (system, history);
+        Err(LlmError::NotConfigured)
+    }
 }
 
 /// The no-op backend used when nothing is configured.

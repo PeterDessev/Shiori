@@ -38,6 +38,17 @@ impl OpenAiCompatExplainer {
     }
 
     fn complete(&self, user_prompt: &str) -> Result<String, LlmError> {
+        self.request(serde_json::json!({
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt}
+            ],
+            "stream": false
+        }))
+    }
+
+    fn request(&self, body: serde_json::Value) -> Result<String, LlmError> {
         #[derive(Deserialize)]
         struct ChatResponse {
             choices: Vec<Choice>,
@@ -51,15 +62,6 @@ impl OpenAiCompatExplainer {
             #[serde(default)]
             content: Option<String>,
         }
-
-        let body = serde_json::json!({
-            "model": self.model,
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt}
-            ],
-            "stream": false
-        });
         let mut request = self
             .agent
             .post(&format!("{}/chat/completions", self.base_url))
@@ -104,6 +106,24 @@ impl Explainer for OpenAiCompatExplainer {
 
     fn production_feedback(&self, prompt: &str, user_text: &str) -> Result<String, LlmError> {
         self.complete(&build_feedback_prompt(prompt, user_text))
+    }
+
+    fn chat(
+        &self,
+        system: &str,
+        history: &[crate::ChatMessage],
+    ) -> Result<String, LlmError> {
+        let mut messages = vec![serde_json::json!({"role": "system", "content": system})];
+        messages.extend(
+            history
+                .iter()
+                .map(|m| serde_json::json!({"role": m.role.as_str(), "content": m.content})),
+        );
+        self.request(serde_json::json!({
+            "model": self.model,
+            "messages": messages,
+            "stream": false
+        }))
     }
 }
 

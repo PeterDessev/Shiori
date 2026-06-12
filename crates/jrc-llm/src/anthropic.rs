@@ -37,7 +37,7 @@ impl AnthropicExplainer {
     }
 
     fn complete(&self, user_prompt: &str) -> Result<String, LlmError> {
-        let body = serde_json::json!({
+        self.request(serde_json::json!({
             "model": self.model,
             "max_tokens": MAX_TOKENS,
             "system": SYSTEM_PROMPT,
@@ -45,8 +45,10 @@ impl AnthropicExplainer {
             "messages": [
                 {"role": "user", "content": user_prompt}
             ]
-        });
+        }))
+    }
 
+    fn request(&self, body: serde_json::Value) -> Result<String, LlmError> {
         let response = self
             .agent
             .post(API_URL)
@@ -84,6 +86,23 @@ impl Explainer for AnthropicExplainer {
 
     fn production_feedback(&self, prompt: &str, user_text: &str) -> Result<String, LlmError> {
         self.complete(&build_feedback_prompt(prompt, user_text))
+    }
+
+    fn chat(
+        &self,
+        system: &str,
+        history: &[crate::ChatMessage],
+    ) -> Result<String, LlmError> {
+        let messages: Vec<serde_json::Value> = history
+            .iter()
+            .map(|m| serde_json::json!({"role": m.role.as_str(), "content": m.content}))
+            .collect();
+        self.request(serde_json::json!({
+            "model": self.model,
+            "max_tokens": MAX_TOKENS,
+            "system": system,
+            "messages": messages
+        }))
     }
 }
 

@@ -5,7 +5,7 @@ use rusqlite::Connection;
 use crate::Result;
 
 /// Current schema version. Bump when adding migration steps.
-const SCHEMA_VERSION: i64 = 4;
+const SCHEMA_VERSION: i64 = 5;
 
 const SCHEMA_V1: &str = r#"
 CREATE TABLE IF NOT EXISTS meta (
@@ -108,6 +108,36 @@ CREATE TABLE IF NOT EXISTS reading_sessions (
     chars       INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_doc ON reading_sessions(document_id);
+
+-- v5: production-practice chat with paper-style write-ups.
+CREATE TABLE IF NOT EXISTS conversations (
+    id         INTEGER PRIMARY KEY,
+    started_at TEXT NOT NULL,
+    title      TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id              INTEGER PRIMARY KEY,
+    conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    idx             INTEGER NOT NULL,
+    role            TEXT NOT NULL,
+    content         TEXT NOT NULL,
+    created_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_conv
+    ON chat_messages(conversation_id, idx);
+
+-- Write-up spans over a *user* message (byte offsets into content).
+CREATE TABLE IF NOT EXISTS chat_annotations (
+    id         INTEGER PRIMARY KEY,
+    message_id INTEGER NOT NULL REFERENCES chat_messages(id) ON DELETE CASCADE,
+    start      INTEGER NOT NULL,
+    end        INTEGER NOT NULL,
+    severity   TEXT NOT NULL,
+    note       TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_chat_annotations_msg
+    ON chat_annotations(message_id);
 "#;
 
 /// Bring the schema up to [`SCHEMA_VERSION`]. Idempotent.

@@ -54,6 +54,18 @@ impl Db {
             })
     }
 
+    /// The word for a key, inserted at the default status if new.
+    pub fn ensure_word(&self, key: &WordKey) -> Result<WordRow> {
+        if let Some(word) = self.find_word(key)? {
+            return Ok(word);
+        }
+        self.conn().execute(
+            "INSERT INTO words(lemma, reading, pos) VALUES (?1, ?2, ?3)",
+            params![key.lemma, key.reading, key.pos.as_str()],
+        )?;
+        self.find_word(key)?.ok_or(DbError::NotFound("word"))
+    }
+
     pub fn find_word(&self, key: &WordKey) -> Result<Option<WordRow>> {
         let result = self.conn().query_row(
             &format!("SELECT {WORD_COLS} FROM words WHERE lemma = ?1 AND reading = ?2 AND pos = ?3"),

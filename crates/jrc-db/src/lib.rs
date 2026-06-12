@@ -10,6 +10,7 @@
 //! not depend on `jrc-dict`.
 
 mod cards;
+mod chat;
 mod dict;
 mod documents;
 mod schema;
@@ -18,6 +19,7 @@ mod stats;
 mod words;
 
 pub use cards::CardRow;
+pub use chat::{ChatAnnotationRow, ChatMessageRow, ConversationRow};
 pub use dict::DictFormRow;
 pub use documents::{DocumentSummary, NewSentence, NewToken, TokenRow};
 pub use sessions::ReadingTotals;

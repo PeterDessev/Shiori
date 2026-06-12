@@ -21,7 +21,9 @@ pub enum Msg {
     DownloadDone(Result<DataStatus, String>),
     ImportDone(Result<DocumentId, String>),
     Explained(Result<String, String>),
-    Feedback(Result<String, String>),
+    /// Outcome of a chat turn: the user message the write-up belongs to,
+    /// and the parsed reply + annotations.
+    ChatReply(i64, Result<jrc_llm::ChatTurnOutcome, String>),
     FontDownloaded(crate::settings::ReaderFont, Result<(), String>),
     OllamaProbe(Result<(String, Vec<jrc_llm::OllamaModel>), String>),
     OllamaPullProgress(String, Option<f32>),
@@ -182,12 +184,31 @@ pub struct ReviewState {
     pub revealed: bool,
 }
 
+/// One chat message prepared for display.
+pub struct ChatMessageView {
+    pub id: i64,
+    /// "user" or "assistant".
+    pub role: String,
+    pub content: String,
+    /// Write-up spans (byte offsets into content); user messages only.
+    pub annotations: Vec<jrc_db::ChatAnnotationRow>,
+    /// Per sentence: clickable tokens (absolute offsets) + phrase groups.
+    pub sentences: Vec<(Vec<jrc_app::ChatTokenRow>, Vec<(usize, usize)>)>,
+}
+
 #[derive(Default)]
 pub struct ProductionState {
-    pub prompt_idx: usize,
-    pub text: String,
-    pub feedback: Option<String>,
+    pub conversations: Vec<jrc_db::ConversationRow>,
+    pub current: Option<i64>,
+    pub messages: Vec<ChatMessageView>,
+    pub input: String,
     pub waiting: bool,
+    /// Conversation list has been loaded this session.
+    pub loaded: bool,
+    /// Dictionary panel for the clicked chat word.
+    pub panel: Option<WordPanel>,
+    /// Write-up note overlapping the clicked word, if any.
+    pub panel_note: Option<String>,
 }
 
 /// Per-document metadata being edited in the library dialog.
@@ -552,10 +573,10 @@ impl JrcGui {
                         }
                     }
                 }
-                Msg::Feedback(result) => {
+                Msg::ChatReply(user_msg_id, result) => {
                     self.production.waiting = false;
                     match result {
-                        Ok(text) => self.production.feedback = Some(text),
+                        Ok(outcome) => self.apply_chat_reply(user_msg_id, outcome),
                         Err(e) => self.error = Some(e),
                     }
                 }
@@ -880,23 +901,164 @@ impl JrcGui {
         });
     }
 
-    /// Request LLM feedback on production-mode writing.
-    pub fn request_feedback(&mut self, ctx: &egui::Context) {
-        let prompts = jrc_llm::writing_prompts();
-        let prompt = prompts[self.production.prompt_idx % prompts.len()].to_string();
-        let text = self.production.text.clone();
+    /// Load (or reload) the conversation list for the chat sidebar.
+    pub fn load_conversations(&mut self) {
+        if let Some(list) = self.with_app(|app| Ok(app.db().list_conversations()?)) {
+            self.production.conversations = list;
+            self.production.loaded = true;
+        }
+    }
+
+    /// Open a conversation: load its messages, annotations, and analysis.
+    pub fn open_conversation(&mut self, id: i64) {
+        let loaded = self.with_app(|app| {
+            let mut views = Vec::new();
+            for row in app.db().conversation_messages(id)? {
+                let annotations = if row.role == "user" {
+                    app.db().chat_annotations(row.id)?
+                } else {
+                    Vec::new()
+                };
+                let sentences = app.analyze_chat_text(&row.content)?;
+                views.push(ChatMessageView {
+                    id: row.id,
+                    role: row.role,
+                    content: row.content,
+                    annotations,
+                    sentences,
+                });
+            }
+            Ok(views)
+        });
+        if let Some(messages) = loaded {
+            self.production.current = Some(id);
+            self.production.messages = messages;
+            self.production.panel = None;
+            self.production.panel_note = None;
+        }
+    }
+
+    /// Send the input box as a user message and request the partner's
+    /// reply + write-up in the background.
+    pub fn send_chat_message(&mut self, ctx: &egui::Context) {
+        let content = self.production.input.trim().to_string();
+        if content.is_empty() || self.production.waiting || !self.explainer.is_available() {
+            return;
+        }
+
+        // Make sure a conversation exists, titled after the first message.
+        let conversation = match self.production.current {
+            Some(id) => id,
+            None => {
+                let title = truncate_title(&content, 24);
+                let Some(id) = self.with_app(|app| {
+                    Ok(app.db().create_conversation(chrono::Utc::now(), &title)?)
+                }) else {
+                    return;
+                };
+                self.production.current = Some(id);
+                self.production.messages.clear();
+                id
+            }
+        };
+
+        let Some((msg_id, sentences)) = self.with_app(|app| {
+            let id = app
+                .db()
+                .add_chat_message(conversation, "user", &content, chrono::Utc::now())?;
+            Ok((id, app.analyze_chat_text(&content)?))
+        }) else {
+            return;
+        };
+        self.production.messages.push(ChatMessageView {
+            id: msg_id,
+            role: "user".into(),
+            content: content.clone(),
+            annotations: Vec::new(),
+            sentences,
+        });
+        self.production.input.clear();
+        self.load_conversations();
+
+        // History for the model: the visible transcript, most recent 20.
+        let history: Vec<jrc_llm::ChatMessage> = self
+            .production
+            .messages
+            .iter()
+            .rev()
+            .take(20)
+            .rev()
+            .map(|m| jrc_llm::ChatMessage {
+                role: if m.role == "user" {
+                    jrc_llm::ChatRole::User
+                } else {
+                    jrc_llm::ChatRole::Assistant
+                },
+                content: m.content.clone(),
+            })
+            .collect();
+        let level_hint = self
+            .with_app(|app| app.chat_level_hint())
+            .unwrap_or_else(|| "Level unknown; infer it from their messages.".into());
+        let system =
+            jrc_llm::chat_system_prompt(&level_hint, self.settings.chat_challenge.to_llm());
+
         self.production.waiting = true;
-        self.production.feedback = None;
         let explainer = self.explainer.clone();
         let tx = self.tx.clone();
         let ctx = ctx.clone();
         std::thread::spawn(move || {
             let result = explainer
-                .production_feedback(&prompt, &text)
+                .chat(&system, &history)
+                .and_then(|raw| jrc_llm::parse_chat_response(&raw, &content))
                 .map_err(|e| e.to_string());
-            let _ = tx.send(Msg::Feedback(result));
+            let _ = tx.send(Msg::ChatReply(msg_id, result));
             ctx.request_repaint();
         });
+    }
+
+    /// Store and display a finished chat turn.
+    fn apply_chat_reply(&mut self, user_msg_id: i64, outcome: jrc_llm::ChatTurnOutcome) {
+        let Some(conversation) = self.production.current else { return };
+
+        let annotations: Vec<jrc_db::ChatAnnotationRow> = outcome
+            .annotations
+            .iter()
+            .map(|a| jrc_db::ChatAnnotationRow {
+                start: a.start,
+                end: a.end,
+                severity: a.severity.as_str().to_string(),
+                note: a.note.clone(),
+            })
+            .collect();
+        let reply = outcome.reply;
+        let stored = self.with_app(|app| {
+            app.db().add_chat_annotations(user_msg_id, &annotations)?;
+            let id = app.db().add_chat_message(
+                conversation,
+                "assistant",
+                &reply,
+                chrono::Utc::now(),
+            )?;
+            Ok((id, app.analyze_chat_text(&reply)?))
+        });
+        if let Some(message) = self
+            .production
+            .messages
+            .iter_mut()
+            .find(|m| m.id == user_msg_id)
+        {
+            message.annotations = annotations;
+        }
+        if let Some((id, sentences)) = stored {
+            self.production.messages.push(ChatMessageView {
+                id,
+                role: "assistant".into(),
+                content: reply,
+                annotations: Vec::new(),
+                sentences,
+            });
+        }
     }
 }
 

@@ -5,6 +5,7 @@
 //! mining vocabulary, reviewing cards, and computing reading-difficulty
 //! statistics.
 
+mod chat;
 mod data;
 pub mod extract;
 mod finish;
@@ -14,6 +15,7 @@ mod review;
 mod sessions;
 mod stats;
 
+pub use chat::ChatTokenRow;
 pub use data::DataStatus;
 pub use finish::{SweepCandidate, SweepPlan};
 pub use mining::MiningCandidate;

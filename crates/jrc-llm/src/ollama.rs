@@ -215,6 +215,42 @@ impl Explainer for OllamaExplainer {
     fn production_feedback(&self, prompt: &str, user_text: &str) -> Result<String, LlmError> {
         self.complete(&build_feedback_prompt(prompt, user_text))
     }
+
+    fn chat(
+        &self,
+        system: &str,
+        history: &[crate::ChatMessage],
+    ) -> Result<String, LlmError> {
+        #[derive(Deserialize)]
+        struct ChatResponse {
+            message: ChatMessageContent,
+        }
+        #[derive(Deserialize)]
+        struct ChatMessageContent {
+            content: String,
+        }
+        let mut messages = vec![serde_json::json!({"role": "system", "content": system})];
+        messages.extend(
+            history
+                .iter()
+                .map(|m| serde_json::json!({"role": m.role.as_str(), "content": m.content})),
+        );
+        let parsed: ChatResponse = self
+            .agent
+            .post(&format!("{}/api/chat", self.base_url))
+            .send_json(serde_json::json!({
+                "model": self.model,
+                "stream": false,
+                "messages": messages
+            }))
+            .map_err(request_error)?
+            .into_json()
+            .map_err(|e| LlmError::Response(e.to_string()))?;
+        if parsed.message.content.is_empty() {
+            return Err(LlmError::Response("empty chat response".into()));
+        }
+        Ok(parsed.message.content)
+    }
 }
 
 fn normalize_base(mut url: String) -> String {
