@@ -124,12 +124,7 @@ fn extract_text(response: &MessagesResponse) -> Result<String, LlmError> {
     Ok(text.join("\n"))
 }
 
-fn truncate(s: &str, max: usize) -> &str {
-    match s.char_indices().nth(max) {
-        Some((i, _)) => &s[..i],
-        None => s,
-    }
-}
+use crate::truncate;
 
 #[cfg(test)]
 mod tests {

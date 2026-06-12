@@ -23,6 +23,9 @@ pub enum Msg {
     Explained(Result<String, String>),
     Feedback(Result<String, String>),
     FontDownloaded(crate::settings::ReaderFont, Result<(), String>),
+    OllamaProbe(Result<(String, Vec<jrc_llm::OllamaModel>), String>),
+    OllamaPullProgress(String, Option<f32>),
+    OllamaPullDone(Result<(), String>),
 }
 
 /// Startup/data lifecycle.
@@ -285,6 +288,13 @@ pub struct JrcGui {
     pub dict_banner_dismissed: bool,
     /// The "what works without the dictionary" modal is open.
     pub offline_info_open: bool,
+    /// Last Ollama probe: server version + installed models, or why not.
+    pub ollama_probe: Option<Result<(String, Vec<jrc_llm::OllamaModel>), String>>,
+    pub ollama_probing: bool,
+    /// Model name typed into the pull box.
+    pub ollama_pull_input: String,
+    /// In-flight pull: (status line, completed fraction).
+    pub ollama_pull: Option<(String, Option<f32>)>,
 }
 
 pub fn default_data_dir() -> PathBuf {
@@ -362,6 +372,10 @@ impl JrcGui {
             welcome_return: None,
             dict_banner_dismissed: false,
             offline_info_open: false,
+            ollama_probe: None,
+            ollama_probing: false,
+            ollama_pull_input: String::new(),
+            ollama_pull: None,
         }
     }
 
@@ -545,6 +559,21 @@ impl JrcGui {
                         Err(e) => self.error = Some(e),
                     }
                 }
+                Msg::OllamaProbe(result) => {
+                    self.ollama_probing = false;
+                    self.ollama_probe = Some(result);
+                }
+                Msg::OllamaPullProgress(status, frac) => {
+                    self.ollama_pull = Some((status, frac));
+                }
+                Msg::OllamaPullDone(result) => {
+                    self.ollama_pull = None;
+                    match result {
+                        // Forget the old probe so the model list refreshes.
+                        Ok(()) => self.ollama_probe = None,
+                        Err(e) => self.error = Some(format!("model pull failed: {e}")),
+                    }
+                }
                 Msg::FontDownloaded(font, result) => {
                     self.font_downloading = false;
                     if let Err(e) = result {
@@ -723,6 +752,64 @@ impl JrcGui {
         if let Some(reader) = self.reader.as_mut() {
             reader.doc.last_sentence = s0;
         }
+    }
+
+    /// Probe the configured Ollama server for liveness and models.
+    pub fn probe_ollama(&mut self, ctx: &egui::Context) {
+        if self.ollama_probing {
+            return;
+        }
+        self.ollama_probing = true;
+        let url = self.settings_draft.ollama_url.clone();
+        let tx = self.tx.clone();
+        let ctx = ctx.clone();
+        std::thread::spawn(move || {
+            let client = jrc_llm::OllamaClient::new(url);
+            let result = client
+                .version()
+                .and_then(|version| Ok((version, client.list_models()?)))
+                .map_err(|e| e.to_string());
+            let _ = tx.send(Msg::OllamaProbe(result));
+            ctx.request_repaint();
+        });
+    }
+
+    /// Pull a model into Ollama with streamed progress.
+    pub fn pull_ollama_model(&mut self, ctx: &egui::Context, model: String) {
+        if self.ollama_pull.is_some() || model.trim().is_empty() {
+            return;
+        }
+        self.ollama_pull = Some(("starting…".into(), None));
+        let url = self.settings_draft.ollama_url.clone();
+        let tx = self.tx.clone();
+        let ctx = ctx.clone();
+        std::thread::spawn(move || {
+            let client = jrc_llm::OllamaClient::new(url);
+            let mut last_sent = -1.0f32;
+            let result = client
+                .pull(model.trim(), |p| {
+                    let frac = match (p.completed, p.total) {
+                        (Some(c), Some(t)) if t > 0 => Some(c as f32 / t as f32),
+                        _ => None,
+                    };
+                    // Throttle: a pull emits thousands of lines.
+                    let significant = match frac {
+                        Some(f) => (f - last_sent).abs() > 0.01,
+                        None => true,
+                    };
+                    if significant {
+                        if let Some(f) = frac {
+                            last_sent = f;
+                        }
+                        let status = p.status.clone().unwrap_or_default();
+                        let _ = tx.send(Msg::OllamaPullProgress(status, frac));
+                        ctx.request_repaint();
+                    }
+                })
+                .map_err(|e| e.to_string());
+            let _ = tx.send(Msg::OllamaPullDone(result));
+            ctx.request_repaint();
+        });
     }
 
     /// Plan a finish sweep and open its confirmation dialog.

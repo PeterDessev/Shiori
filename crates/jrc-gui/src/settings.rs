@@ -121,6 +121,17 @@ pub enum Theme {
     Sepia,
 }
 
+/// Which LLM backend powers explanations and production practice.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LlmProvider {
+    Anthropic,
+    /// Local models via Ollama.
+    Ollama,
+    /// Any OpenAI-compatible endpoint (LM Studio, llama.cpp, vLLM, …).
+    Custom,
+}
+
 /// When the reader shows furigana over kanji words.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -172,12 +183,21 @@ impl ReaderFont {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
+    pub llm_provider: LlmProvider,
     /// Anthropic API key for the optional LLM features. Stored locally,
     /// never sent anywhere but the Anthropic API. Falls back to the
     /// ANTHROPIC_API_KEY environment variable when empty.
     pub anthropic_api_key: String,
-    /// Model id for the LLM backend.
+    /// Model id for the Anthropic backend.
     pub llm_model: String,
+    /// Ollama server URL; empty means the default localhost:11434.
+    pub ollama_url: String,
+    /// Local model to use with Ollama (e.g. "qwen3:8b").
+    pub ollama_model: String,
+    /// OpenAI-compatible base URL up to /v1 (e.g. http://localhost:1234/v1).
+    pub custom_url: String,
+    pub custom_api_key: String,
+    pub custom_model: String,
     /// Tint unknown words in the reader (off by default; the selection
     /// highlight is always on).
     pub show_unknown_highlights: bool,
@@ -200,8 +220,14 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            llm_provider: LlmProvider::Anthropic,
             anthropic_api_key: String::new(),
             llm_model: "claude-opus-4-8".to_string(),
+            ollama_url: String::new(),
+            ollama_model: String::new(),
+            custom_url: String::new(),
+            custom_api_key: String::new(),
+            custom_model: String::new(),
             show_unknown_highlights: false,
             onboarded: false,
             theme: Theme::Dark,
@@ -232,16 +258,29 @@ impl Settings {
 
     /// Build the LLM backend this configuration describes.
     pub fn build_explainer(&self) -> std::sync::Arc<dyn jrc_llm::Explainer> {
-        let key = self.anthropic_api_key.trim();
-        if key.is_empty() {
-            std::sync::Arc::from(jrc_llm::explainer_from_env())
-        } else {
-            let model = if self.llm_model.trim().is_empty() {
-                Settings::default().llm_model
-            } else {
-                self.llm_model.trim().to_string()
-            };
-            std::sync::Arc::new(jrc_llm::AnthropicExplainer::with_model(key, model))
+        match self.llm_provider {
+            LlmProvider::Anthropic => {
+                let key = self.anthropic_api_key.trim();
+                if key.is_empty() {
+                    std::sync::Arc::from(jrc_llm::explainer_from_env())
+                } else {
+                    let model = if self.llm_model.trim().is_empty() {
+                        Settings::default().llm_model
+                    } else {
+                        self.llm_model.trim().to_string()
+                    };
+                    std::sync::Arc::new(jrc_llm::AnthropicExplainer::with_model(key, model))
+                }
+            }
+            LlmProvider::Ollama => std::sync::Arc::new(jrc_llm::OllamaExplainer::new(
+                self.ollama_url.clone(),
+                self.ollama_model.trim(),
+            )),
+            LlmProvider::Custom => std::sync::Arc::new(jrc_llm::OpenAiCompatExplainer::new(
+                self.custom_url.trim(),
+                self.custom_api_key.trim(),
+                self.custom_model.trim(),
+            )),
         }
     }
 }

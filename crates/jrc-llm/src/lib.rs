@@ -6,12 +6,26 @@
 //! provided live backend talks to the Anthropic Messages API over HTTP.
 
 mod anthropic;
+mod ollama;
+mod openai_compat;
 mod prompts;
 
 pub use anthropic::AnthropicExplainer;
+pub use ollama::{
+    OllamaClient, OllamaExplainer, OllamaModel, PullProgress, DEFAULT_OLLAMA_URL,
+};
+pub use openai_compat::OpenAiCompatExplainer;
 pub use prompts::{
     build_explain_prompt, build_feedback_prompt, writing_prompts, SentenceContext,
 };
+
+/// Clip a string to at most `max` characters (for error displays).
+pub(crate) fn truncate(s: &str, max: usize) -> &str {
+    match s.char_indices().nth(max) {
+        Some((i, _)) => &s[..i],
+        None => s,
+    }
+}
 
 /// Errors from the LLM backend.
 #[derive(Debug, thiserror::Error)]

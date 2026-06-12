@@ -225,34 +225,97 @@ impl JrcGui {
     }
 
     fn settings_ai(&mut self, ui: &mut egui::Ui) {
+        use crate::settings::LlmProvider;
+
         ui.heading("LLM backend (optional)");
         ui.label(
             "Powers sentence explanations in the reader and conversation \
              practice in Production mode. Everything else works without it.",
         );
         ui.add_space(6.0);
-        let field_width = (ui.available_width() - 160.0).clamp(240.0, 520.0);
-        egui::Grid::new("llm-grid").spacing([10.0, 8.0]).show(ui, |ui| {
-            ui.label("Anthropic API key:");
-            ui.add_sized(
-                [field_width, 22.0],
-                egui::TextEdit::singleline(&mut self.settings_draft.anthropic_api_key)
-                    .password(true)
-                    .hint_text("sk-ant-…"),
+        ui.horizontal(|ui| {
+            ui.selectable_value(
+                &mut self.settings_draft.llm_provider,
+                LlmProvider::Anthropic,
+                "Anthropic",
             );
-            ui.end_row();
-            ui.label("Model:");
-            ui.add_sized(
-                [field_width, 22.0],
-                egui::TextEdit::singleline(&mut self.settings_draft.llm_model),
+            ui.selectable_value(
+                &mut self.settings_draft.llm_provider,
+                LlmProvider::Ollama,
+                "Ollama (local)",
             );
-            ui.end_row();
+            ui.selectable_value(
+                &mut self.settings_draft.llm_provider,
+                LlmProvider::Custom,
+                "Custom endpoint",
+            );
         });
-        ui.weak(
-            "The key is stored locally in settings.json and only ever sent to \
-             the Anthropic API. Leave empty to use the ANTHROPIC_API_KEY \
-             environment variable instead.",
-        );
+        ui.add_space(8.0);
+
+        let field_width = (ui.available_width() - 160.0).clamp(240.0, 520.0);
+        match self.settings_draft.llm_provider {
+            LlmProvider::Anthropic => {
+                egui::Grid::new("llm-grid").spacing([10.0, 8.0]).show(ui, |ui| {
+                    ui.label("API key:");
+                    ui.add_sized(
+                        [field_width, 22.0],
+                        egui::TextEdit::singleline(
+                            &mut self.settings_draft.anthropic_api_key,
+                        )
+                        .password(true)
+                        .hint_text("sk-ant-…"),
+                    );
+                    ui.end_row();
+                    ui.label("Model:");
+                    ui.add_sized(
+                        [field_width, 22.0],
+                        egui::TextEdit::singleline(&mut self.settings_draft.llm_model),
+                    );
+                    ui.end_row();
+                });
+                ui.weak(
+                    "The key is stored locally in settings.json and only ever sent \
+                     to the Anthropic API. Leave empty to use the \
+                     ANTHROPIC_API_KEY environment variable instead.",
+                );
+            }
+            LlmProvider::Ollama => self.settings_ollama(ui, field_width),
+            LlmProvider::Custom => {
+                egui::Grid::new("custom-llm-grid")
+                    .spacing([10.0, 8.0])
+                    .show(ui, |ui| {
+                        ui.label("Base URL:");
+                        ui.add_sized(
+                            [field_width, 22.0],
+                            egui::TextEdit::singleline(&mut self.settings_draft.custom_url)
+                                .hint_text("http://localhost:1234/v1"),
+                        );
+                        ui.end_row();
+                        ui.label("API key:");
+                        ui.add_sized(
+                            [field_width, 22.0],
+                            egui::TextEdit::singleline(
+                                &mut self.settings_draft.custom_api_key,
+                            )
+                            .password(true)
+                            .hint_text("optional for local servers"),
+                        );
+                        ui.end_row();
+                        ui.label("Model:");
+                        ui.add_sized(
+                            [field_width, 22.0],
+                            egui::TextEdit::singleline(&mut self.settings_draft.custom_model),
+                        );
+                        ui.end_row();
+                    });
+                ui.weak(
+                    "Any server speaking the OpenAI chat-completions dialect: \
+                     LM Studio, llama.cpp server, vLLM, or a cloud provider.",
+                );
+            }
+        }
+
+        ui.add_space(8.0);
         ui.horizontal(|ui| {
             ui.label("Current backend:");
             if self.explainer.is_available() {
@@ -264,6 +327,129 @@ impl JrcGui {
                 ui.weak("none");
             }
         });
+    }
+
+    /// Ollama section: liveness, installed models, in-app pulls.
+    fn settings_ollama(&mut self, ui: &mut egui::Ui, field_width: f32) {
+        egui::Grid::new("ollama-grid").spacing([10.0, 8.0]).show(ui, |ui| {
+            ui.label("Server URL:");
+            ui.add_sized(
+                [field_width, 22.0],
+                egui::TextEdit::singleline(&mut self.settings_draft.ollama_url)
+                    .hint_text(jrc_llm::DEFAULT_OLLAMA_URL),
+            );
+            ui.end_row();
+        });
+
+        // Probe once automatically; afterwards on demand.
+        if self.ollama_probe.is_none() && !self.ollama_probing {
+            self.probe_ollama(ui.ctx());
+        }
+        ui.horizontal(|ui| {
+            ui.label("Status:");
+            if self.ollama_probing {
+                ui.spinner();
+            } else {
+                match &self.ollama_probe {
+                    Some(Ok((version, models))) => {
+                        ui.colored_label(
+                            egui::Color32::from_rgb(110, 180, 110),
+                            format!("running (v{version}) · {} models installed", models.len()),
+                        );
+                    }
+                    Some(Err(e)) => {
+                        ui.colored_label(
+                            egui::Color32::from_rgb(220, 90, 90),
+                            format!("not reachable: {e}"),
+                        );
+                    }
+                    None => {
+                        ui.weak("unknown");
+                    }
+                }
+            }
+            if ui.small_button("⟳ refresh").clicked() {
+                self.ollama_probe = None;
+            }
+        });
+        if matches!(&self.ollama_probe, Some(Err(_))) {
+            ui.weak(
+                "Install Ollama from ollama.com and make sure it is running, \
+                 then refresh.",
+            );
+        }
+
+        if let Some(Ok((_, models))) = &self.ollama_probe {
+            ui.add_space(4.0);
+            ui.horizontal(|ui| {
+                ui.label("Model:");
+                let selected = if self.settings_draft.ollama_model.is_empty() {
+                    "choose a model".to_string()
+                } else {
+                    self.settings_draft.ollama_model.clone()
+                };
+                egui::ComboBox::from_id_salt("ollama-model")
+                    .selected_text(selected)
+                    .show_ui(ui, |ui| {
+                        for m in models {
+                            let label = format!(
+                                "{}  ({:.1} GB{})",
+                                m.model,
+                                m.size as f64 / 1e9,
+                                m.details
+                                    .as_ref()
+                                    .and_then(|d| d.parameter_size.as_deref())
+                                    .map(|p| format!(", {p}"))
+                                    .unwrap_or_default()
+                            );
+                            ui.selectable_value(
+                                &mut self.settings_draft.ollama_model,
+                                m.model.clone(),
+                                label,
+                            );
+                        }
+                    });
+            });
+        }
+
+        ui.add_space(4.0);
+        ui.horizontal(|ui| {
+            ui.label("Pull model:");
+            ui.add_sized(
+                [200.0, 22.0],
+                egui::TextEdit::singleline(&mut self.ollama_pull_input)
+                    .hint_text("e.g. qwen3:8b"),
+            );
+            let pulling = self.ollama_pull.is_some();
+            if ui
+                .add_enabled(!pulling, egui::Button::new("⬇ Pull"))
+                .clicked()
+            {
+                let model = self.ollama_pull_input.clone();
+                self.pull_ollama_model(ui.ctx(), model);
+            }
+        });
+        if let Some((status, frac)) = self.ollama_pull.clone() {
+            ui.horizontal(|ui| {
+                match frac {
+                    Some(f) => {
+                        ui.add(
+                            egui::ProgressBar::new(f)
+                                .desired_width(260.0)
+                                .show_percentage(),
+                        );
+                    }
+                    None => {
+                        ui.spinner();
+                    }
+                }
+                ui.weak(status);
+            });
+        }
+        ui.weak(
+            "Models run entirely on this machine; nothing leaves it. \
+             Japanese-capable picks: qwen3, gemma3, llama3.1-swallow.",
+        );
     }
 
     fn settings_shortcuts(&mut self, ui: &mut egui::Ui) {
