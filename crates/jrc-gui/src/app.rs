@@ -45,6 +45,7 @@ pub enum View {
     Library,
     Reader,
     Review,
+    Dictionary,
     Stats,
     Production,
     Settings,
@@ -184,6 +185,14 @@ pub struct ReviewState {
     pub revealed: bool,
 }
 
+#[derive(Default)]
+pub struct DictionaryState {
+    pub query: String,
+    /// Query the current results belong to.
+    pub searched_for: String,
+    pub results: jrc_app::DictSearchResults,
+}
+
 /// One chat message prepared for display.
 pub struct ChatMessageView {
     pub id: i64,
@@ -283,6 +292,7 @@ pub struct JrcGui {
     pub sweep: Option<SweepState>,
     pub reader: Option<ReaderState>,
     pub review: ReviewState,
+    pub dictionary: DictionaryState,
     pub production: ProductionState,
     pub data_status: Option<DataStatus>,
     pub data_dir: PathBuf,
@@ -377,6 +387,7 @@ impl JrcGui {
             sweep: None,
             reader: None,
             review: ReviewState::default(),
+            dictionary: DictionaryState::default(),
             production: ProductionState::default(),
             data_status: None,
             data_dir,
@@ -845,6 +856,14 @@ impl JrcGui {
         }
     }
 
+    /// Jump to the dictionary view with a query (e.g. a kanji chip from
+    /// the reader's word panel).
+    pub fn open_dictionary(&mut self, query: String) {
+        self.dictionary.query = query;
+        self.dictionary.searched_for.clear(); // force a re-search
+        self.view = View::Dictionary;
+    }
+
     /// Open (or refresh) the library's book-info side panel.
     pub fn open_book_info(&mut self, id: DocumentId) {
         if let Some((reading, top_unknown)) = self.with_app(|app| {
@@ -1129,6 +1148,7 @@ impl eframe::App for JrcGui {
             View::Library => self.show_library(ctx),
             View::Reader => self.show_reader(ctx),
             View::Review => self.show_review(ctx),
+            View::Dictionary => self.show_dictionary(ctx),
             View::Stats => self.show_stats(ctx),
             View::Production => self.show_production(ctx),
             View::Settings => self.show_settings(ctx),
@@ -1255,6 +1275,15 @@ impl JrcGui {
                                 .small()
                                 .color(egui::Color32::from_rgb(80, 160, 220)),
                         );
+                    }
+                    if item(
+                        ui,
+                        self.view == View::Dictionary,
+                        "🔍",
+                        "Dictionary & kanji".into(),
+                        true,
+                    ) {
+                        nav = Some(View::Dictionary);
                     }
                     if item(ui, self.view == View::Stats, "📊", "Statistics".into(), true) {
                         nav = Some(View::Stats);

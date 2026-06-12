@@ -163,12 +163,18 @@ impl JrcGui {
             }
         }
 
+        let mut open_kanji: Option<String> = None;
         egui::SidePanel::right("dict-panel")
             .resizable(true)
             .default_width(340.0)
             .show(ctx, |ui| {
-                action = self.dictionary_panel(ui, &mut explain_requested);
+                action = self.dictionary_panel(ui, &mut explain_requested, &mut open_kanji);
             });
+        if let Some(kanji) = open_kanji {
+            self.end_page_visit(crate::session::VisitEnd::Pause);
+            self.open_dictionary(kanji);
+            return;
+        }
 
         // Progress strip + page controls at the bottom. The control
         // cluster is centered on its own; the hint rides along to the
@@ -664,6 +670,7 @@ impl JrcGui {
         &mut self,
         ui: &mut egui::Ui,
         explain_requested: &mut bool,
+        open_kanji: &mut Option<String>,
     ) -> Option<WordAction> {
         let mut action = None;
         let reader = self.reader.as_ref()?;
@@ -719,6 +726,35 @@ impl JrcGui {
                 });
                 if let Some(rank) = panel.rank {
                     ui.label(format!("corpus frequency rank: #{rank}"));
+                }
+
+                // Kanji chips: expand any kanji of the headword into its
+                // card in the dictionary view.
+                let kanji_chars: Vec<char> = {
+                    let mut seen = std::collections::HashSet::new();
+                    panel
+                        .word
+                        .key
+                        .lemma
+                        .chars()
+                        .filter(|c| {
+                            jrc_nlp::kana::contains_kanji(&c.to_string()) && seen.insert(*c)
+                        })
+                        .collect()
+                };
+                if !kanji_chars.is_empty() {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.weak("kanji:");
+                        for c in kanji_chars {
+                            if ui
+                                .small_button(c.to_string())
+                                .on_hover_text("Readings and stroke order")
+                                .clicked()
+                            {
+                                *open_kanji = Some(c.to_string());
+                            }
+                        }
+                    });
                 }
 
                 // Conjugation/form information.

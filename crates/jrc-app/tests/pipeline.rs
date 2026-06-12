@@ -44,6 +44,21 @@ fn app() -> App {
         .expect("analyzer should initialize");
     app.import_dictionary_json(DICT_FIXTURE).unwrap();
     app.import_frequency_text(FREQ_FIXTURE).unwrap();
+    app.db()
+        .import_kanji(vec![jrc_db::KanjiRow {
+            literal: "猫".into(),
+            grade: Some(8),
+            stroke_count: 11,
+            jlpt: Some(2),
+            freq: None,
+            on_readings: vec!["ビョウ".into()],
+            kun_readings: vec!["ねこ".into()],
+            nanori: vec![],
+            meanings: vec!["cat".into()],
+            variants: vec![],
+            strokes: vec![],
+        }])
+        .unwrap();
     assert!(app.data_status().unwrap().is_ready());
     app
 }

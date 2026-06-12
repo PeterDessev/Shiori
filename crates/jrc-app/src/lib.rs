@@ -7,6 +7,7 @@
 
 mod chat;
 mod data;
+mod dictionary;
 pub mod extract;
 mod finish;
 mod ingest;
@@ -17,6 +18,7 @@ mod stats;
 
 pub use chat::ChatTokenRow;
 pub use data::DataStatus;
+pub use dictionary::{DictSearchHit, DictSearchResults};
 pub use finish::{SweepCandidate, SweepPlan};
 pub use mining::MiningCandidate;
 pub use review::ReviewItem;

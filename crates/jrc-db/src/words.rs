@@ -54,6 +54,15 @@ impl Db {
             })
     }
 
+    /// All tracked words sharing a lemma (any reading/POS).
+    pub fn words_by_lemma(&self, lemma: &str) -> Result<Vec<WordRow>> {
+        let mut stmt = self
+            .conn()
+            .prepare(&format!("SELECT {WORD_COLS} FROM words WHERE lemma = ?1"))?;
+        let rows = stmt.query_map([lemma], row_to_word)?;
+        Ok(rows.collect::<std::result::Result<_, _>>()?)
+    }
+
     /// The word for a key, inserted at the default status if new.
     pub fn ensure_word(&self, key: &WordKey) -> Result<WordRow> {
         if let Some(word) = self.find_word(key)? {

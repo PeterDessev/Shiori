@@ -10,11 +10,12 @@ use crate::{App, Result};
 pub struct DataStatus {
     pub dict_entries: u64,
     pub frequency_words: u64,
+    pub kanji: u64,
 }
 
 impl DataStatus {
     pub fn is_ready(&self) -> bool {
-        self.dict_entries > 0 && self.frequency_words > 0
+        self.dict_entries > 0 && self.frequency_words > 0 && self.kanji > 0
     }
 }
 
@@ -23,12 +24,15 @@ impl App {
         Ok(DataStatus {
             dict_entries: self.db.dict_entry_count()?,
             frequency_words: self.db.frequency_count()?,
+            kanji: self.db.kanji_count()?,
         })
     }
 
-    /// Download (if not cached on disk) and import the dictionary and
-    /// frequency list. Heavy: run on a background thread. `on_progress`
-    /// receives human-readable status lines.
+    /// Download (if not cached on disk) and import the dictionary,
+    /// frequency list, and kanji data. Heavy: run on a background
+    /// thread. `on_progress` receives human-readable status lines. Each
+    /// step skips when its data is already imported, so retries are
+    /// incremental.
     pub fn download_and_import_data(
         &self,
         mut on_progress: impl FnMut(&str),
@@ -48,8 +52,39 @@ impl App {
             on_progress("Importing frequency list…");
             self.import_frequency_text(&text)?;
         }
+        if self.db.kanji_count()? == 0 {
+            on_progress("Downloading KANJIDIC2 (kanji data)…");
+            let kanjidic = jrc_dict::kanji::ensure_kanjidic2(&self.data_dir)?;
+            on_progress("Downloading KanjiVG (stroke order)…");
+            let kanjivg = jrc_dict::kanji::ensure_kanjivg(&self.data_dir)?;
+            on_progress("Parsing and importing kanji…");
+            self.import_kanji_data(&kanjidic, &kanjivg)?;
+        }
         on_progress("Reference data ready.");
         self.data_status()
+    }
+
+    /// Parse the two kanji archives and store the joined entries.
+    pub fn import_kanji_data(
+        &self,
+        kanjidic2_gz: &std::path::Path,
+        kanjivg_gz: &std::path::Path,
+    ) -> Result<u64> {
+        let entries = jrc_dict::kanji::load_kanji(kanjidic2_gz, kanjivg_gz)?;
+        let rows = entries.into_iter().map(|k| jrc_db::KanjiRow {
+            literal: k.literal,
+            grade: k.grade,
+            stroke_count: k.stroke_count,
+            jlpt: k.jlpt,
+            freq: k.freq,
+            on_readings: k.on_readings,
+            kun_readings: k.kun_readings,
+            nanori: k.nanori,
+            meanings: k.meanings,
+            variants: k.variants,
+            strokes: k.strokes,
+        });
+        Ok(self.db.import_kanji(rows)?)
     }
 
     /// Parse a jmdict-simplified JSON document and store it.

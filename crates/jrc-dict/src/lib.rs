@@ -8,11 +8,13 @@
 
 pub mod download;
 pub mod frequency;
+pub mod kanji;
 mod lookup;
 pub mod register;
 mod types;
 
 pub use frequency::FrequencyList;
+pub use kanji::KanjiEntry;
 pub use lookup::{pick_best_entry, Dictionary};
 pub use types::{DictEntry, Form, JmdictFile, Sense};
 

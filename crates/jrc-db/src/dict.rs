@@ -63,6 +63,22 @@ impl Db {
         Ok(rows.collect::<std::result::Result<_, _>>()?)
     }
 
+    /// Sequence ids whose forms start with `prefix`, exact matches and
+    /// common entries first. Powers the dictionary search box.
+    pub fn dict_search_seqs(&self, prefix: &str, limit: u32) -> Result<Vec<i64>> {
+        // LIKE with an escaped prefix; % and _ in user input are literal.
+        let escaped = prefix.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+        let mut stmt = self.conn().prepare(
+            "SELECT seq, MAX(text = ?1) AS exact, MAX(is_common) AS common
+             FROM dict_forms WHERE text LIKE ?2 || '%' ESCAPE '\\'
+             GROUP BY seq
+             ORDER BY exact DESC, common DESC, LENGTH(MIN(text)), seq
+             LIMIT ?3",
+        )?;
+        let rows = stmt.query_map(params![prefix, escaped, limit], |r| r.get(0))?;
+        Ok(rows.collect::<std::result::Result<_, _>>()?)
+    }
+
     pub fn dict_entry_json(&self, seq: i64) -> Result<Option<String>> {
         let result = self.conn().query_row(
             "SELECT json FROM dict_entries WHERE seq = ?1",

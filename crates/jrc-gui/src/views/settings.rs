@@ -579,9 +579,12 @@ impl JrcGui {
         ui.label(format!("Data directory: {}", self.data_dir.display()));
         if let Some(status) = &self.data_status {
             ui.label(format!(
-                "Dictionary entries: {} · frequency words: {}",
-                status.dict_entries, status.frequency_words
+                "Dictionary entries: {} · frequency words: {} · kanji: {}",
+                status.dict_entries, status.frequency_words, status.kanji
             ));
         }
+        ui.add_space(8.0);
+        ui.weak("Kanji data: KANJIDIC2 © EDRDG (CC BY-SA 4.0).");
+        ui.weak("Stroke order: KanjiVG © Ulrich Apel (CC BY-SA 3.0).");
     }
 }

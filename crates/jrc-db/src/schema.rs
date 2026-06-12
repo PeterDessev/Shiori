@@ -5,7 +5,7 @@ use rusqlite::Connection;
 use crate::Result;
 
 /// Current schema version. Bump when adding migration steps.
-const SCHEMA_VERSION: i64 = 5;
+const SCHEMA_VERSION: i64 = 6;
 
 const SCHEMA_V1: &str = r#"
 CREATE TABLE IF NOT EXISTS meta (
@@ -138,6 +138,21 @@ CREATE TABLE IF NOT EXISTS chat_annotations (
 );
 CREATE INDEX IF NOT EXISTS idx_chat_annotations_msg
     ON chat_annotations(message_id);
+
+-- v6: kanji reference data (KANJIDIC2 joined with KanjiVG strokes).
+CREATE TABLE IF NOT EXISTS kanji (
+    literal      TEXT PRIMARY KEY,
+    grade        INTEGER,
+    stroke_count INTEGER NOT NULL,
+    jlpt         INTEGER,
+    freq         INTEGER,
+    on_readings  TEXT NOT NULL,
+    kun_readings TEXT NOT NULL,
+    nanori       TEXT NOT NULL,
+    meanings     TEXT NOT NULL,
+    variants     TEXT NOT NULL,
+    strokes      TEXT
+);
 "#;
 
 /// Bring the schema up to [`SCHEMA_VERSION`]. Idempotent.
