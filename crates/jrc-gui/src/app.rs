@@ -6,7 +6,7 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 
 use eframe::egui;
-use jrc_app::{App, DataStatus, DocStats, MiningCandidate, ReviewItem};
+use jrc_app::{App, DataStatus, DocStats, ReviewItem};
 use jrc_core::{Document, DocumentId, WordId};
 use jrc_db::{DocumentSummary, TokenRow, WordRow};
 use jrc_dict::DictEntry;
@@ -39,7 +39,6 @@ pub enum View {
     Welcome,
     Library,
     Reader,
-    Mining,
     Review,
     Stats,
     Production,
@@ -175,13 +174,6 @@ fn compute_groups(sentences: &[SentenceView]) -> Vec<Vec<(usize, usize)>> {
 }
 
 #[derive(Default)]
-pub struct MiningState {
-    pub doc_id: Option<DocumentId>,
-    pub doc_title: String,
-    pub candidates: Vec<MiningCandidate>,
-}
-
-#[derive(Default)]
 pub struct ReviewState {
     pub queue: Vec<ReviewItem>,
     pub revealed: bool,
@@ -247,7 +239,6 @@ pub struct JrcGui {
 
     pub meta_edit: Option<MetaEdit>,
     pub reader: Option<ReaderState>,
-    pub mining: MiningState,
     pub review: ReviewState,
     pub production: ProductionState,
     pub data_status: Option<DataStatus>,
@@ -333,7 +324,6 @@ impl JrcGui {
             due_count: 0,
             meta_edit: None,
             reader: None,
-            mining: MiningState::default(),
             review: ReviewState::default(),
             production: ProductionState::default(),
             data_status: None,
@@ -703,23 +693,6 @@ impl JrcGui {
         }
     }
 
-    pub fn open_mining(&mut self, doc_id: DocumentId, title: String) {
-        if let Some(candidates) = self.with_app(|app| app.mining_candidates(doc_id)) {
-            self.mining = MiningState {
-                doc_id: Some(doc_id),
-                doc_title: title,
-                candidates,
-            };
-            self.view = View::Mining;
-        }
-    }
-
-    pub fn reload_mining(&mut self) {
-        if let (Some(doc_id), title) = (self.mining.doc_id, self.mining.doc_title.clone()) {
-            self.open_mining(doc_id, title);
-        }
-    }
-
     pub fn load_review_queue(&mut self) {
         if let Some(queue) = self.with_app(|app| app.due_reviews(100)) {
             self.review = ReviewState {
@@ -846,7 +819,6 @@ impl eframe::App for JrcGui {
             View::Welcome => self.show_welcome(ctx),
             View::Library => self.show_library(ctx),
             View::Reader => self.show_reader(ctx),
-            View::Mining => self.show_mining(ctx),
             View::Review => self.show_review(ctx),
             View::Stats => self.show_stats(ctx),
             View::Production => self.show_production(ctx),
@@ -959,15 +931,6 @@ impl JrcGui {
                         self.reader.is_some(),
                     ) {
                         nav = Some(View::Reader);
-                    }
-                    if item(
-                        ui,
-                        self.view == View::Mining,
-                        "⛏",
-                        "Vocabulary mining".into(),
-                        self.mining.doc_id.is_some(),
-                    ) {
-                        nav = Some(View::Mining);
                     }
                     let review_tip = if self.due_count > 0 {
                         format!("Review — {} due", self.due_count)

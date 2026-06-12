@@ -1,7 +1,6 @@
 //! UI views, one module per screen, all methods on `JrcGui`.
 
 mod library;
-mod mining;
 mod production;
 mod reader;
 mod review;

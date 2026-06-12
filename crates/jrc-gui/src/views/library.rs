@@ -114,7 +114,6 @@ impl JrcGui {
         let order = self.sorted_order();
 
         let mut to_open: Option<DocumentId> = None;
-        let mut to_mine: Option<(DocumentId, String)> = None;
         let mut to_delete: Option<DocumentId> = None;
         let mut to_edit: Option<usize> = None;
         let mut clicked_sort: Option<SortKey> = None;
@@ -266,9 +265,6 @@ impl JrcGui {
                             if ui.button("Read").clicked() {
                                 to_open = Some(id);
                             }
-                            if ui.button("Mine").clicked() {
-                                to_mine = Some((id, summary.document.title.clone()));
-                            }
                             if ui
                                 .small_button("✏")
                                 .on_hover_text("Edit metadata")
@@ -311,16 +307,10 @@ impl JrcGui {
         if let Some(id) = to_open {
             self.open_reader(id);
         }
-        if let Some((id, title)) = to_mine {
-            self.open_mining(id, title);
-        }
         if let Some(id) = to_delete {
             if self.reader.as_ref().is_some_and(|r| r.doc.id == id) {
                 self.end_page_visit(crate::session::VisitEnd::Pause);
                 self.reader = None;
-            }
-            if self.mining.doc_id == Some(id) {
-                self.mining = Default::default();
             }
             self.with_app(|app| Ok(app.db().delete_document(id)?));
             self.refresh_caches();

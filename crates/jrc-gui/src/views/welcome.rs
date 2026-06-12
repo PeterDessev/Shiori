@@ -35,22 +35,13 @@ impl JrcGui {
                              conjugated into. From there one click adds it to your \
                              reviews, marks it known, or ignores it.",
                         ]);
-                        section(ui, "3 · Mine — stock up before you read", &[
-                            "Mining is the same vocabulary, approached from the other \
-                             side: instead of meeting unknown words one by one in the \
-                             text, Mining lists every unknown word in a document ranked \
-                             by how useful it is to learn (how common it is in Japanese \
-                             × how often it appears in this document). Skim the top of \
-                             the list, add the worthwhile ones, ignore the noise — then \
-                             read with fewer interruptions.",
-                        ]);
-                        section(ui, "4 · Review", &[
+                        section(ui, "3 · Review", &[
                             "Words you chose to learn come back for spaced-repetition \
                              review (FSRS) — always shown inside the sentence you found \
                              them in, never as an isolated flashcard. A few minutes a \
                              day keeps the queue short.",
                         ]);
-                        section(ui, "5 · Stats — what should I read next?", &[
+                        section(ui, "4 · Stats — what should I read next?", &[
                             "For every document you'll see how much of it you already \
                              know. Aim for material with roughly 2–5% unknown words — \
                              hard enough to learn from, easy enough to enjoy. The \
