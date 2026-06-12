@@ -1,8 +1,8 @@
 # Roadmap
 
-Plan of record for agreed features. Everything in this file is designed and
-considered planned; nothing here is implemented yet unless struck through.
-Deferred ideas live at the bottom.
+Plan of record for agreed features. **Status: everything below except the
+"Deferred / TODO" section is implemented** (June 2026). The feature sections
+are kept as the design record; the deferred list is what remains.
 
 ## Removals
 
