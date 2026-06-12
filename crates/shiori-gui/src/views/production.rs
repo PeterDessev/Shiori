@@ -7,7 +7,7 @@
 use eframe::egui;
 use shiori_core::WordKey;
 
-use crate::app::JrcGui;
+use crate::app::ShioriGui;
 
 /// Action chosen in the chat word panel.
 enum ChatWordAction {
@@ -16,7 +16,7 @@ enum ChatWordAction {
     Ignore(shiori_core::WordId),
 }
 
-impl JrcGui {
+impl ShioriGui {
     pub fn show_production(&mut self, ctx: &egui::Context) {
         if !self.production.loaded {
             self.load_conversations();

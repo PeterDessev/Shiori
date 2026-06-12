@@ -1,4 +1,4 @@
-//! UI views, one module per screen, all methods on `JrcGui`.
+//! UI views, one module per screen, all methods on `ShioriGui`.
 
 mod dictionary;
 mod library;

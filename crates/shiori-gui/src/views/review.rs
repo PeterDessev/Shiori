@@ -6,11 +6,11 @@ use eframe::egui;
 use shiori_dict::register::UsageProfile;
 use shiori_srs::Rating;
 
-use crate::app::JrcGui;
+use crate::app::ShioriGui;
 use crate::settings::shortcut_pressed;
 use crate::views::human_duration;
 
-impl JrcGui {
+impl ShioriGui {
     pub fn show_review(&mut self, ctx: &egui::Context) {
         let mut answered: Option<Rating> = None;
 

@@ -74,7 +74,7 @@ impl App {
             ));
         }
         let count = notes.len();
-        shiori_db::anki::write_apkg(path, "Japanese Reading Companion", &notes)?;
+        shiori_db::anki::write_apkg(path, "Shiori", &notes)?;
         Ok(count)
     }
 

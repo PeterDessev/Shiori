@@ -5,10 +5,10 @@ use chrono::{Datelike, Utc};
 use eframe::egui;
 use shiori_core::KnowledgeStatus;
 
-use crate::app::JrcGui;
+use crate::app::ShioriGui;
 use crate::views::band_color;
 
-impl JrcGui {
+impl ShioriGui {
     pub fn show_stats(&mut self, ctx: &egui::Context) {
         // Cheap aggregate queries; fine to run per frame shown.
         let data = self.with_app(|app| {

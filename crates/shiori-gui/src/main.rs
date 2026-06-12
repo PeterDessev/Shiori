@@ -1,4 +1,4 @@
-//! Desktop GUI for the Japanese Reading Companion.
+//! Desktop GUI for Shiori.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -13,12 +13,12 @@ fn main() -> eframe::Result {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_inner_size([1200.0, 800.0])
             .with_min_inner_size([800.0, 560.0])
-            .with_title("Japanese Reading Companion"),
+            .with_title("Shiori"),
         ..Default::default()
     };
     eframe::run_native(
-        "Japanese Reading Companion",
+        "Shiori",
         options,
-        Box::new(|cc| Ok(Box::new(app::JrcGui::new(cc)))),
+        Box::new(|cc| Ok(Box::new(app::ShioriGui::new(cc)))),
     )
 }

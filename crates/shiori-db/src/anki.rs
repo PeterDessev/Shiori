@@ -114,7 +114,7 @@ fn col_json(deck_name: &str, now_s: i64) -> (String, String, String, String) {
     let models = serde_json::json!({
         MODEL_ID.to_string(): {
             "id": MODEL_ID.to_string(),
-            "name": "Japanese Reading Companion",
+            "name": "Shiori",
             "type": 0, "mod": now_s, "usn": 0, "sortf": 0, "did": DECK_ID,
             "css": ".card { font-family: sans-serif; font-size: 26px; text-align: center; }",
             "flds": fields,

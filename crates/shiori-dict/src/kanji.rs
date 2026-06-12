@@ -48,7 +48,7 @@ pub struct KanjiEntry {
 
 fn agent() -> ureq::Agent {
     ureq::AgentBuilder::new()
-        .user_agent("japanese-reading-companion/0.1")
+        .user_agent("shiori/0.1")
         .build()
 }
 

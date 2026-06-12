@@ -2,14 +2,14 @@
 
 use eframe::egui;
 
-use crate::app::{JrcGui, Phase};
+use crate::app::{ShioriGui, Phase};
 
-impl JrcGui {
+impl ShioriGui {
     pub fn show_setup(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.vertical_centered(|ui| {
                 ui.add_space(60.0);
-                ui.heading("Japanese Reading Companion");
+                ui.heading("Shiori");
                 ui.add_space(12.0);
                 ui.label(
                     "Reference data needs to be fetched and imported: the JMdict \

@@ -4,7 +4,7 @@
 
 use std::time::Instant;
 
-use crate::app::{JrcGui, ReaderState};
+use crate::app::{ShioriGui, ReaderState};
 
 /// Flat away threshold (and credit cap) before a velocity stat exists.
 pub const FLAT_AWAY_SECS: f64 = 300.0;
@@ -131,7 +131,7 @@ pub fn current_page_chars(reader: &ReaderState) -> u32 {
         .sum()
 }
 
-impl JrcGui {
+impl ShioriGui {
     /// End the current page visit, credit it, and stop the clock.
     /// Idempotent: a second call before `enter_page` is a no-op.
     pub fn end_page_visit(&mut self, end: VisitEnd) {

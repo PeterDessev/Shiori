@@ -23,7 +23,7 @@ const WIKISOURCE_API: &str = "https://ja.wikisource.org/w/api.php";
 const WIKISOURCE_REST: &str = "https://ja.wikisource.org/w/rest.php/v1/page";
 
 const USER_AGENT: &str =
-    "JapaneseReadingCompanion/0.1 (https://github.com/; local desktop app) ureq/2";
+    "Shiori/0.1 (https://github.com/; local desktop app) ureq/2";
 
 /// One public-domain work from the Aozora catalog.
 #[derive(Debug, Clone)]

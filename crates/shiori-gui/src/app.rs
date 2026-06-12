@@ -299,7 +299,7 @@ pub enum SortKey {
     NewWords,
 }
 
-pub struct JrcGui {
+pub struct ShioriGui {
     pub tx: Sender<Msg>,
     rx: Receiver<Msg>,
     pub app: Option<Arc<Mutex<App>>>,
@@ -361,12 +361,19 @@ pub struct JrcGui {
 }
 
 pub fn default_data_dir() -> PathBuf {
-    dirs::data_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join("japanese-reading-companion")
+    let base = dirs::data_dir().unwrap_or_else(|| PathBuf::from("."));
+    let new = base.join("shiori");
+    // One-time migration from the pre-Shiori directory name. If the
+    // rename is blocked (another instance, antivirus), keep using the
+    // old directory rather than starting over with empty data.
+    let old = base.join("japanese-reading-companion");
+    if !new.exists() && old.exists() && std::fs::rename(&old, &new).is_err() {
+        return old;
+    }
+    new
 }
 
-impl JrcGui {
+impl ShioriGui {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let (tx, rx) = channel();
         let data_dir = default_data_dir();
@@ -1225,7 +1232,7 @@ impl JrcGui {
     }
 }
 
-impl eframe::App for JrcGui {
+impl eframe::App for ShioriGui {
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         // Flips persist as they happen; this catches a page reached by a
         // resize-induced repagination right before quitting.
@@ -1311,7 +1318,7 @@ impl eframe::App for JrcGui {
     }
 }
 
-impl JrcGui {
+impl ShioriGui {
     /// Banner shown while running without the reference dictionary, with
     /// retry and an explanation modal. This banner (and in-place notices
     /// where lookups break) is the only place the offline path is

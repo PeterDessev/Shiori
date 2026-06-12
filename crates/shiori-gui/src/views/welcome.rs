@@ -3,9 +3,9 @@
 
 use eframe::egui;
 
-use crate::app::JrcGui;
+use crate::app::ShioriGui;
 
-impl JrcGui {
+impl ShioriGui {
     pub fn show_welcome(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::ScrollArea::vertical()

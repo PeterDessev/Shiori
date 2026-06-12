@@ -6,9 +6,9 @@
 
 use eframe::egui;
 
-use crate::app::{JrcGui, SourceImport, SourceTab};
+use crate::app::{ShioriGui, SourceImport, SourceTab};
 
-impl JrcGui {
+impl ShioriGui {
     pub fn show_sources(&mut self, ctx: &egui::Context) {
         let mut import: Option<SourceImport> = None;
         let mut reload_catalog = false;

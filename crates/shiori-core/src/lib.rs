@@ -1,4 +1,4 @@
-//! Shared domain types and errors for the Japanese Reading Companion.
+//! Shared domain types and errors for Shiori.
 //!
 //! Everything in this crate is plain data: no I/O, no panics, no policy.
 //! The other crates agree on these types so that, for example, the NLP

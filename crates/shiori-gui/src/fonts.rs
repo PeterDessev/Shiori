@@ -89,7 +89,7 @@ pub fn download_font(data_dir: &Path, font: ReaderFont) -> Result<(), String> {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
     let agent = ureq::AgentBuilder::new()
-        .user_agent("japanese-reading-companion/0.1")
+        .user_agent("shiori/0.1")
         .build();
     let response = agent.get(url).call().map_err(|e| e.to_string())?;
     let mut bytes = Vec::new();

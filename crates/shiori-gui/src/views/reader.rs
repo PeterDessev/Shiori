@@ -10,7 +10,7 @@ use eframe::egui;
 use shiori_core::{KnowledgeStatus, WordId};
 use shiori_dict::register::UsageProfile;
 
-use crate::app::JrcGui;
+use crate::app::ShioriGui;
 use crate::settings::shortcut_pressed;
 use crate::views::{tight_highlight_rect, unknown_fill};
 
@@ -30,7 +30,7 @@ enum WordAction {
     Forgot(WordId, Option<shiori_core::SentenceId>),
 }
 
-impl JrcGui {
+impl ShioriGui {
     pub fn show_reader(&mut self, ctx: &egui::Context) {
         if self.reader.is_none() {
             egui::CentralPanel::default().show(ctx, |ui| {

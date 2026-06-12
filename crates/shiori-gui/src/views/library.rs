@@ -5,10 +5,10 @@ use eframe::egui;
 use egui_extras::{Column, TableBuilder};
 use shiori_core::DocumentId;
 
-use crate::app::{JrcGui, MetaEdit, SortKey};
+use crate::app::{ShioriGui, MetaEdit, SortKey};
 use crate::views::band_color;
 
-impl JrcGui {
+impl ShioriGui {
     pub fn show_library(&mut self, ctx: &egui::Context) {
         let hovering_files = ctx.input(|i| !i.raw.hovered_files.is_empty());
 

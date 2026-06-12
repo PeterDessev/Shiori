@@ -39,7 +39,7 @@ pub fn ensure_jlpt_lists(data_dir: &Path) -> Result<PathBuf, DictError> {
     }
     std::fs::create_dir_all(data_dir)?;
     let agent = ureq::AgentBuilder::new()
-        .user_agent("japanese-reading-companion/0.1")
+        .user_agent("shiori/0.1")
         .build();
     let mut merged = String::from("level,kana,kanji\n");
     for level in 1..=5u8 {

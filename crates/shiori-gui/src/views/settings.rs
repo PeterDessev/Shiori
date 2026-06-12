@@ -3,7 +3,7 @@
 
 use eframe::egui;
 
-use crate::app::JrcGui;
+use crate::app::ShioriGui;
 
 /// Which settings page is open. UI state only, not persisted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -42,7 +42,7 @@ impl SettingsCategory {
     }
 }
 
-impl JrcGui {
+impl ShioriGui {
     pub fn show_settings(&mut self, ctx: &egui::Context) {
         egui::SidePanel::left("settings-categories")
             .resizable(false)
@@ -99,7 +99,7 @@ impl JrcGui {
     fn settings_general(&mut self, ui: &mut egui::Ui) {
         ui.heading("About");
         ui.label(
-            "Japanese Reading Companion — comprehensible-input reading with \
+            "Shiori（栞・bookmark） — comprehensible-input reading with \
              FSRS spaced repetition.",
         );
         ui.label("Dictionary: JMdict © EDRDG (via jmdict-simplified).");
@@ -589,7 +589,7 @@ impl JrcGui {
         ui.horizontal(|ui| {
             if ui.button("⬆ Export deck (.apkg)…").clicked() {
                 if let Some(path) = rfd::FileDialog::new()
-                    .set_file_name("japanese-reading-companion.apkg")
+                    .set_file_name("shiori.apkg")
                     .add_filter("Anki deck", &["apkg"])
                     .save_file()
                 {
@@ -624,7 +624,7 @@ impl JrcGui {
         ui.horizontal(|ui| {
             if ui.button("⬆ Export settings…").clicked() {
                 if let Some(path) = rfd::FileDialog::new()
-                    .set_file_name("jrc-settings.json")
+                    .set_file_name("shiori-settings.json")
                     .add_filter("JSON", &["json"])
                     .save_file()
                 {
@@ -664,7 +664,7 @@ impl JrcGui {
         ui.horizontal(|ui| {
             if ui.button("💾 Back up database…").clicked() {
                 if let Some(path) = rfd::FileDialog::new()
-                    .set_file_name("jrc-backup.sqlite3")
+                    .set_file_name("shiori-backup.sqlite3")
                     .add_filter("SQLite database", &["sqlite3", "db"])
                     .save_file()
                 {

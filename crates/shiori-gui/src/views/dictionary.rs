@@ -5,9 +5,9 @@
 use eframe::egui;
 use shiori_core::KnowledgeStatus;
 
-use crate::app::JrcGui;
+use crate::app::ShioriGui;
 
-impl JrcGui {
+impl ShioriGui {
     pub fn show_dictionary(&mut self, ctx: &egui::Context) {
         // Re-search whenever the query no longer matches the results.
         if self.dictionary.query != self.dictionary.searched_for {
