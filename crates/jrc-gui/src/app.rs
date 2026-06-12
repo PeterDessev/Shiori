@@ -636,6 +636,12 @@ impl JrcGui {
 }
 
 impl eframe::App for JrcGui {
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        // Flips persist as they happen; this catches a page reached by a
+        // resize-induced repagination right before quitting.
+        self.persist_reading_position();
+    }
+
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.apply_theme(ctx);
         self.handle_messages();
@@ -806,6 +812,12 @@ impl JrcGui {
                 View::Welcome => self.open_welcome(),
                 View::Review => {
                     self.load_review_queue();
+                    self.view = view;
+                }
+                // The progress column reflects reading done since the last
+                // refresh, so returning to the library re-reads it.
+                View::Library => {
+                    self.refresh_caches();
                     self.view = view;
                 }
                 _ => self.view = view,
