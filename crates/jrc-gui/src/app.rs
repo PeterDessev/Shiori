@@ -193,6 +193,14 @@ pub struct MetaEdit {
     pub meta: jrc_core::DocumentMeta,
 }
 
+/// Contents of the library's book-info side panel.
+pub struct BookInfo {
+    pub id: DocumentId,
+    pub reading: jrc_db::ReadingTotals,
+    /// Unknown content words, most useful to learn first.
+    pub top_unknown: Vec<jrc_app::MiningCandidate>,
+}
+
 /// Press-to-record state for one shortcut binding. The combo is
 /// committed when the first held key is released ("burned in on
 /// release"); Escape cancels.
@@ -238,6 +246,7 @@ pub struct JrcGui {
     pub due_count: u64,
 
     pub meta_edit: Option<MetaEdit>,
+    pub book_info: Option<BookInfo>,
     pub reader: Option<ReaderState>,
     pub review: ReviewState,
     pub production: ProductionState,
@@ -323,6 +332,7 @@ impl JrcGui {
             doc_stats: HashMap::new(),
             due_count: 0,
             meta_edit: None,
+            book_info: None,
             reader: None,
             review: ReviewState::default(),
             production: ProductionState::default(),
@@ -690,6 +700,22 @@ impl JrcGui {
         self.with_app(|app| Ok(app.db().set_reading_position(doc_id, s0 as u32)?));
         if let Some(reader) = self.reader.as_mut() {
             reader.doc.last_sentence = s0 as u32;
+        }
+    }
+
+    /// Open (or refresh) the library's book-info side panel.
+    pub fn open_book_info(&mut self, id: DocumentId) {
+        if let Some((reading, top_unknown)) = self.with_app(|app| {
+            Ok((
+                app.db().document_reading_totals(id)?,
+                app.mining_candidates(id)?,
+            ))
+        }) {
+            self.book_info = Some(BookInfo {
+                id,
+                reading,
+                top_unknown,
+            });
         }
     }
 

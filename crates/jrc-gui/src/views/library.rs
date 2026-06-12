@@ -12,6 +12,8 @@ impl JrcGui {
     pub fn show_library(&mut self, ctx: &egui::Context) {
         let hovering_files = ctx.input(|i| !i.raw.hovered_files.is_empty());
 
+        self.book_info_panel(ctx);
+
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.heading("Library");
@@ -114,6 +116,7 @@ impl JrcGui {
         let order = self.sorted_order();
 
         let mut to_open: Option<DocumentId> = None;
+        let mut to_info: Option<DocumentId> = None;
         let mut to_delete: Option<DocumentId> = None;
         let mut to_edit: Option<usize> = None;
         let mut clicked_sort: Option<SortKey> = None;
@@ -266,6 +269,13 @@ impl JrcGui {
                                 to_open = Some(id);
                             }
                             if ui
+                                .button("ⓘ")
+                                .on_hover_text("Book details and stats")
+                                .clicked()
+                            {
+                                to_info = Some(id);
+                            }
+                            if ui
                                 .small_button("✏")
                                 .on_hover_text("Edit metadata")
                                 .clicked()
@@ -307,10 +317,16 @@ impl JrcGui {
         if let Some(id) = to_open {
             self.open_reader(id);
         }
+        if let Some(id) = to_info {
+            self.open_book_info(id);
+        }
         if let Some(id) = to_delete {
             if self.reader.as_ref().is_some_and(|r| r.doc.id == id) {
                 self.end_page_visit(crate::session::VisitEnd::Pause);
                 self.reader = None;
+            }
+            if self.book_info.as_ref().is_some_and(|b| b.id == id) {
+                self.book_info = None;
             }
             self.with_app(|app| Ok(app.db().delete_document(id)?));
             self.refresh_caches();
@@ -364,6 +380,176 @@ impl JrcGui {
             order.reverse();
         }
         order
+    }
+
+    /// Right side panel with one book's metadata, stats, reading time,
+    /// coverage forecast, and most-useful unknown words.
+    fn book_info_panel(&mut self, ctx: &egui::Context) {
+        let Some(info) = &self.book_info else { return };
+        let Some(summary) = self
+            .library
+            .iter()
+            .find(|d| d.document.id == info.id)
+            .cloned()
+        else {
+            self.book_info = None;
+            return;
+        };
+        let stats = self.doc_stats.get(&info.id.0).copied();
+
+        let mut close = false;
+        let mut to_read: Option<DocumentId> = None;
+        egui::SidePanel::right("book-info")
+            .resizable(true)
+            .default_width(330.0)
+            .show(ctx, |ui| {
+                egui::ScrollArea::vertical()
+                    .auto_shrink([false; 2])
+                    .show(ui, |ui| {
+                        let info = self.book_info.as_ref().unwrap();
+                        ui.add_space(6.0);
+                        ui.horizontal(|ui| {
+                            ui.heading(&summary.document.title);
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    if ui.small_button("✕").clicked() {
+                                        close = true;
+                                    }
+                                },
+                            );
+                        });
+                        ui.add_space(4.0);
+                        egui::Grid::new("book-info-meta")
+                            .num_columns(2)
+                            .spacing([10.0, 4.0])
+                            .show(ui, |ui| {
+                                let field = |ui: &mut egui::Ui, k: &str, v: &str| {
+                                    if !v.is_empty() {
+                                        ui.weak(k);
+                                        ui.label(v);
+                                        ui.end_row();
+                                    }
+                                };
+                                field(ui, "Author", &summary.document.author);
+                                field(ui, "Publisher", &summary.document.publisher);
+                                field(ui, "Published", &summary.document.published);
+                                ui.weak("Added");
+                                ui.label(
+                                    summary.document.added_at.format("%Y-%m-%d").to_string(),
+                                );
+                                ui.end_row();
+                                ui.weak("Size");
+                                ui.label(format!(
+                                    "{} sentences · {} tokens",
+                                    summary.sentence_count, summary.token_count
+                                ));
+                                ui.end_row();
+                                let progress = summary.document.last_sentence as f32
+                                    / summary.sentence_count.max(1) as f32;
+                                ui.weak("Progress");
+                                ui.label(if summary.document.last_sentence == 0 {
+                                    "not started".to_string()
+                                } else {
+                                    format!("{:.0}%", (progress * 100.0).min(100.0))
+                                });
+                                ui.end_row();
+                            });
+
+                        if let Some(stats) = stats {
+                            ui.add_space(8.0);
+                            ui.separator();
+                            ui.label(egui::RichText::new("Difficulty").strong());
+                            ui.horizontal(|ui| {
+                                ui.colored_label(band_color(stats.band), stats.band.label());
+                                ui.label(format!(
+                                    "· {:.1}% known · {:.1}% learning · {:.1}% unknown",
+                                    stats.known_share() * 100.0,
+                                    stats.learning_share() * 100.0,
+                                    stats.unknown_share() * 100.0
+                                ));
+                            });
+
+                            // Coverage forecast from the top unknown words.
+                            let n = info.top_unknown.len().min(20);
+                            if n > 0 && stats.content_tokens > 0 {
+                                let gained: u32 =
+                                    info.top_unknown[..n].iter().map(|c| c.occurrences).sum();
+                                let now = stats.known_share() * 100.0;
+                                let after = ((stats.known_tokens
+                                    + stats.ignored_tokens
+                                    + gained) as f64
+                                    / stats.content_tokens as f64)
+                                    * 100.0;
+                                ui.add_space(4.0);
+                                ui.label(format!(
+                                    "Learning the top {n} unknown words lifts coverage \
+                                     from {now:.1}% to {after:.1}%."
+                                ));
+                            }
+                        }
+
+                        ui.add_space(8.0);
+                        ui.separator();
+                        ui.label(egui::RichText::new("Reading time").strong());
+                        if info.reading.seconds > 0.0 {
+                            let mins = info.reading.seconds / 60.0;
+                            let mut line = format!(
+                                "{} · {} characters",
+                                crate::views::human_duration(chrono::Duration::seconds(
+                                    info.reading.seconds as i64
+                                )),
+                                info.reading.chars
+                            );
+                            if info.reading.chars > 0 && mins > 0.0 {
+                                line.push_str(&format!(
+                                    " · {:.0} chars/min",
+                                    info.reading.chars as f64 / mins
+                                ));
+                            }
+                            ui.label(line);
+                        } else {
+                            ui.weak("No reading recorded yet.");
+                        }
+
+                        if !info.top_unknown.is_empty() {
+                            ui.add_space(8.0);
+                            ui.separator();
+                            ui.label(
+                                egui::RichText::new("Most useful unknown words").strong(),
+                            );
+                            ui.weak("Click a word in the text while reading to learn it.");
+                            ui.add_space(2.0);
+                            egui::Grid::new("book-info-unknown")
+                                .num_columns(3)
+                                .spacing([12.0, 2.0])
+                                .show(ui, |ui| {
+                                    for c in info.top_unknown.iter().take(12) {
+                                        ui.label(&c.word.key.lemma);
+                                        ui.weak(match c.corpus_rank {
+                                            Some(r) => format!("#{r}"),
+                                            None => "—".into(),
+                                        });
+                                        ui.weak(format!("×{}", c.occurrences));
+                                        ui.end_row();
+                                    }
+                                });
+                        }
+
+                        ui.add_space(10.0);
+                        if ui.button("📖 Read").clicked() {
+                            to_read = Some(summary.document.id);
+                        }
+                        ui.add_space(8.0);
+                    });
+            });
+
+        if close {
+            self.book_info = None;
+        }
+        if let Some(id) = to_read {
+            self.open_reader(id);
+        }
     }
 
     fn meta_edit_dialog(&mut self, ctx: &egui::Context) {
