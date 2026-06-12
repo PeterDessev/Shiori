@@ -93,6 +93,15 @@ impl Db {
         Ok(())
     }
 
+    /// Every card (for exports).
+    pub fn all_cards(&self) -> Result<Vec<CardRow>> {
+        let mut stmt = self
+            .conn()
+            .prepare(&format!("SELECT {CARD_COLS} FROM cards ORDER BY word_id"))?;
+        let rows = stmt.query_map([], row_to_card)?;
+        Ok(rows.collect::<std::result::Result<_, _>>()?)
+    }
+
     /// Cards due at `now`, most overdue first.
     pub fn due_cards(&self, now: DateTime<Utc>, limit: u32) -> Result<Vec<CardRow>> {
         let mut stmt = self.conn().prepare(&format!(

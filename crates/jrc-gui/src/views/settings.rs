@@ -583,8 +583,118 @@ impl JrcGui {
                 status.dict_entries, status.frequency_words, status.kanji
             ));
         }
-        ui.add_space(8.0);
+
+        ui.add_space(12.0);
+        ui.heading("Anki");
+        ui.horizontal(|ui| {
+            if ui.button("⬆ Export deck (.apkg)…").clicked() {
+                if let Some(path) = rfd::FileDialog::new()
+                    .set_file_name("japanese-reading-companion.apkg")
+                    .add_filter("Anki deck", &["apkg"])
+                    .save_file()
+                {
+                    self.run_transfer(ui.ctx(), move |app| {
+                        let n = app.export_apkg(&path)?;
+                        Ok(format!("exported {n} cards to {}", path.display()))
+                    });
+                }
+            }
+            if ui.button("⬇ Import deck (.apkg)…").clicked() {
+                if let Some(path) = rfd::FileDialog::new()
+                    .add_filter("Anki deck", &["apkg"])
+                    .pick_file()
+                {
+                    self.run_transfer(ui.ctx(), move |app| {
+                        let (imported, skipped) = app.import_apkg(&path)?;
+                        Ok(format!(
+                            "imported {imported} cards ({skipped} skipped — \
+                             non-Japanese or already scheduled)"
+                        ))
+                    });
+                }
+            }
+        });
+        ui.weak(
+            "Export carries approximate scheduling (FSRS → SM-2); import seeds \
+             FSRS from SM-2 intervals and never overwrites existing cards.",
+        );
+
+        ui.add_space(12.0);
+        ui.heading("Settings file");
+        ui.horizontal(|ui| {
+            if ui.button("⬆ Export settings…").clicked() {
+                if let Some(path) = rfd::FileDialog::new()
+                    .set_file_name("jrc-settings.json")
+                    .add_filter("JSON", &["json"])
+                    .save_file()
+                {
+                    let result = self
+                        .settings
+                        .save_to(&path)
+                        .map(|()| format!("settings exported to {}", path.display()))
+                        .map_err(|e| format!("settings export failed: {e}"));
+                    match result {
+                        Ok(msg) => self.notice = Some(msg),
+                        Err(e) => self.error = Some(e),
+                    }
+                }
+            }
+            if ui.button("⬇ Import settings…").clicked() {
+                if let Some(path) = rfd::FileDialog::new()
+                    .add_filter("JSON", &["json"])
+                    .pick_file()
+                {
+                    match crate::settings::Settings::load_from(&path) {
+                        Some(settings) => {
+                            self.settings_draft = settings;
+                            self.apply_settings();
+                            self.notice = Some("settings imported and applied".into());
+                        }
+                        None => {
+                            self.error =
+                                Some("that file is not a valid settings export".into())
+                        }
+                    }
+                }
+            }
+        });
+
+        ui.add_space(12.0);
+        ui.heading("Database");
+        ui.horizontal(|ui| {
+            if ui.button("💾 Back up database…").clicked() {
+                if let Some(path) = rfd::FileDialog::new()
+                    .set_file_name("jrc-backup.sqlite3")
+                    .add_filter("SQLite database", &["sqlite3", "db"])
+                    .save_file()
+                {
+                    self.run_transfer(ui.ctx(), move |app| {
+                        app.db().backup_to(&path)?;
+                        Ok(format!("database backed up to {}", path.display()))
+                    });
+                }
+            }
+            if ui.button("↩ Restore from backup…").clicked() {
+                if let Some(path) = rfd::FileDialog::new()
+                    .add_filter("SQLite database", &["sqlite3", "db"])
+                    .pick_file()
+                {
+                    self.run_transfer(ui.ctx(), move |app| {
+                        app.stage_restore(&path)?;
+                        Ok("restore staged — restart the app to complete it".into())
+                    });
+                }
+            }
+        });
+        ui.weak(
+            "Backups are clean single-file copies, safe to take while the app \
+             runs. Restoring swaps the database in on the next launch; the \
+             current database is kept aside as jrc.sqlite3.pre-restore.",
+        );
+
+        ui.add_space(12.0);
         ui.weak("Kanji data: KANJIDIC2 © EDRDG (CC BY-SA 4.0).");
         ui.weak("Stroke order: KanjiVG © Ulrich Apel (CC BY-SA 3.0).");
+        ui.weak("JLPT lists: stephenmk/yomitan-jlpt-vocab (CC BY-SA 4.0).");
     }
 }

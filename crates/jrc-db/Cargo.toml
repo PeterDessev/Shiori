@@ -14,3 +14,4 @@ rusqlite = { version = "0.37", features = ["bundled", "chrono"] }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+zip = { version = "2", default-features = false, features = ["deflate"] }

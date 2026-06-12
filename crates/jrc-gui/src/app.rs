@@ -30,6 +30,8 @@ pub enum Msg {
     OllamaPullDone(Result<(), String>),
     AozoraCatalog(Result<Vec<jrc_app::AozoraWork>, String>),
     WikisourceResults(Result<Vec<jrc_app::WikisourceHit>, String>),
+    /// Export/import/backup finished: Ok(summary) or Err(reason).
+    TransferDone(Result<String, String>),
 }
 
 /// Startup/data lifecycle.
@@ -305,6 +307,8 @@ pub struct JrcGui {
     pub phase: Phase,
     pub progress: Vec<String>,
     pub error: Option<String>,
+    /// Green, dismissible success message (exports, backups).
+    pub notice: Option<String>,
     /// Number of background import jobs in flight.
     pub import_jobs: usize,
     pub view: View,
@@ -401,6 +405,7 @@ impl JrcGui {
             phase: Phase::Starting,
             progress: Vec::new(),
             error: None,
+            notice: None,
             import_jobs: 0,
             view: if settings.onboarded {
                 View::Library
@@ -643,6 +648,13 @@ impl JrcGui {
                         Err(e) => self.error = Some(e),
                     }
                 }
+                Msg::TransferDone(result) => match result {
+                    Ok(summary) => {
+                        self.notice = Some(summary);
+                        self.refresh_caches();
+                    }
+                    Err(e) => self.error = Some(e),
+                },
                 Msg::OllamaPullProgress(status, frac) => {
                     self.ollama_pull = Some((status, frac));
                 }
@@ -902,6 +914,25 @@ impl JrcGui {
                 include,
             });
         }
+    }
+
+    /// Run a blocking export/import job against the app on a worker
+    /// thread; the outcome lands in the notice/error bar.
+    pub fn run_transfer<F>(&mut self, ctx: &egui::Context, job: F)
+    where
+        F: FnOnce(&App) -> Result<String, jrc_app::AppError> + Send + 'static,
+    {
+        let Some(app) = self.app.clone() else { return };
+        let tx = self.tx.clone();
+        let ctx = ctx.clone();
+        std::thread::spawn(move || {
+            let result = match app.lock() {
+                Ok(guard) => job(&guard).map_err(|e| e.to_string()),
+                Err(_) => Err("app lock poisoned".into()),
+            };
+            let _ = tx.send(Msg::TransferDone(result));
+            ctx.request_repaint();
+        });
     }
 
     /// Load (or force-reload) the Aozora catalog in the background.
@@ -1251,6 +1282,16 @@ impl eframe::App for JrcGui {
                     ui.colored_label(egui::Color32::from_rgb(220, 80, 80), &error);
                     if ui.small_button("dismiss").clicked() {
                         self.error = None;
+                    }
+                });
+            });
+        }
+        if let Some(notice) = self.notice.clone() {
+            egui::TopBottomPanel::bottom("noticebar").show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.colored_label(egui::Color32::from_rgb(110, 180, 110), &notice);
+                    if ui.small_button("dismiss").clicked() {
+                        self.notice = None;
                     }
                 });
             });

@@ -9,6 +9,7 @@
 //! Dictionary entries are stored as opaque JSON strings so this crate does
 //! not depend on `jrc-dict`.
 
+pub mod anki;
 mod cards;
 mod chat;
 mod dict;
@@ -76,6 +77,19 @@ impl Db {
 
     pub(crate) fn conn(&self) -> &Connection {
         &self.conn
+    }
+
+    /// Write a clean, single-file copy of the live database (safe while
+    /// open; WAL contents are folded in).
+    pub fn backup_to(&self, path: &Path) -> Result<()> {
+        if path.exists() {
+            std::fs::remove_file(path).map_err(|e| {
+                DbError::Sqlite(rusqlite::Error::ToSqlConversionFailure(Box::new(e)))
+            })?;
+        }
+        self.conn
+            .execute("VACUUM INTO ?1", [path.to_string_lossy().as_ref()])?;
+        Ok(())
     }
 }
 

@@ -282,8 +282,20 @@ impl Settings {
 
     pub fn save(&self, data_dir: &Path) -> std::io::Result<()> {
         std::fs::create_dir_all(data_dir)?;
+        self.save_to(&data_dir.join(SETTINGS_FILENAME))
+    }
+
+    /// Write the settings to an arbitrary path (exports).
+    pub fn save_to(&self, path: &Path) -> std::io::Result<()> {
         let json = serde_json::to_string_pretty(self).map_err(std::io::Error::other)?;
-        std::fs::write(data_dir.join(SETTINGS_FILENAME), json)
+        std::fs::write(path, json)
+    }
+
+    /// Read settings from an arbitrary path (imports); `None` when the
+    /// file isn't a settings export.
+    pub fn load_from(path: &Path) -> Option<Self> {
+        let json = std::fs::read_to_string(path).ok()?;
+        serde_json::from_str(&json).ok()
     }
 
     /// Build the LLM backend this configuration describes.

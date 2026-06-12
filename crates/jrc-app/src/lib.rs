@@ -16,6 +16,7 @@ mod review;
 mod sessions;
 mod sources;
 mod stats;
+mod transfer;
 
 pub use chat::ChatTokenRow;
 pub use data::DataStatus;
@@ -64,11 +65,34 @@ pub struct App {
 impl App {
     /// Database filename inside the data directory.
     pub const DB_FILENAME: &'static str = "jrc.sqlite3";
+    /// A backup staged for restore; swapped in on the next startup
+    /// (the live database file can't be replaced while open).
+    pub const RESTORE_PENDING_FILENAME: &'static str = "jrc.sqlite3.restore-pending";
 
     /// Open the application with its data directory (created if missing).
     pub fn open(data_dir: &Path) -> Result<Self> {
-        let db = Db::open(&data_dir.join(Self::DB_FILENAME))?;
+        let db_path = data_dir.join(Self::DB_FILENAME);
+        // Complete a staged restore before the database opens.
+        let pending = data_dir.join(Self::RESTORE_PENDING_FILENAME);
+        if pending.exists() {
+            if db_path.exists() {
+                let aside = data_dir.join("jrc.sqlite3.pre-restore");
+                std::fs::remove_file(&aside).ok();
+                std::fs::rename(&db_path, &aside)?;
+                // WAL/SHM of the old database must not leak into the new one.
+                std::fs::remove_file(data_dir.join("jrc.sqlite3-wal")).ok();
+                std::fs::remove_file(data_dir.join("jrc.sqlite3-shm")).ok();
+            }
+            std::fs::rename(&pending, &db_path)?;
+        }
+        let db = Db::open(&db_path)?;
         Self::with_db(db, data_dir.to_path_buf())
+    }
+
+    /// Stage a backup file to replace the database on next launch.
+    pub fn stage_restore(&self, backup: &Path) -> Result<()> {
+        std::fs::copy(backup, self.data_dir.join(Self::RESTORE_PENDING_FILENAME))?;
+        Ok(())
     }
 
     /// Open over an existing database handle (tests use an in-memory one).
