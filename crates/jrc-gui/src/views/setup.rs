@@ -11,8 +11,12 @@ impl JrcGui {
                 ui.add_space(60.0);
                 ui.heading("Japanese Reading Companion");
                 ui.add_space(12.0);
-                ui.label("First run: the JMdict dictionary (~11 MB download) and a word \
-                          frequency list need to be fetched and imported.");
+                ui.label(
+                    "Reference data needs to be fetched and imported: the JMdict \
+                     dictionary (~11 MB), a word frequency list, kanji data with \
+                     stroke order (~5 MB), and JLPT vocabulary lists. Steps \
+                     already imported are skipped.",
+                );
                 ui.label(format!("Data directory: {}", self.data_dir.display()));
                 ui.add_space(16.0);
 
