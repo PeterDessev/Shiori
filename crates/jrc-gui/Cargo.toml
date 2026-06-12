@@ -21,6 +21,7 @@ serde.workspace = true
 serde_json.workspace = true
 jrc-nlp = { version = "0.1.0", path = "../jrc-nlp" }
 egui_extras = "0.31"
+ureq = "2"
 
 [[bin]]
 name = "jrc"

@@ -111,6 +111,30 @@ impl Shortcuts {
 pub enum Theme {
     Dark,
     Light,
+    /// Warm paper tones for long reading sessions.
+    Sepia,
+}
+
+/// Which Japanese font renders the app's CJK text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReaderFont {
+    /// Whatever the operating system provides (Meiryo on Windows).
+    System,
+    /// Noto Sans JP (gothic) — downloaded on first use.
+    NotoSans,
+    /// Noto Serif JP (mincho) — downloaded on first use.
+    NotoSerif,
+}
+
+impl ReaderFont {
+    pub fn label(self) -> &'static str {
+        match self {
+            ReaderFont::System => "System (gothic)",
+            ReaderFont::NotoSans => "Noto Sans JP (gothic)",
+            ReaderFont::NotoSerif => "Noto Serif JP (mincho)",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -128,6 +152,11 @@ pub struct Settings {
     /// Whether the getting-started page has been dismissed.
     pub onboarded: bool,
     pub theme: Theme,
+    pub reader_font: ReaderFont,
+    /// Reader text size in points.
+    pub reader_font_size: f32,
+    /// Multiplier on the reader's line and paragraph gaps.
+    pub reader_line_spacing: f32,
     pub shortcuts: Shortcuts,
 }
 
@@ -139,6 +168,9 @@ impl Default for Settings {
             show_unknown_highlights: false,
             onboarded: false,
             theme: Theme::Dark,
+            reader_font: ReaderFont::System,
+            reader_font_size: 21.0,
+            reader_line_spacing: 1.0,
             shortcuts: Shortcuts::default(),
         }
     }

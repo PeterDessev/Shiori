@@ -18,9 +18,6 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "Japanese Reading Companion",
         options,
-        Box::new(|cc| {
-            fonts::install_japanese_fonts(&cc.egui_ctx);
-            Ok(Box::new(app::JrcGui::new(cc)))
-        }),
+        Box::new(|cc| Ok(Box::new(app::JrcGui::new(cc)))),
     )
 }

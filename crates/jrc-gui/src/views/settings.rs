@@ -123,7 +123,56 @@ impl JrcGui {
                 crate::settings::Theme::Light,
                 "Light",
             );
+            ui.selectable_value(
+                &mut self.settings_draft.theme,
+                crate::settings::Theme::Sepia,
+                "Sepia",
+            );
         });
+
+        ui.add_space(12.0);
+        ui.heading("Japanese font");
+        for font in [
+            crate::settings::ReaderFont::System,
+            crate::settings::ReaderFont::NotoSans,
+            crate::settings::ReaderFont::NotoSerif,
+        ] {
+            ui.horizontal(|ui| {
+                ui.selectable_value(&mut self.settings_draft.reader_font, font, font.label());
+                if !crate::fonts::font_available(&self.data_dir, font) {
+                    ui.weak("~5–8 MB download on first use");
+                }
+            });
+        }
+        if self.font_downloading {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                ui.label("downloading font…");
+            });
+        }
+        ui.weak("Applies everywhere Japanese is rendered, after saving.");
+
+        ui.add_space(12.0);
+        ui.heading("Reader text");
+        egui::Grid::new("reader-text-grid")
+            .spacing([10.0, 8.0])
+            .show(ui, |ui| {
+                ui.label("Font size:");
+                ui.add(egui::Slider::new(
+                    &mut self.settings_draft.reader_font_size,
+                    14.0..=40.0,
+                ));
+                ui.end_row();
+                ui.label("Line spacing:");
+                ui.add(
+                    egui::Slider::new(
+                        &mut self.settings_draft.reader_line_spacing,
+                        0.6..=2.0,
+                    )
+                    .fixed_decimals(1),
+                );
+                ui.end_row();
+            });
     }
 
     fn settings_reading(&mut self, ui: &mut egui::Ui) {

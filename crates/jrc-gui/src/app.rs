@@ -22,6 +22,7 @@ pub enum Msg {
     ImportDone(Result<DocumentId, String>),
     Explained(Result<String, String>),
     Feedback(Result<String, String>),
+    FontDownloaded(crate::settings::ReaderFont, Result<(), String>),
 }
 
 /// Startup/data lifecycle.
@@ -238,6 +239,10 @@ pub struct JrcGui {
     pub sort_asc: bool,
     /// Theme applied to the egui context (to detect setting changes).
     applied_theme: Option<Theme>,
+    /// Japanese font currently installed in the egui context.
+    applied_font: Option<crate::settings::ReaderFont>,
+    /// A font download is in flight.
+    pub font_downloading: bool,
     /// Where to return when the getting-started page is closed.
     pub welcome_return: Option<View>,
 }
@@ -253,6 +258,16 @@ impl JrcGui {
         let (tx, rx) = channel();
         let data_dir = default_data_dir();
         let settings = Settings::load(&data_dir);
+
+        // Install whichever Japanese font is usable right now; if the
+        // chosen Noto font isn't cached yet, the first frame's
+        // apply_fonts kicks off the download and switches on arrival.
+        let initial_font = if crate::fonts::font_available(&data_dir, settings.reader_font) {
+            settings.reader_font
+        } else {
+            crate::settings::ReaderFont::System
+        };
+        crate::fonts::install_japanese_fonts(&cc.egui_ctx, &data_dir, initial_font);
 
         // Opening the app deserializes the embedded NLP dictionary — keep
         // it off the first frame.
@@ -301,6 +316,8 @@ impl JrcGui {
             sort_key: SortKey::default(),
             sort_asc: true,
             applied_theme: None,
+            applied_font: Some(initial_font),
+            font_downloading: false,
             welcome_return: None,
         }
     }
@@ -310,18 +327,66 @@ impl JrcGui {
             ctx.set_visuals(match self.settings.theme {
                 Theme::Dark => egui::Visuals::dark(),
                 Theme::Light => egui::Visuals::light(),
+                Theme::Sepia => sepia_visuals(),
             });
             self.applied_theme = Some(self.settings.theme);
         }
     }
 
+    /// Make the installed Japanese font match the setting, downloading a
+    /// Noto font in the background the first time it is chosen.
+    fn apply_fonts(&mut self, ctx: &egui::Context) {
+        let wanted = self.settings.reader_font;
+        if self.applied_font == Some(wanted) {
+            return;
+        }
+        if crate::fonts::font_available(&self.data_dir, wanted) {
+            crate::fonts::install_japanese_fonts(ctx, &self.data_dir, wanted);
+            self.applied_font = Some(wanted);
+            // Different metrics: re-measure and re-paginate the open book.
+            self.invalidate_reader_layout();
+        } else if !self.font_downloading {
+            self.font_downloading = true;
+            let data_dir = self.data_dir.clone();
+            let tx = self.tx.clone();
+            let ctx = ctx.clone();
+            std::thread::spawn(move || {
+                let result = crate::fonts::download_font(&data_dir, wanted);
+                let _ = tx.send(Msg::FontDownloaded(wanted, result));
+                ctx.request_repaint();
+            });
+        }
+    }
+
     /// Persist the settings draft and apply it (rebuilds the LLM backend).
     pub fn apply_settings(&mut self) {
+        let layout_changed = self.settings.reader_font_size
+            != self.settings_draft.reader_font_size
+            || self.settings.reader_line_spacing != self.settings_draft.reader_line_spacing;
         self.settings = self.settings_draft.clone();
         if let Err(e) = self.settings.save(&self.data_dir) {
             self.error = Some(format!("could not save settings: {e}"));
         }
         self.explainer = self.settings.build_explainer();
+        if layout_changed {
+            self.invalidate_reader_layout();
+        }
+    }
+
+    /// Force the reader to re-measure tokens and re-paginate (after a
+    /// font, size, or spacing change), keeping the current position.
+    pub fn invalidate_reader_layout(&mut self) {
+        if let Some(reader) = self.reader.as_mut() {
+            let para = reader
+                .page_starts
+                .get(reader.current_page)
+                .copied()
+                .unwrap_or(0);
+            let sentence = reader.para_ranges.get(para).map(|&(s0, _)| s0).unwrap_or(0);
+            reader.token_widths.clear();
+            reader.page_starts.clear();
+            reader.pending_restore = Some(sentence);
+        }
     }
 
     /// Dismiss the getting-started page, returning to wherever the user
@@ -429,6 +494,19 @@ impl JrcGui {
                         Ok(text) => self.production.feedback = Some(text),
                         Err(e) => self.error = Some(e),
                     }
+                }
+                Msg::FontDownloaded(font, result) => {
+                    self.font_downloading = false;
+                    if let Err(e) = result {
+                        self.error = Some(format!("font download failed: {e}"));
+                        // Fall back so apply_fonts stops retrying.
+                        if self.settings.reader_font == font {
+                            self.settings.reader_font = crate::settings::ReaderFont::System;
+                            self.settings_draft.reader_font = self.settings.reader_font;
+                            let _ = self.settings.save(&self.data_dir);
+                        }
+                    }
+                    // On success apply_fonts installs it next frame.
                 }
             }
         }
@@ -665,6 +743,7 @@ impl eframe::App for JrcGui {
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.apply_theme(ctx);
+        self.apply_fonts(ctx);
         self.handle_messages();
 
         match self.phase {
@@ -845,6 +924,39 @@ impl JrcGui {
             }
         }
     }
+}
+
+/// Warm paper-toned visuals for long reading sessions.
+fn sepia_visuals() -> egui::Visuals {
+    use egui::{Color32, Stroke};
+    let mut v = egui::Visuals::light();
+    let text = Color32::from_rgb(66, 50, 35);
+    v.override_text_color = Some(text);
+    v.panel_fill = Color32::from_rgb(240, 228, 205);
+    v.window_fill = Color32::from_rgb(246, 236, 216);
+    v.extreme_bg_color = Color32::from_rgb(250, 242, 226);
+    v.faint_bg_color = Color32::from_rgb(232, 218, 192);
+    v.code_bg_color = Color32::from_rgb(232, 218, 192);
+    v.selection.bg_fill = Color32::from_rgb(213, 178, 122);
+    v.selection.stroke = Stroke::new(1.0, Color32::from_rgb(120, 90, 50));
+    v.hyperlink_color = Color32::from_rgb(140, 90, 40);
+    v.warn_fg_color = Color32::from_rgb(160, 100, 20);
+    v.error_fg_color = Color32::from_rgb(170, 50, 40);
+    v.widgets.noninteractive.bg_fill = v.panel_fill;
+    v.widgets.noninteractive.fg_stroke = Stroke::new(1.0, text);
+    v.widgets.inactive.bg_fill = Color32::from_rgb(228, 213, 185);
+    v.widgets.inactive.weak_bg_fill = Color32::from_rgb(228, 213, 185);
+    v.widgets.inactive.fg_stroke = Stroke::new(1.0, text);
+    v.widgets.hovered.bg_fill = Color32::from_rgb(219, 201, 168);
+    v.widgets.hovered.weak_bg_fill = Color32::from_rgb(219, 201, 168);
+    v.widgets.hovered.fg_stroke = Stroke::new(1.5, text);
+    v.widgets.active.bg_fill = Color32::from_rgb(208, 188, 152);
+    v.widgets.active.weak_bg_fill = Color32::from_rgb(208, 188, 152);
+    v.widgets.active.fg_stroke = Stroke::new(1.5, text);
+    v.widgets.open.bg_fill = Color32::from_rgb(228, 213, 185);
+    v.widgets.open.weak_bg_fill = Color32::from_rgb(228, 213, 185);
+    v.widgets.open.fg_stroke = Stroke::new(1.0, text);
+    v
 }
 
 pub fn truncate_title(s: &str, max_chars: usize) -> String {

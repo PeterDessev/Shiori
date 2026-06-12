@@ -14,10 +14,11 @@ use crate::app::JrcGui;
 use crate::settings::shortcut_pressed;
 use crate::views::{tight_highlight_rect, unknown_fill};
 
-const READER_FONT_SIZE: f32 = 21.0;
-/// Vertical gap after each paragraph.
+/// Base vertical gap after each paragraph (scaled by the line-spacing
+/// setting).
 const PARA_GAP: f32 = 14.0;
-/// Extra spacing horizontal_wrapped inserts between wrapped rows.
+/// Base spacing horizontal_wrapped inserts between wrapped rows (scaled
+/// by the line-spacing setting).
 const ROW_GAP: f32 = 8.0;
 
 /// Action chosen in the dictionary panel.
@@ -41,6 +42,11 @@ impl JrcGui {
         let mut action: Option<WordAction> = None;
         let mut clicked: Option<(usize, usize)> = None; // (sentence, token)
         let mut explain_requested = false;
+
+        let font_size = self.settings.reader_font_size.clamp(14.0, 40.0);
+        let spacing_mult = self.settings.reader_line_spacing.clamp(0.6, 2.0);
+        let row_gap = ROW_GAP * spacing_mult;
+        let para_gap = PARA_GAP * spacing_mult;
 
         // Keyboard shortcuts (ignored while a text field has focus).
         let shortcuts = self.settings.shortcuts.clone();
@@ -177,7 +183,7 @@ impl JrcGui {
             // measured per-token widths (a plain-text estimate breaks
             // lines later than the renderer and cut text off the page).
             {
-                let font = egui::FontId::proportional(READER_FONT_SIZE);
+                let font = egui::FontId::proportional(font_size);
                 let row_height = ui.fonts(|f| f.row_height(&font));
 
                 // One-time per-token width measurement.
@@ -239,7 +245,7 @@ impl JrcGui {
                             }
                         }
                         let rows = rows as f32;
-                        let h = rows * row_height + (rows - 1.0) * ROW_GAP + PARA_GAP;
+                        let h = rows * row_height + (rows - 1.0) * row_gap + para_gap;
                         if acc + h > budget && pi > *starts.last().unwrap() {
                             starts.push(pi);
                             acc = 0.0;
@@ -271,7 +277,7 @@ impl JrcGui {
             for (s0, s1) in &reader.para_ranges[para_begin..para_end] {
                 ui.horizontal_wrapped(|ui| {
                     ui.spacing_mut().item_spacing.x = 0.0;
-                    ui.spacing_mut().item_spacing.y = ROW_GAP;
+                    ui.spacing_mut().item_spacing.y = row_gap;
                     let selection_fill = ui.visuals().selection.bg_fill;
                     let unknown_fill = unknown_fill(ui.visuals());
                     for si in *s0..*s1 {
@@ -295,7 +301,7 @@ impl JrcGui {
                                 None
                             };
                             let text =
-                                egui::RichText::new(&row.token.surface).size(READER_FONT_SIZE);
+                                egui::RichText::new(&row.token.surface).size(font_size);
                             // Tokens never wrap internally: a label that
                             // breaks across lines reports a full-width
                             // union rect, which painted highlights as
@@ -315,7 +321,7 @@ impl JrcGui {
                             let response = ui.add(label);
                             if let Some(fill) = fill {
                                 let rect =
-                                    tight_highlight_rect(response.rect, READER_FONT_SIZE);
+                                    tight_highlight_rect(response.rect, font_size);
                                 ui.painter().set(
                                     bg_slot,
                                     egui::Shape::rect_filled(rect, 0.0, fill),
@@ -331,7 +337,7 @@ impl JrcGui {
                         }
                     }
                 });
-                ui.add_space(PARA_GAP);
+                ui.add_space(para_gap);
             }
         });
 

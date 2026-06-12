@@ -24,12 +24,13 @@ pub fn tight_highlight_rect(rect: egui::Rect, font_size: f32) -> egui::Rect {
 }
 
 /// Theme-aware tint for unknown words. Opaque, so adjacent token rects
-/// never double up where they meet.
+/// never double up where they meet. The light tint is amber enough to
+/// stay visible on the sepia theme's paper background too.
 pub fn unknown_fill(visuals: &egui::Visuals) -> Color32 {
     if visuals.dark_mode {
         Color32::from_rgb(84, 63, 24)
     } else {
-        Color32::from_rgb(255, 236, 195)
+        Color32::from_rgb(243, 213, 145)
     }
 }
 
