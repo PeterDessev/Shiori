@@ -20,6 +20,7 @@ pub struct Shortcuts {
     pub reader_known: String,
     pub reader_ignore: String,
     pub reader_explain: String,
+    pub reader_away: String,
 }
 
 impl Default for Shortcuts {
@@ -34,6 +35,7 @@ impl Default for Shortcuts {
             reader_known: "K".into(),
             reader_ignore: "I".into(),
             reader_explain: "E".into(),
+            reader_away: "P".into(),
         }
     }
 }
@@ -50,11 +52,12 @@ pub enum ShortcutId {
     ReaderKnown,
     ReaderIgnore,
     ReaderExplain,
+    ReaderAway,
 }
 
 impl Shortcuts {
     /// Every rebindable action with its settings-page label.
-    pub const FIELDS: [(ShortcutId, &'static str); 9] = [
+    pub const FIELDS: [(ShortcutId, &'static str); 10] = [
         (ShortcutId::ReviewReveal, "Review · show answer"),
         (ShortcutId::ReviewCorrect, "Review · correct"),
         (ShortcutId::ReviewIncorrect, "Review · incorrect"),
@@ -64,6 +67,7 @@ impl Shortcuts {
         (ShortcutId::ReaderKnown, "Reader · mark known"),
         (ShortcutId::ReaderIgnore, "Reader · ignore word"),
         (ShortcutId::ReaderExplain, "Reader · explain sentence"),
+        (ShortcutId::ReaderAway, "Reader · pause reading"),
     ];
 
     pub fn get(&self, id: ShortcutId) -> &str {
@@ -77,6 +81,7 @@ impl Shortcuts {
             ShortcutId::ReaderKnown => &self.reader_known,
             ShortcutId::ReaderIgnore => &self.reader_ignore,
             ShortcutId::ReaderExplain => &self.reader_explain,
+            ShortcutId::ReaderAway => &self.reader_away,
         }
     }
 
@@ -91,6 +96,7 @@ impl Shortcuts {
             ShortcutId::ReaderKnown => &mut self.reader_known,
             ShortcutId::ReaderIgnore => &mut self.reader_ignore,
             ShortcutId::ReaderExplain => &mut self.reader_explain,
+            ShortcutId::ReaderAway => &mut self.reader_away,
         }
     }
 

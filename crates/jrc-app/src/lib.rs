@@ -10,6 +10,7 @@ pub mod extract;
 mod ingest;
 mod mining;
 mod review;
+mod sessions;
 mod stats;
 
 pub use data::DataStatus;

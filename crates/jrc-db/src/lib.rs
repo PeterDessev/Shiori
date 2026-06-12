@@ -13,12 +13,14 @@ mod cards;
 mod dict;
 mod documents;
 mod schema;
+mod sessions;
 mod stats;
 mod words;
 
 pub use cards::CardRow;
 pub use dict::DictFormRow;
 pub use documents::{DocumentSummary, NewSentence, NewToken, TokenRow};
+pub use sessions::ReadingTotals;
 pub use stats::StatusCount;
 pub use words::{DocWord, WordRow};
 

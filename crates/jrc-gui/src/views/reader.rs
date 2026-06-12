@@ -48,41 +48,108 @@ impl JrcGui {
         let row_gap = ROW_GAP * spacing_mult;
         let para_gap = PARA_GAP * spacing_mult;
 
-        // Keyboard shortcuts (ignored while a text field has focus).
-        let shortcuts = self.settings.shortcuts.clone();
-        if shortcut_pressed(ctx, &shortcuts.reader_next) {
-            self.navigate_selection(1);
-        } else if shortcut_pressed(ctx, &shortcuts.reader_prev) {
-            self.navigate_selection(-1);
-        }
-        if let Some(reader) = self.reader.as_ref() {
-            if let Some(panel) = &reader.panel {
-                let sentence_id = reader
-                    .selected
-                    .and_then(|(s, _)| reader.sentences.get(s))
-                    .map(|v| v.sentence.id);
-                if shortcut_pressed(ctx, &shortcuts.reader_learn)
-                    && panel.word.status != KnowledgeStatus::Learning
-                {
-                    if let Some(sid) = sentence_id {
-                        action = Some(WordAction::Learn(panel.word.id, sid));
+        // ---- reading clock & away handling ----
+        // While paused (or just resuming), all reader input is swallowed.
+        let mut input_blocked = false;
+        let mut manual_away = false;
+        {
+            use crate::session::{current_page_chars, Away, VisitEnd, GRACE_SECS};
+            let now = std::time::Instant::now();
+            let interacted = ctx.input(|i| {
+                i.pointer.any_pressed()
+                    || i.raw_scroll_delta.y != 0.0
+                    || i.events
+                        .iter()
+                        .any(|e| matches!(e, egui::Event::Key { pressed: true, .. }))
+            });
+            match self.reader.as_ref().and_then(|r| r.session.away) {
+                Some(Away::Manual) | Some(Away::Auto) => {
+                    input_blocked = true;
+                    if interacted {
+                        // Resume; the resuming click/key does nothing else.
+                        self.enter_page();
                     }
                 }
-                if shortcut_pressed(ctx, &shortcuts.reader_known)
-                    && panel.word.status != KnowledgeStatus::Known
-                {
-                    action = Some(WordAction::Known(panel.word.id));
+                Some(Away::Grace { shown }) => {
+                    input_blocked = true;
+                    if interacted {
+                        // A hard page, not an absence: keep the clock
+                        // running with full credit.
+                        if let Some(reader) = self.reader.as_mut() {
+                            reader.session.away = None;
+                            reader.session.last_interaction = now;
+                        }
+                    } else if shown.elapsed().as_secs_f64() >= GRACE_SECS {
+                        self.end_page_visit(VisitEnd::AutoAway);
+                        if let Some(reader) = self.reader.as_mut() {
+                            reader.session.away = Some(Away::Auto);
+                        }
+                    }
                 }
-                if shortcut_pressed(ctx, &shortcuts.reader_ignore)
-                    && panel.word.status != KnowledgeStatus::Ignored
-                {
-                    action = Some(WordAction::Ignore(panel.word.id));
+                None => {
+                    if interacted {
+                        if let Some(reader) = self.reader.as_mut() {
+                            reader.session.last_interaction = now;
+                        }
+                    } else if let Some(reader) = self.reader.as_mut() {
+                        let chars = current_page_chars(reader);
+                        if chars > 0 {
+                            if let Some(entered) = reader.session.page_entered {
+                                let idle_start = reader.session.last_interaction.max(entered);
+                                if idle_start.elapsed().as_secs_f64()
+                                    >= reader.session.away_threshold(chars)
+                                {
+                                    reader.session.away = Some(Away::Grace { shown: now });
+                                }
+                            }
+                        }
+                    }
                 }
-                if shortcut_pressed(ctx, &shortcuts.reader_explain)
-                    && self.explainer.is_available()
-                    && !reader.explaining
-                {
-                    explain_requested = true;
+            }
+            // The away clock must tick even without input events.
+            ctx.request_repaint_after(std::time::Duration::from_secs(1));
+        }
+
+        // Keyboard shortcuts (ignored while a text field has focus).
+        let shortcuts = self.settings.shortcuts.clone();
+        if !input_blocked {
+            if shortcut_pressed(ctx, &shortcuts.reader_away) {
+                manual_away = true;
+            }
+            if shortcut_pressed(ctx, &shortcuts.reader_next) {
+                self.navigate_selection(1);
+            } else if shortcut_pressed(ctx, &shortcuts.reader_prev) {
+                self.navigate_selection(-1);
+            }
+            if let Some(reader) = self.reader.as_ref() {
+                if let Some(panel) = &reader.panel {
+                    let sentence_id = reader
+                        .selected
+                        .and_then(|(s, _)| reader.sentences.get(s))
+                        .map(|v| v.sentence.id);
+                    if shortcut_pressed(ctx, &shortcuts.reader_learn)
+                        && panel.word.status != KnowledgeStatus::Learning
+                    {
+                        if let Some(sid) = sentence_id {
+                            action = Some(WordAction::Learn(panel.word.id, sid));
+                        }
+                    }
+                    if shortcut_pressed(ctx, &shortcuts.reader_known)
+                        && panel.word.status != KnowledgeStatus::Known
+                    {
+                        action = Some(WordAction::Known(panel.word.id));
+                    }
+                    if shortcut_pressed(ctx, &shortcuts.reader_ignore)
+                        && panel.word.status != KnowledgeStatus::Ignored
+                    {
+                        action = Some(WordAction::Ignore(panel.word.id));
+                    }
+                    if shortcut_pressed(ctx, &shortcuts.reader_explain)
+                        && self.explainer.is_available()
+                        && !reader.explaining
+                    {
+                        explain_requested = true;
+                    }
                 }
             }
         }
@@ -147,7 +214,7 @@ impl JrcGui {
                         .size()
                         .x;
                     let gap = ui.spacing().item_spacing.x;
-                    let cluster = 26.0 + gap + label_width + gap + 26.0;
+                    let cluster = 26.0 + gap + label_width + gap + 26.0 + gap + 26.0;
                     ui.add_space((ui.available_width() - cluster).max(0.0) / 2.0);
                     if ui.add_enabled(page > 0, egui::Button::new("◀")).clicked() {
                         flip = -1;
@@ -159,6 +226,17 @@ impl JrcGui {
                     {
                         flip = 1;
                     }
+                    if ui
+                        .button("⏸")
+                        .on_hover_text(format!(
+                            "Pause reading ({})",
+                            self.settings.shortcuts.reader_away
+                        ))
+                        .clicked()
+                    {
+                        flip = 0;
+                        manual_away = true;
+                    }
                     ui.weak("scroll or PgUp/PgDn");
                 });
                 ui.add_space(2.0);
@@ -166,11 +244,13 @@ impl JrcGui {
         }
 
         // Scroll wheel and PageUp/PageDown flip pages, e-reader style.
-        let scroll_y = ctx.input(|i| i.raw_scroll_delta.y);
-        if scroll_y < -8.0 || ctx.input(|i| i.key_pressed(egui::Key::PageDown)) {
-            flip = 1;
-        } else if scroll_y > 8.0 || ctx.input(|i| i.key_pressed(egui::Key::PageUp)) {
-            flip = -1;
+        if !input_blocked {
+            let scroll_y = ctx.input(|i| i.raw_scroll_delta.y);
+            if scroll_y < -8.0 || ctx.input(|i| i.key_pressed(egui::Key::PageDown)) {
+                flip = 1;
+            } else if scroll_y > 8.0 || ctx.input(|i| i.key_pressed(egui::Key::PageUp)) {
+                flip = -1;
+            }
         }
 
         let show_unknown = self.settings.show_unknown_highlights;
@@ -341,22 +421,67 @@ impl JrcGui {
             }
         });
 
-        if flip != 0 {
-            let mut moved = false;
-            if let Some(reader) = self.reader.as_mut() {
+        if flip != 0 && !input_blocked {
+            let target = self.reader.as_ref().map(|reader| {
                 let pages = reader.page_count() as isize;
-                let target =
-                    (reader.current_page as isize + flip).clamp(0, pages - 1) as usize;
-                moved = target != reader.current_page;
-                reader.current_page = target;
-            }
-            if moved {
-                self.persist_reading_position();
+                (reader.current_page as isize + flip).clamp(0, pages - 1) as usize
+            });
+            if let Some(target) = target {
+                let moved = self
+                    .reader
+                    .as_ref()
+                    .is_some_and(|r| target != r.current_page);
+                if moved {
+                    // Credit the page being left before moving off it.
+                    self.end_page_visit(crate::session::VisitEnd::Flip);
+                    if let Some(reader) = self.reader.as_mut() {
+                        reader.current_page = target;
+                    }
+                    self.enter_page();
+                    self.persist_reading_position();
+                }
             }
         }
 
+        if manual_away && !input_blocked && self.reader.is_some() {
+            self.end_page_visit(crate::session::VisitEnd::Pause);
+            if let Some(reader) = self.reader.as_mut() {
+                reader.session.away = Some(crate::session::Away::Manual);
+            }
+        }
+
+        // Pause overlay: dims the page and swallows pointer input.
+        if self.reader.as_ref().is_some_and(|r| r.session.away.is_some()) {
+            let screen = ctx.screen_rect();
+            egui::Area::new(egui::Id::new("away-overlay"))
+                .order(egui::Order::Foreground)
+                .fixed_pos(screen.min)
+                .show(ctx, |ui| {
+                    let (rect, _) =
+                        ui.allocate_exact_size(screen.size(), egui::Sense::click());
+                    let painter = ui.painter();
+                    painter.rect_filled(rect, 0.0, egui::Color32::from_black_alpha(170));
+                    painter.text(
+                        rect.center() - egui::vec2(0.0, 16.0),
+                        egui::Align2::CENTER_CENTER,
+                        "⏸  Reading paused",
+                        egui::FontId::proportional(30.0),
+                        egui::Color32::WHITE,
+                    );
+                    painter.text(
+                        rect.center() + egui::vec2(0.0, 26.0),
+                        egui::Align2::CENTER_CENTER,
+                        "click anywhere or press any key to resume",
+                        egui::FontId::proportional(15.0),
+                        egui::Color32::from_gray(200),
+                    );
+                });
+        }
+
         if let Some((s_idx, t_idx)) = clicked {
-            self.select_token(s_idx, t_idx);
+            if !input_blocked {
+                self.select_token(s_idx, t_idx);
+            }
         }
         if explain_requested {
             self.request_explanation(ctx);
@@ -401,15 +526,19 @@ impl JrcGui {
         let (s, _, t) = selectable[next];
         self.select_token(s, t);
         // Follow the selection across page boundaries.
-        let mut moved = false;
-        if let Some(reader) = self.reader.as_mut() {
-            if let Some(&para) = reader.para_of_sentence.get(s) {
-                let page = reader.page_of_paragraph(para);
-                moved = page != reader.current_page;
+        let target = self.reader.as_ref().and_then(|reader| {
+            reader
+                .para_of_sentence
+                .get(s)
+                .map(|&para| reader.page_of_paragraph(para))
+                .filter(|&page| page != reader.current_page)
+        });
+        if let Some(page) = target {
+            self.end_page_visit(crate::session::VisitEnd::Flip);
+            if let Some(reader) = self.reader.as_mut() {
                 reader.current_page = page;
             }
-        }
-        if moved {
+            self.enter_page();
             self.persist_reading_position();
         }
     }

@@ -4,6 +4,7 @@
 
 mod app;
 mod fonts;
+mod session;
 mod settings;
 mod views;
 

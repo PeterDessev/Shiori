@@ -5,7 +5,7 @@ use rusqlite::Connection;
 use crate::Result;
 
 /// Current schema version. Bump when adding migration steps.
-const SCHEMA_VERSION: i64 = 3;
+const SCHEMA_VERSION: i64 = 4;
 
 const SCHEMA_V1: &str = r#"
 CREATE TABLE IF NOT EXISTS meta (
@@ -97,6 +97,17 @@ CREATE TABLE IF NOT EXISTS review_log (
     difficulty  REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_review_log_word ON review_log(word_id);
+
+-- v4: active reading time, one row per continuous sitting.
+CREATE TABLE IF NOT EXISTS reading_sessions (
+    id          INTEGER PRIMARY KEY,
+    document_id INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    started_at  TEXT NOT NULL,
+    ended_at    TEXT NOT NULL,
+    seconds     REAL NOT NULL DEFAULT 0,
+    chars       INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_doc ON reading_sessions(document_id);
 "#;
 
 /// Bring the schema up to [`SCHEMA_VERSION`]. Idempotent.

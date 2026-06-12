@@ -316,6 +316,7 @@ impl JrcGui {
         }
         if let Some(id) = to_delete {
             if self.reader.as_ref().is_some_and(|r| r.doc.id == id) {
+                self.end_page_visit(crate::session::VisitEnd::Pause);
                 self.reader = None;
             }
             if self.mining.doc_id == Some(id) {

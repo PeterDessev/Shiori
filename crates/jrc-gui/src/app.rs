@@ -93,6 +93,8 @@ pub struct ReaderState {
     /// Sentence index to jump to once pages are computed (restores the
     /// saved reading position).
     pub pending_restore: Option<usize>,
+    /// Reading clock for this sitting.
+    pub session: crate::session::SessionTracker,
 }
 
 impl ReaderState {
@@ -561,6 +563,8 @@ impl JrcGui {
 
     /// Open a document in the reader.
     pub fn open_reader(&mut self, doc_id: DocumentId) {
+        // Flush the sitting with the previous document, if any.
+        self.end_page_visit(crate::session::VisitEnd::Pause);
         if let Some(state) = self.with_app(|app| {
             let doc = app.db().document(doc_id)?;
             let mut sentences = Vec::new();
@@ -572,6 +576,7 @@ impl JrcGui {
             let (para_ranges, para_of_sentence) = paragraph_structure(&sentences);
             let pending_restore =
                 (doc.last_sentence > 0).then_some(doc.last_sentence as usize);
+            let velocity = app.reading_velocity_cps()?;
             Ok(ReaderState {
                 doc,
                 sentences,
@@ -587,6 +592,7 @@ impl JrcGui {
                 page_layout: (0.0, 0.0),
                 token_widths: Vec::new(),
                 pending_restore,
+                session: crate::session::SessionTracker::new(velocity),
             })
         }) {
             self.reader = Some(state);
@@ -739,6 +745,8 @@ impl eframe::App for JrcGui {
         // Flips persist as they happen; this catches a page reached by a
         // resize-induced repagination right before quitting.
         self.persist_reading_position();
+        // Credit the reading done on the final page.
+        self.end_page_visit(crate::session::VisitEnd::Pause);
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
@@ -908,6 +916,12 @@ impl JrcGui {
             });
 
         if let Some(view) = nav {
+            // The reading clock only runs while the reader is on screen.
+            if self.view == View::Reader && view != View::Reader {
+                self.end_page_visit(crate::session::VisitEnd::Pause);
+            } else if view == View::Reader && self.view != View::Reader {
+                self.enter_page();
+            }
             match view {
                 View::Welcome => self.open_welcome(),
                 View::Review => {
