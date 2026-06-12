@@ -4,6 +4,10 @@ Plan of record for agreed features. **Status: everything below except the
 "Deferred / TODO" section is implemented** (June 2026). The feature sections
 are kept as the design record; the deferred list is what remains.
 
+User-facing documentation of the shipped behavior lives in the
+[user guide](docs/wiki/Home.md); this file records the design decisions
+behind it.
+
 ## Removals
 
 ### Mining page
