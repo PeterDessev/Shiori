@@ -1,6 +1,7 @@
-# Japanese Reading Companion
+# Shiori（栞）
 
-A desktop application for learning Japanese through **comprehensible input**. The
+*Shiori* — 栞, "bookmark" — is a desktop application for learning Japanese
+through **comprehensible input**. The
 primary activity is reading real Japanese text; every other feature exists to
 support that. It is not a flashcard driller — it is a reading companion that
 happens to teach.
@@ -11,9 +12,11 @@ happens to teach.
   `.txt`/`.md` (UTF-8 or Shift_JIS), `.html` (Aozora Bunko pages — furigana
   ruby is stripped), `.epub`, and `.pdf`. The app parses everything to the
   morpheme level while preserving sentence and paragraph context.
-- **Vocabulary mining** — unknown words are identified, looked up in JMdict,
-  and ranked by how useful they are to learn (corpus frequency × document
-  frequency).
+- **In-context learning** — click any word while reading to see its entry,
+  usage register, and conjugation explained; one click adds it to reviews.
+  Configurable furigana (including "first X instances per book"), a book
+  info panel with coverage forecasts, and a finish-the-book sweep that
+  marks untouched words known.
 - **Spaced repetition** — review cards always show the word in the sentence it
   came from, scheduled with the FSRS algorithm.
 - **Dictionary** — JMdict (via [jmdict-simplified](https://github.com/scriptin/jmdict-simplified))
@@ -24,32 +27,44 @@ happens to teach.
 - **Conjugation-aware reading** — clicking 読んでいる selects the whole
   conjugated phrase and the panel explains the form (te-iru, polite past,
   passive, causative, …) component by component.
-- **LLM explanations (optional)** — connect an LLM backend to explain *why* a
-  sentence is constructed the way it is, and to get naturalness feedback on
-  your own writing (production mode). The app is fully functional without it.
+- **Dictionary & kanji** — search JMdict directly; kanji cards show
+  readings, meanings, grades, and stroke-order diagrams (KANJIDIC2 +
+  KanjiVG).
+- **Online sources** — search Aozora Bunko's public-domain catalog and
+  Japanese Wikisource, and import works in one click.
+- **Conversation practice (optional LLM)** — chat with a native-speaker
+  persona that converses rather than corrects; mistakes come back as
+  paper-style underlines on your own messages. Backends: Anthropic, local
+  models via Ollama, or any OpenAI-compatible server. The app is fully
+  functional without an LLM.
+- **Statistics that matter** — reading velocity and calendar, JLPT-graded
+  comfortable reading level, review forecasts and retention.
+- **Anki interop** — export your cards to .apkg (with scheduling) or import
+  an existing deck; one-click database backup.
 
 ## Workspace layout
 
 | Crate      | Concern                                                        |
 |------------|----------------------------------------------------------------|
-| `jrc-core` | Shared domain types and errors                                 |
-| `jrc-nlp`  | Morphological analysis and sentence segmentation               |
-| `jrc-srs`  | FSRS spaced-repetition scheduler                               |
-| `jrc-dict` | JMdict dictionary + frequency list download/lookup             |
-| `jrc-db`   | SQLite persistence                                             |
-| `jrc-app`  | Application services: ingestion, mining, reviews, stats        |
-| `jrc-llm`  | Pluggable LLM explanation/feedback backend                     |
-| `jrc-gui`  | egui desktop interface                                         |
+| `shiori-core` | Shared domain types and errors                                 |
+| `shiori-nlp`  | Morphological analysis and sentence segmentation               |
+| `shiori-srs`  | FSRS spaced-repetition scheduler                               |
+| `shiori-dict` | JMdict dictionary + frequency list download/lookup             |
+| `shiori-db`   | SQLite persistence                                             |
+| `shiori-app`  | Application services: ingestion, mining, reviews, stats        |
+| `shiori-llm`  | Pluggable LLM explanation/feedback backend                     |
+| `shiori-gui`  | egui desktop interface                                         |
 
 ## Building
 
 ```sh
 cargo build --release
-cargo run --release -p jrc-gui
+cargo run --release -p shiori-gui
 ```
 
-On first launch the app downloads JMdict and a frequency list into its data
-directory. A Japanese-capable system font is picked up automatically.
+On first launch the app downloads its reference data (JMdict, a frequency
+list, KANJIDIC2 + KanjiVG kanji data, and JLPT vocabulary lists) into its
+data directory. A Japanese-capable system font is picked up automatically.
 
 ## Development
 
@@ -62,7 +77,7 @@ An end-to-end smoke run against real data (downloads JMdict on first use,
 cached afterwards):
 
 ```sh
-cargo run -p jrc-app --example smoke -- <data-dir> <utf8-text-file> "<title>"
+cargo run -p shiori-app --example smoke -- <data-dir> <utf8-text-file> "<title>"
 ```
 
 The first build downloads and embeds the IPADIC morphological dictionary
