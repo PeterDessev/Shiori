@@ -271,6 +271,10 @@ pub struct JrcGui {
     pub font_downloading: bool,
     /// Where to return when the getting-started page is closed.
     pub welcome_return: Option<View>,
+    /// The no-dictionary banner was dismissed this run.
+    pub dict_banner_dismissed: bool,
+    /// The "what works without the dictionary" modal is open.
+    pub offline_info_open: bool,
 }
 
 pub fn default_data_dir() -> PathBuf {
@@ -345,7 +349,14 @@ impl JrcGui {
             applied_font: Some(initial_font),
             font_downloading: false,
             welcome_return: None,
+            dict_banner_dismissed: false,
+            offline_info_open: false,
         }
+    }
+
+    /// Whether the reference data (dictionary + frequency list) is loaded.
+    pub fn dict_ready(&self) -> bool {
+        self.data_status.as_ref().is_some_and(|s| s.is_ready())
     }
 
     fn apply_theme(&mut self, ctx: &egui::Context) {
@@ -818,6 +829,7 @@ impl eframe::App for JrcGui {
         }
 
         self.show_nav_rail(ctx);
+        self.show_dictionary_banner(ctx);
 
         if let Some(error) = self.error.clone() {
             egui::TopBottomPanel::bottom("errorbar").show(ctx, |ui| {
@@ -844,6 +856,70 @@ impl eframe::App for JrcGui {
 }
 
 impl JrcGui {
+    /// Banner shown while running without the reference dictionary, with
+    /// retry and an explanation modal. This banner (and in-place notices
+    /// where lookups break) is the only place the offline path is
+    /// explained.
+    fn show_dictionary_banner(&mut self, ctx: &egui::Context) {
+        if self.dict_ready() || self.dict_banner_dismissed {
+            return;
+        }
+        egui::TopBottomPanel::top("dict-banner").show(ctx, |ui| {
+            ui.add_space(3.0);
+            ui.horizontal(|ui| {
+                ui.colored_label(
+                    egui::Color32::from_rgb(230, 160, 60),
+                    "Dictionary not installed — word lookups are unavailable.",
+                );
+                if ui.button("Retry download").clicked() {
+                    self.start_download(ctx);
+                }
+                if ui
+                    .button("ⓘ")
+                    .on_hover_text("What works without it?")
+                    .clicked()
+                {
+                    self.offline_info_open = true;
+                }
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.small_button("✕").on_hover_text("Dismiss").clicked() {
+                        self.dict_banner_dismissed = true;
+                    }
+                });
+            });
+            ui.add_space(3.0);
+        });
+
+        if self.offline_info_open {
+            let mut open = true;
+            egui::Window::new("Running without the dictionary")
+                .collapsible(false)
+                .resizable(false)
+                .open(&mut open)
+                .show(ctx, |ui| {
+                    ui.label("Unavailable until the reference data is downloaded:");
+                    ui.label("  · dictionary entries and definitions");
+                    ui.label("  · compound-word lookups");
+                    ui.label("  · corpus frequency ranks");
+                    ui.label("  · usage registers (formal, colloquial, …)");
+                    ui.add_space(8.0);
+                    ui.label("Everything else works normally:");
+                    ui.label("  · importing and reading books");
+                    ui.label("  · marking words and SRS reviews");
+                    ui.label("  · difficulty statistics and recommendations");
+                    ui.label("  · LLM features, including local models");
+                    ui.add_space(8.0);
+                    ui.weak(
+                        "Retry the download any time from the banner; it needs \
+                         a network connection once.",
+                    );
+                });
+            if !open {
+                self.offline_info_open = false;
+            }
+        }
+    }
+
     /// VS-Code-style icon rail on the left edge.
     fn show_nav_rail(&mut self, ctx: &egui::Context) {
         fn item(

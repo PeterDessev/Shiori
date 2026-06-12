@@ -21,6 +21,18 @@ impl JrcGui {
                         if ui.button("Download reference data").clicked() {
                             self.start_download(ctx);
                         }
+                        ui.add_space(8.0);
+                        if ui
+                            .button("Continue without dictionary")
+                            .on_hover_text(
+                                "Import, read, and review without definitions; \
+                                 you can retry the download any time",
+                            )
+                            .clicked()
+                        {
+                            self.phase = Phase::Ready;
+                            self.refresh_caches();
+                        }
                     }
                     Phase::Downloading => {
                         ui.spinner();

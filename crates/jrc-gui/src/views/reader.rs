@@ -786,7 +786,15 @@ impl JrcGui {
                         }
                     }
                     None => {
-                        ui.weak("No dictionary entry found for this word.");
+                        if self.dict_ready() {
+                            ui.weak("No dictionary entry found for this word.");
+                        } else {
+                            ui.weak(
+                                "No dictionary installed — definitions are \
+                                 unavailable. Retry the download from the \
+                                 banner above.",
+                            );
+                        }
                     }
                 }
 
