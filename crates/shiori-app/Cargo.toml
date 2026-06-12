@@ -1,0 +1,26 @@
+[package]
+name = "shiori-app"
+description = "Application services: ingestion, mining, reviews, statistics"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+shiori-core.workspace = true
+shiori-nlp.workspace = true
+shiori-srs.workspace = true
+shiori-dict.workspace = true
+shiori-db.workspace = true
+thiserror.workspace = true
+chrono.workspace = true
+serde_json.workspace = true
+epub = "2"
+pdf-extract = "0.10"
+encoding_rs = "0.8"
+ureq = { version = "2", features = ["json"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+csv = "1.4"
+
+[dev-dependencies]
+zip = "2"

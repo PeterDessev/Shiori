@@ -1,0 +1,29 @@
+[package]
+name = "shiori-gui"
+description = "Desktop GUI for the Japanese Reading Companion"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+shiori-core.workspace = true
+shiori-app.workspace = true
+shiori-db.workspace = true
+shiori-dict.workspace = true
+shiori-srs.workspace = true
+shiori-llm.workspace = true
+eframe = "0.31"
+rfd = "0.15"
+dirs = "6"
+chrono.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+shiori-nlp = { version = "0.1.0", path = "../shiori-nlp" }
+egui_extras = "0.31"
+ureq = "2"
+kurbo = "0.13"
+
+[[bin]]
+name = "shiori"
+path = "src/main.rs"

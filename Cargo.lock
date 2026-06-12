@@ -2306,116 +2306,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "jrc-app"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "csv",
- "encoding_rs",
- "epub",
- "jrc-core",
- "jrc-db",
- "jrc-dict",
- "jrc-nlp",
- "jrc-srs",
- "pdf-extract",
- "serde_json",
- "thiserror 2.0.18",
- "ureq",
- "zip 2.4.2",
-]
-
-[[package]]
-name = "jrc-core"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "serde",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "jrc-db"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "jrc-core",
- "jrc-srs",
- "rusqlite",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
- "zip 2.4.2",
-]
-
-[[package]]
-name = "jrc-dict"
-version = "0.1.0"
-dependencies = [
- "csv",
- "flate2",
- "jrc-core",
- "quick-xml 0.39.4",
- "serde",
- "serde_json",
- "tar",
- "thiserror 2.0.18",
- "ureq",
-]
-
-[[package]]
-name = "jrc-gui"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "dirs",
- "eframe",
- "egui_extras",
- "jrc-app",
- "jrc-core",
- "jrc-db",
- "jrc-dict",
- "jrc-llm",
- "jrc-nlp",
- "jrc-srs",
- "kurbo",
- "rfd",
- "serde",
- "serde_json",
- "ureq",
-]
-
-[[package]]
-name = "jrc-llm"
-version = "0.1.0"
-dependencies = [
- "jrc-core",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
- "ureq",
-]
-
-[[package]]
-name = "jrc-nlp"
-version = "0.1.0"
-dependencies = [
- "jrc-core",
- "lindera",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "jrc-srs"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "jrc-core",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "js-sys"
 version = "0.3.100"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4264,6 +4154,116 @@ dependencies = [
  "cfg-if",
  "cpufeatures",
  "digest",
+]
+
+[[package]]
+name = "shiori-app"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "csv",
+ "encoding_rs",
+ "epub",
+ "pdf-extract",
+ "serde_json",
+ "shiori-core",
+ "shiori-db",
+ "shiori-dict",
+ "shiori-nlp",
+ "shiori-srs",
+ "thiserror 2.0.18",
+ "ureq",
+ "zip 2.4.2",
+]
+
+[[package]]
+name = "shiori-core"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "shiori-db"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "shiori-core",
+ "shiori-srs",
+ "thiserror 2.0.18",
+ "zip 2.4.2",
+]
+
+[[package]]
+name = "shiori-dict"
+version = "0.1.0"
+dependencies = [
+ "csv",
+ "flate2",
+ "quick-xml 0.39.4",
+ "serde",
+ "serde_json",
+ "shiori-core",
+ "tar",
+ "thiserror 2.0.18",
+ "ureq",
+]
+
+[[package]]
+name = "shiori-gui"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "dirs",
+ "eframe",
+ "egui_extras",
+ "kurbo",
+ "rfd",
+ "serde",
+ "serde_json",
+ "shiori-app",
+ "shiori-core",
+ "shiori-db",
+ "shiori-dict",
+ "shiori-llm",
+ "shiori-nlp",
+ "shiori-srs",
+ "ureq",
+]
+
+[[package]]
+name = "shiori-llm"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "shiori-core",
+ "thiserror 2.0.18",
+ "ureq",
+]
+
+[[package]]
+name = "shiori-nlp"
+version = "0.1.0"
+dependencies = [
+ "lindera",
+ "shiori-core",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "shiori-srs"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "shiori-core",
 ]
 
 [[package]]

@@ -1,14 +1,14 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/jrc-core",
-    "crates/jrc-nlp",
-    "crates/jrc-srs",
-    "crates/jrc-dict",
-    "crates/jrc-db",
-    "crates/jrc-app",
-    "crates/jrc-llm",
-    "crates/jrc-gui",
+    "crates/shiori-core",
+    "crates/shiori-nlp",
+    "crates/shiori-srs",
+    "crates/shiori-dict",
+    "crates/shiori-db",
+    "crates/shiori-app",
+    "crates/shiori-llm",
+    "crates/shiori-gui",
 ]
 
 [workspace.package]
@@ -19,13 +19,13 @@ repository = ""
 authors = ["Peter Dessev <peter.dessev@gmail.com>"]
 
 [workspace.dependencies]
-jrc-core = { path = "crates/jrc-core" }
-jrc-nlp = { path = "crates/jrc-nlp" }
-jrc-srs = { path = "crates/jrc-srs" }
-jrc-dict = { path = "crates/jrc-dict" }
-jrc-db = { path = "crates/jrc-db" }
-jrc-app = { path = "crates/jrc-app" }
-jrc-llm = { path = "crates/jrc-llm" }
+shiori-core = { path = "crates/shiori-core" }
+shiori-nlp = { path = "crates/shiori-nlp" }
+shiori-srs = { path = "crates/shiori-srs" }
+shiori-dict = { path = "crates/shiori-dict" }
+shiori-db = { path = "crates/shiori-db" }
+shiori-app = { path = "crates/shiori-app" }
+shiori-llm = { path = "crates/shiori-llm" }
 
 thiserror = "2"
 serde = { version = "1", features = ["derive"] }
