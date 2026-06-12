@@ -7,6 +7,7 @@
 
 mod data;
 pub mod extract;
+mod finish;
 mod ingest;
 mod mining;
 mod review;
@@ -14,6 +15,7 @@ mod sessions;
 mod stats;
 
 pub use data::DataStatus;
+pub use finish::{SweepCandidate, SweepPlan};
 pub use mining::MiningCandidate;
 pub use review::ReviewItem;
 pub use stats::{DifficultyBand, DocStats, Recommendation};

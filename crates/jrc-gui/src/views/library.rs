@@ -88,6 +88,7 @@ impl JrcGui {
         });
 
         self.meta_edit_dialog(ctx);
+        self.sweep_dialog(ctx);
     }
 
     fn documents_table(&mut self, ui: &mut egui::Ui) {
@@ -399,6 +400,7 @@ impl JrcGui {
 
         let mut close = false;
         let mut to_read: Option<DocumentId> = None;
+        let mut to_sweep: Option<DocumentId> = None;
         egui::SidePanel::right("book-info")
             .resizable(true)
             .default_width(330.0)
@@ -536,6 +538,21 @@ impl JrcGui {
                                 });
                         }
 
+                        let finished = summary.sentence_count > 0
+                            && summary.document.last_sentence >= summary.sentence_count;
+                        if finished {
+                            ui.add_space(8.0);
+                            ui.separator();
+                            ui.label(egui::RichText::new("Finished 🎉").strong());
+                            ui.weak(
+                                "Sweep every word you never marked while reading to \
+                                 known; untouched names become ignored.",
+                            );
+                            if ui.button("✔ Mark remaining words as known").clicked() {
+                                to_sweep = Some(summary.document.id);
+                            }
+                        }
+
                         ui.add_space(10.0);
                         if ui.button("📖 Read").clicked() {
                             to_read = Some(summary.document.id);
@@ -549,6 +566,109 @@ impl JrcGui {
         }
         if let Some(id) = to_read {
             self.open_reader(id);
+        }
+        if let Some(id) = to_sweep {
+            self.open_sweep_dialog(id);
+        }
+    }
+
+    /// Confirmation dialog for the finish sweep, listing suspicious words
+    /// for review (excluded by default).
+    fn sweep_dialog(&mut self, ctx: &egui::Context) {
+        let Some(sweep) = &mut self.sweep else { return };
+        let mut open = true;
+        let mut confirm = false;
+        let mut cancel = false;
+        egui::Window::new("Finish book")
+            .collapsible(false)
+            .open(&mut open)
+            .default_width(420.0)
+            .show(ctx, |ui| {
+                let included = sweep.include.iter().filter(|b| **b).count();
+                let excluded = sweep.plan.to_known.len() - included;
+                ui.label(format!(
+                    "{} words → known · {} names → ignored · {} left unknown",
+                    included,
+                    sweep.plan.to_ignored.len(),
+                    excluded
+                ));
+
+                let suspicious: Vec<usize> = sweep
+                    .plan
+                    .to_known
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, c)| c.suspicious)
+                    .map(|(i, _)| i)
+                    .collect();
+                if !suspicious.is_empty() {
+                    ui.add_space(6.0);
+                    ui.label(
+                        "These look unusual for your level — tick only what you \
+                         actually know:",
+                    );
+                    ui.add_space(4.0);
+                    egui::ScrollArea::vertical()
+                        .max_height(280.0)
+                        .show(ui, |ui| {
+                            for &i in &suspicious {
+                                let c = &sweep.plan.to_known[i];
+                                ui.horizontal(|ui| {
+                                    ui.checkbox(&mut sweep.include[i], "");
+                                    ui.label(&c.word.key.lemma);
+                                    if !c.word.key.reading.is_empty()
+                                        && c.word.key.reading != c.word.key.lemma
+                                    {
+                                        ui.weak(format!("（{}）", c.word.key.reading));
+                                    }
+                                    ui.weak(c.reasons.join("; "));
+                                });
+                            }
+                        });
+                    ui.horizontal(|ui| {
+                        if ui.small_button("Include all").clicked() {
+                            for &i in &suspicious {
+                                sweep.include[i] = true;
+                            }
+                        }
+                        if ui.small_button("Exclude all").clicked() {
+                            for &i in &suspicious {
+                                sweep.include[i] = false;
+                            }
+                        }
+                    });
+                }
+
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    if ui.button("✔ Confirm").clicked() {
+                        confirm = true;
+                    }
+                    if ui.button("Cancel").clicked() {
+                        cancel = true;
+                    }
+                });
+            });
+
+        if confirm {
+            if let Some(sweep) = self.sweep.take() {
+                let known: Vec<jrc_core::WordId> = sweep
+                    .plan
+                    .to_known
+                    .iter()
+                    .zip(&sweep.include)
+                    .filter(|(_, inc)| **inc)
+                    .map(|(c, _)| c.word.id)
+                    .collect();
+                let ignored: Vec<jrc_core::WordId> =
+                    sweep.plan.to_ignored.iter().map(|c| c.word.id).collect();
+                self.with_app(|app| app.apply_finish_sweep(&known, &ignored));
+                self.refresh_caches();
+                self.refresh_reader_tokens();
+                self.open_book_info(sweep.doc);
+            }
+        } else if cancel || !open {
+            self.sweep = None;
         }
     }
 

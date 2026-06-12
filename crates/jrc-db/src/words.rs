@@ -78,6 +78,31 @@ impl Db {
         Ok(())
     }
 
+    /// Set many words to one status in a single transaction.
+    pub fn bulk_set_status(&self, ids: &[WordId], status: KnowledgeStatus) -> Result<()> {
+        let tx = self.conn().unchecked_transaction()?;
+        {
+            let mut stmt = tx.prepare("UPDATE words SET status = ?2 WHERE id = ?1")?;
+            for id in ids {
+                stmt.execute(params![id.0, status.as_str()])?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Corpus frequency ranks of every known word that has one, sorted
+    /// ascending. The shape of this distribution is the user's "known
+    /// band" for missed-word detection.
+    pub fn known_word_ranks(&self) -> Result<Vec<u32>> {
+        let mut stmt = self.conn().prepare(
+            "SELECT f.rank FROM words w JOIN frequency f ON f.word = w.lemma
+             WHERE w.status = 'known' ORDER BY f.rank",
+        )?;
+        let rows = stmt.query_map([], |r| r.get::<_, i64>(0).map(|n| n as u32))?;
+        Ok(rows.collect::<std::result::Result<_, _>>()?)
+    }
+
     pub fn set_word_dict_seq(&self, id: WordId, seq: Option<i64>) -> Result<()> {
         self.conn().execute(
             "UPDATE words SET dict_seq = ?2 WHERE id = ?1",

@@ -201,6 +201,15 @@ pub struct BookInfo {
     pub top_unknown: Vec<jrc_app::MiningCandidate>,
 }
 
+/// The finish-sweep confirmation dialog.
+pub struct SweepState {
+    pub doc: DocumentId,
+    pub plan: jrc_app::SweepPlan,
+    /// Inclusion checkbox per `plan.to_known` entry; suspicious words
+    /// default to excluded.
+    pub include: Vec<bool>,
+}
+
 /// Press-to-record state for one shortcut binding. The combo is
 /// committed when the first held key is released ("burned in on
 /// release"); Escape cancels.
@@ -247,6 +256,7 @@ pub struct JrcGui {
 
     pub meta_edit: Option<MetaEdit>,
     pub book_info: Option<BookInfo>,
+    pub sweep: Option<SweepState>,
     pub reader: Option<ReaderState>,
     pub review: ReviewState,
     pub production: ProductionState,
@@ -333,6 +343,7 @@ impl JrcGui {
             due_count: 0,
             meta_edit: None,
             book_info: None,
+            sweep: None,
             reader: None,
             review: ReviewState::default(),
             production: ProductionState::default(),
@@ -690,16 +701,39 @@ impl JrcGui {
     }
 
     /// Remember the first sentence of the current reader page as the
-    /// user's position in the open document.
+    /// user's position in the open document. Reaching the last page
+    /// saves one-past-the-end, which reads as 100% (finished) in the
+    /// library and unlocks the finish sweep.
     pub fn persist_reading_position(&mut self) {
         let Some(reader) = self.reader.as_ref() else { return };
+        if reader.page_starts.is_empty() {
+            // Not laid out yet; nothing meaningful to save.
+            return;
+        }
         let page = reader.current_page.min(reader.page_count() - 1);
-        let para = reader.page_starts.get(page).copied().unwrap_or(0);
-        let Some(&(s0, _)) = reader.para_ranges.get(para) else { return };
+        let s0 = if page + 1 == reader.page_count() {
+            reader.sentences.len() as u32
+        } else {
+            let para = reader.page_starts.get(page).copied().unwrap_or(0);
+            let Some(&(s0, _)) = reader.para_ranges.get(para) else { return };
+            s0 as u32
+        };
         let doc_id = reader.doc.id;
-        self.with_app(|app| Ok(app.db().set_reading_position(doc_id, s0 as u32)?));
+        self.with_app(|app| Ok(app.db().set_reading_position(doc_id, s0)?));
         if let Some(reader) = self.reader.as_mut() {
-            reader.doc.last_sentence = s0 as u32;
+            reader.doc.last_sentence = s0;
+        }
+    }
+
+    /// Plan a finish sweep and open its confirmation dialog.
+    pub fn open_sweep_dialog(&mut self, id: DocumentId) {
+        if let Some(plan) = self.with_app(|app| app.finish_sweep_plan(id)) {
+            let include = plan.to_known.iter().map(|c| !c.suspicious).collect();
+            self.sweep = Some(SweepState {
+                doc: id,
+                plan,
+                include,
+            });
         }
     }
 

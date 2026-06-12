@@ -348,9 +348,12 @@ impl JrcGui {
                     reader.current_page = reader.page_of_paragraph(current_para);
                 }
 
-                // Jump to the saved reading position once pages exist.
+                // Jump to the saved reading position once pages exist. A
+                // finished book stores one-past-the-end; clamp onto the
+                // last page.
                 if let Some(sentence) = reader.pending_restore.take() {
-                    if let Some(&para) = reader.para_of_sentence.get(sentence) {
+                    let idx = sentence.min(reader.sentences.len().saturating_sub(1));
+                    if let Some(&para) = reader.para_of_sentence.get(idx) {
                         reader.current_page = reader.page_of_paragraph(para);
                     }
                 }
