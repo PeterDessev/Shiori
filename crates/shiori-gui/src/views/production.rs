@@ -355,9 +355,18 @@ impl ShioriGui {
                                 .inner_margin(egui::Margin::symmetric(10, 8))
                                 .show(ui, |ui| {
                                     ui.set_max_width(max_bubble);
-                                    if let Some(c) = chat_message_body(ui, message, m_idx) {
-                                        clicked = Some(c);
-                                    }
+                                    // The bubble row is right-to-left for
+                                    // user messages (to right-align the
+                                    // bubble); the tokens inside must not
+                                    // inherit that or they render reversed.
+                                    ui.with_layout(
+                                        egui::Layout::top_down(egui::Align::Min),
+                                        |ui| {
+                                            if let Some(c) = chat_message_body(ui, message, m_idx) {
+                                                clicked = Some(c);
+                                            }
+                                        },
+                                    );
                                 });
                         });
                         ui.add_space(8.0);
