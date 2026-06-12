@@ -1,6 +1,6 @@
 [package]
 name = "shiori-gui"
-description = "Desktop GUI for the Japanese Reading Companion"
+description = "Shiori desktop GUI"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -23,6 +23,9 @@ shiori-nlp = { version = "0.1.0", path = "../shiori-nlp" }
 egui_extras = "0.31"
 ureq = "2"
 kurbo = "0.13"
+
+[build-dependencies]
+winresource = "0.1"
 
 [[bin]]
 name = "shiori"
