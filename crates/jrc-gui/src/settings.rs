@@ -6,8 +6,8 @@ use serde::{Deserialize, Serialize};
 
 pub const SETTINGS_FILENAME: &str = "settings.json";
 
-/// Configurable keyboard shortcuts, stored as egui key names
-/// (e.g. "Space", "Enter", "ArrowRight", "K").
+/// Configurable keyboard shortcuts, stored as strings like "K",
+/// "Space", or "Ctrl+Shift+E" (modifiers in Ctrl, Alt, Shift order).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Shortcuts {
@@ -35,6 +35,73 @@ impl Default for Shortcuts {
             reader_ignore: "I".into(),
             reader_explain: "E".into(),
         }
+    }
+}
+
+/// Identifies one rebindable action (one field of [`Shortcuts`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShortcutId {
+    ReviewReveal,
+    ReviewCorrect,
+    ReviewIncorrect,
+    ReaderNext,
+    ReaderPrev,
+    ReaderLearn,
+    ReaderKnown,
+    ReaderIgnore,
+    ReaderExplain,
+}
+
+impl Shortcuts {
+    /// Every rebindable action with its settings-page label.
+    pub const FIELDS: [(ShortcutId, &'static str); 9] = [
+        (ShortcutId::ReviewReveal, "Review · show answer"),
+        (ShortcutId::ReviewCorrect, "Review · correct"),
+        (ShortcutId::ReviewIncorrect, "Review · incorrect"),
+        (ShortcutId::ReaderNext, "Reader · next word"),
+        (ShortcutId::ReaderPrev, "Reader · previous word"),
+        (ShortcutId::ReaderLearn, "Reader · learn word"),
+        (ShortcutId::ReaderKnown, "Reader · mark known"),
+        (ShortcutId::ReaderIgnore, "Reader · ignore word"),
+        (ShortcutId::ReaderExplain, "Reader · explain sentence"),
+    ];
+
+    pub fn get(&self, id: ShortcutId) -> &str {
+        match id {
+            ShortcutId::ReviewReveal => &self.review_reveal,
+            ShortcutId::ReviewCorrect => &self.review_correct,
+            ShortcutId::ReviewIncorrect => &self.review_incorrect,
+            ShortcutId::ReaderNext => &self.reader_next,
+            ShortcutId::ReaderPrev => &self.reader_prev,
+            ShortcutId::ReaderLearn => &self.reader_learn,
+            ShortcutId::ReaderKnown => &self.reader_known,
+            ShortcutId::ReaderIgnore => &self.reader_ignore,
+            ShortcutId::ReaderExplain => &self.reader_explain,
+        }
+    }
+
+    pub fn get_mut(&mut self, id: ShortcutId) -> &mut String {
+        match id {
+            ShortcutId::ReviewReveal => &mut self.review_reveal,
+            ShortcutId::ReviewCorrect => &mut self.review_correct,
+            ShortcutId::ReviewIncorrect => &mut self.review_incorrect,
+            ShortcutId::ReaderNext => &mut self.reader_next,
+            ShortcutId::ReaderPrev => &mut self.reader_prev,
+            ShortcutId::ReaderLearn => &mut self.reader_learn,
+            ShortcutId::ReaderKnown => &mut self.reader_known,
+            ShortcutId::ReaderIgnore => &mut self.reader_ignore,
+            ShortcutId::ReaderExplain => &mut self.reader_explain,
+        }
+    }
+
+    /// The label of a binding that already uses `combo`, excluding `except`.
+    pub fn conflict(&self, combo: &str, except: ShortcutId) -> Option<&'static str> {
+        let target = parse_shortcut(combo)?;
+        Self::FIELDS
+            .iter()
+            .filter(|(id, _)| *id != except)
+            .find(|(id, _)| parse_shortcut(self.get(*id)) == Some(target))
+            .map(|(_, label)| *label)
     }
 }
 
@@ -114,22 +181,80 @@ fn parse_key(name: &str) -> Option<eframe::egui::Key> {
         .or_else(|| eframe::egui::Key::from_name(&trimmed.to_uppercase()))
 }
 
+/// A parsed shortcut: modifier set plus one non-modifier key.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Shortcut {
+    pub ctrl: bool,
+    pub alt: bool,
+    pub shift: bool,
+    pub key: eframe::egui::Key,
+}
+
+/// Parse "Ctrl+Shift+K"-style combos. Escape is reserved (cancel) and
+/// never parses as a binding.
+pub fn parse_shortcut(name: &str) -> Option<Shortcut> {
+    let mut ctrl = false;
+    let mut alt = false;
+    let mut shift = false;
+    let mut key = None;
+    let mut parts = name.split('+').peekable();
+    while let Some(part) = parts.next() {
+        let part = part.trim();
+        if parts.peek().is_some() {
+            match part.to_ascii_lowercase().as_str() {
+                "ctrl" | "control" => ctrl = true,
+                "alt" => alt = true,
+                "shift" => shift = true,
+                _ => return None,
+            }
+        } else {
+            key = parse_key(part);
+        }
+    }
+    let key = key?;
+    if key == eframe::egui::Key::Escape {
+        return None;
+    }
+    Some(Shortcut { ctrl, alt, shift, key })
+}
+
+/// Canonical display/storage form of a combo: "Ctrl+Alt+Shift+Key".
+pub fn format_shortcut(modifiers: eframe::egui::Modifiers, key: eframe::egui::Key) -> String {
+    let mut out = String::new();
+    if modifiers.ctrl || modifiers.command {
+        out.push_str("Ctrl+");
+    }
+    if modifiers.alt {
+        out.push_str("Alt+");
+    }
+    if modifiers.shift {
+        out.push_str("Shift+");
+    }
+    out.push_str(key.name());
+    out
+}
+
 /// Whether the named shortcut was pressed this frame, ignoring keypresses
-/// while a text field has focus.
+/// while a text field has focus. Modifiers must match exactly, so "K"
+/// does not fire while Ctrl is held.
 pub fn shortcut_pressed(ctx: &eframe::egui::Context, name: &str) -> bool {
-    let Some(key) = parse_key(name) else {
+    let Some(sc) = parse_shortcut(name) else {
         return false;
     };
     if ctx.memory(|m| m.focused().is_some()) {
         return false;
     }
-    ctx.input(|i| i.key_pressed(key))
+    ctx.input(|i| {
+        i.key_pressed(sc.key)
+            && (i.modifiers.ctrl || i.modifiers.command) == sc.ctrl
+            && i.modifiers.alt == sc.alt
+            && i.modifiers.shift == sc.shift
+    })
 }
 
-/// Whether a shortcut name is a valid egui key name (for settings UI
-/// validation).
+/// Whether a combo string is a valid binding (for settings UI validation).
 pub fn is_valid_key_name(name: &str) -> bool {
-    parse_key(name).is_some()
+    parse_shortcut(name).is_some()
 }
 
 #[cfg(test)]
@@ -185,10 +310,61 @@ mod tests {
 
     #[test]
     fn key_name_validation() {
-        for name in ["Space", "Enter", "ArrowRight", "A", "l"] {
+        for name in ["Space", "Enter", "ArrowRight", "A", "l", "Ctrl+E", "ctrl + shift + 4"] {
             assert!(is_valid_key_name(name), "{name} should be valid");
         }
-        assert!(!is_valid_key_name("NotAKey"));
-        assert!(!is_valid_key_name(""));
+        for name in ["NotAKey", "", "Escape", "Ctrl+Escape", "Meta+K", "Ctrl+"] {
+            assert!(!is_valid_key_name(name), "{name} should be invalid");
+        }
+    }
+
+    #[test]
+    fn shortcut_parse_and_format_roundtrip() {
+        use eframe::egui::{Key, Modifiers};
+        let sc = parse_shortcut("Ctrl+Shift+K").unwrap();
+        assert!(sc.ctrl && sc.shift && !sc.alt);
+        assert_eq!(sc.key, Key::K);
+
+        let formatted = format_shortcut(
+            Modifiers {
+                ctrl: true,
+                shift: true,
+                ..Default::default()
+            },
+            Key::K,
+        );
+        assert_eq!(formatted, "Ctrl+Shift+K");
+        assert_eq!(parse_shortcut(&formatted), Some(sc));
+
+        // Plain keys still parse (backward compatible with old settings).
+        assert_eq!(parse_shortcut("Space").unwrap().key, Key::Space);
+        // command (cmd/win) is treated as ctrl when formatting.
+        let cmd = format_shortcut(
+            Modifiers {
+                command: true,
+                ..Default::default()
+            },
+            Key::E,
+        );
+        assert_eq!(cmd, "Ctrl+E");
+    }
+
+    #[test]
+    fn conflict_detection() {
+        let sc = Shortcuts::default();
+        // ArrowRight is used by both review_correct and reader_next, but
+        // conflict() only reports other fields.
+        assert_eq!(
+            sc.conflict("ArrowRight", ShortcutId::ReaderNext),
+            Some("Review · correct")
+        );
+        // Lenient spelling still collides with the canonical form.
+        assert_eq!(
+            sc.conflict("ctrl+L", ShortcutId::ReaderLearn),
+            None,
+            "Ctrl+L differs from plain L"
+        );
+        assert_eq!(sc.conflict("l", ShortcutId::ReviewReveal), Some("Reader · learn word"));
+        assert_eq!(sc.conflict("Ctrl+Shift+9", ShortcutId::ReaderLearn), None);
     }
 }

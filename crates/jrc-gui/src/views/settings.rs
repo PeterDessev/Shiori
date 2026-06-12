@@ -186,50 +186,124 @@ impl JrcGui {
     }
 
     fn settings_shortcuts(&mut self, ui: &mut egui::Ui) {
+        self.handle_shortcut_recording(ui.ctx());
+
         ui.heading("Keyboard shortcuts");
         ui.weak(
-            "Key names: letters and digits (K, 1), Space, Enter, ArrowLeft, \
-             ArrowRight, ArrowUp, ArrowDown, Tab, F1–F12.",
+            "Click a binding, then press the keys (e.g. Ctrl+Shift+4). The \
+             combo is set when you release; Escape cancels.",
         );
         ui.add_space(4.0);
+
+        let recording_id = self.shortcut_recording.as_ref().map(|r| r.id);
+        let mut start_recording = None;
         egui::Grid::new("shortcut-grid")
-            .num_columns(4)
+            .num_columns(3)
             .spacing([10.0, 6.0])
             .show(ui, |ui| {
-                let sc = &mut self.settings_draft.shortcuts;
-                let field = |ui: &mut egui::Ui, label: &str, value: &mut String| {
+                for (id, label) in crate::settings::Shortcuts::FIELDS {
                     ui.label(label);
-                    ui.add_sized([160.0, 20.0], egui::TextEdit::singleline(value));
-                    if crate::settings::is_valid_key_name(value) {
-                        ui.label("");
+                    let value = self.settings_draft.shortcuts.get(id);
+                    let recording = recording_id == Some(id);
+                    let text = if recording {
+                        egui::RichText::new("press keys…").italics()
                     } else {
+                        egui::RichText::new(value)
+                    };
+                    if ui
+                        .add_sized([170.0, 20.0], egui::Button::new(text))
+                        .clicked()
+                        && !recording
+                    {
+                        start_recording = Some(id);
+                    }
+                    if !recording && !crate::settings::is_valid_key_name(value) {
                         ui.colored_label(
                             egui::Color32::from_rgb(220, 90, 90),
-                            "unknown key",
+                            "invalid binding",
                         );
+                    } else {
+                        ui.label("");
                     }
-                };
-                field(ui, "Review · show answer", &mut sc.review_reveal);
-                ui.end_row();
-                field(ui, "Review · correct", &mut sc.review_correct);
-                ui.end_row();
-                field(ui, "Review · incorrect", &mut sc.review_incorrect);
-                ui.end_row();
-                field(ui, "Reader · next word", &mut sc.reader_next);
-                ui.end_row();
-                field(ui, "Reader · previous word", &mut sc.reader_prev);
-                ui.end_row();
-                field(ui, "Reader · learn word", &mut sc.reader_learn);
-                ui.end_row();
-                field(ui, "Reader · mark known", &mut sc.reader_known);
-                ui.end_row();
-                field(ui, "Reader · ignore word", &mut sc.reader_ignore);
-                ui.end_row();
-                field(ui, "Reader · explain sentence", &mut sc.reader_explain);
-                ui.end_row();
+                    ui.end_row();
+                }
             });
+        if let Some(id) = start_recording {
+            self.shortcut_notice = None;
+            self.shortcut_recording = Some(crate::app::ShortcutRecording {
+                id,
+                captured: None,
+                prev_modifiers: ui.ctx().input(|i| i.modifiers),
+            });
+        }
+        if let Some(notice) = &self.shortcut_notice {
+            ui.colored_label(egui::Color32::from_rgb(230, 160, 60), notice);
+        }
+        ui.add_space(6.0);
         if ui.button("Reset shortcuts to defaults").clicked() {
             self.settings_draft.shortcuts = Default::default();
+            self.shortcut_notice = None;
+        }
+    }
+
+    /// Drive an in-progress shortcut capture from this frame's input.
+    ///
+    /// The binding commits when the first held key is released — either
+    /// the non-modifier key (its release event carries the modifiers that
+    /// were still held) or a modifier (detected as a flag dropping while
+    /// a key is captured, committed with last frame's modifier state).
+    fn handle_shortcut_recording(&mut self, ctx: &egui::Context) {
+        let Some(rec) = &mut self.shortcut_recording else { return };
+        let (events, modifiers) = ctx.input(|i| (i.events.clone(), i.modifiers));
+
+        // None = cancelled; Some((mods, key)) = commit.
+        let mut outcome: Option<Option<(egui::Modifiers, egui::Key)>> = None;
+        for event in &events {
+            let egui::Event::Key {
+                key,
+                pressed,
+                modifiers,
+                ..
+            } = event
+            else {
+                continue;
+            };
+            if *pressed {
+                if *key == egui::Key::Escape {
+                    outcome = Some(None);
+                    break;
+                }
+                rec.captured = Some((*modifiers, *key));
+            } else if rec.captured.is_some_and(|(_, k)| k == *key) {
+                outcome = Some(Some((*modifiers, *key)));
+                break;
+            }
+        }
+        if outcome.is_none() {
+            let lost_modifier = (rec.prev_modifiers.ctrl && !modifiers.ctrl)
+                || (rec.prev_modifiers.command && !modifiers.command)
+                || (rec.prev_modifiers.alt && !modifiers.alt)
+                || (rec.prev_modifiers.shift && !modifiers.shift);
+            if lost_modifier {
+                if let Some((_, key)) = rec.captured {
+                    outcome = Some(Some((rec.prev_modifiers, key)));
+                }
+            }
+        }
+        rec.prev_modifiers = modifiers;
+
+        let Some(result) = outcome else { return };
+        let id = rec.id;
+        self.shortcut_recording = None;
+        if let Some((mods, key)) = result {
+            let combo = crate::settings::format_shortcut(mods, key);
+            if let Some(label) = self.settings_draft.shortcuts.conflict(&combo, id) {
+                self.shortcut_notice =
+                    Some(format!("{combo} is already bound to \"{label}\""));
+            } else {
+                *self.settings_draft.shortcuts.get_mut(id) = combo;
+                self.shortcut_notice = None;
+            }
         }
     }
 

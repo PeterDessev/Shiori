@@ -174,6 +174,18 @@ pub struct MetaEdit {
     pub meta: jrc_core::DocumentMeta,
 }
 
+/// Press-to-record state for one shortcut binding. The combo is
+/// committed when the first held key is released ("burned in on
+/// release"); Escape cancels.
+pub struct ShortcutRecording {
+    pub id: crate::settings::ShortcutId,
+    /// (modifiers at press, key) of the last non-modifier key pressed.
+    pub captured: Option<(egui::Modifiers, egui::Key)>,
+    /// Modifier state last frame, to detect a modifier being released
+    /// first (which also commits the combo).
+    pub prev_modifiers: egui::Modifiers,
+}
+
 /// Library column to sort by.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SortKey {
@@ -218,6 +230,10 @@ pub struct JrcGui {
     pub settings_draft: Settings,
     /// Which settings category page is open.
     pub settings_category: crate::views::SettingsCategory,
+    /// In-progress press-to-record shortcut capture.
+    pub shortcut_recording: Option<ShortcutRecording>,
+    /// Conflict/info notice under the shortcuts grid.
+    pub shortcut_notice: Option<String>,
     pub sort_key: SortKey,
     pub sort_asc: bool,
     /// Theme applied to the egui context (to detect setting changes).
@@ -280,6 +296,8 @@ impl JrcGui {
             settings_draft: settings.clone(),
             settings,
             settings_category: Default::default(),
+            shortcut_recording: None,
+            shortcut_notice: None,
             sort_key: SortKey::default(),
             sort_asc: true,
             applied_theme: None,
