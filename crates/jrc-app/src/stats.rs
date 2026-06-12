@@ -89,6 +89,79 @@ pub struct Recommendation {
     pub score: f64,
 }
 
+/// Everything the statistics page shows beyond per-document difficulty.
+#[derive(Debug, Default)]
+pub struct StatsOverview {
+    /// Characters per minute, when enough history exists.
+    pub velocity_cpm: Option<f64>,
+    pub total_reading_seconds: f64,
+    pub total_reading_chars: u64,
+    /// Credited reading seconds per day (for the calendar heatmap).
+    pub reading_by_day: Vec<(String, f64)>,
+    /// Cards becoming due per day, next two weeks (overdue under today).
+    pub due_forecast: Vec<(String, u32)>,
+    /// New words entering the SRS per day, averaged over the last 30.
+    pub learning_rate_30d: f64,
+    /// Share of correct reviews over the last 30 days.
+    pub retention_30d: Option<f64>,
+    /// Cumulative count of words whose card stability matured past the
+    /// known threshold, per day.
+    pub matured_by_day: Vec<(String, u32)>,
+    /// Known share per JLPT level, easiest (N5) first.
+    pub jlpt: Vec<jrc_db::JlptShare>,
+    /// "Comfortable reading level" derived from the JLPT shares.
+    pub comfortable_level: Option<String>,
+    /// (rank bound, known words within it) coverage of the corpus.
+    pub rank_bands: Vec<(u32, u32)>,
+}
+
+impl App {
+    /// Aggregate the expanded statistics page in one call.
+    pub fn stats_overview(&self) -> Result<StatsOverview> {
+        let totals = self.db().reading_totals()?;
+        let velocity_cpm = self.reading_velocity_cps()?.map(|cps| cps * 60.0);
+
+        let starts = self.db().learning_starts_by_day()?;
+        let today = chrono::Utc::now().date_naive();
+        let recent: u32 = starts
+            .iter()
+            .filter(|(day, _)| {
+                chrono::NaiveDate::parse_from_str(day, "%Y-%m-%d")
+                    .map(|d| (today - d).num_days() < 30)
+                    .unwrap_or(false)
+            })
+            .map(|(_, n)| n)
+            .sum();
+
+        let (correct, total) = self.db().retention_counts(30)?;
+        let jlpt = self.db().jlpt_known_shares()?;
+        // Comfortable level: hardest level where this and every easier
+        // level is at least half known. jlpt is sorted easiest-first.
+        let mut comfortable_level = None;
+        for share in &jlpt {
+            if share.total > 0 && f64::from(share.known) / f64::from(share.total) >= 0.5 {
+                comfortable_level = Some(format!("around JLPT N{}", share.level));
+            } else {
+                break;
+            }
+        }
+
+        Ok(StatsOverview {
+            velocity_cpm,
+            total_reading_seconds: totals.seconds,
+            total_reading_chars: totals.chars,
+            reading_by_day: self.db().reading_seconds_by_day()?,
+            due_forecast: self.db().due_forecast(14)?,
+            learning_rate_30d: f64::from(recent) / 30.0,
+            retention_30d: (total > 0).then(|| f64::from(correct) / f64::from(total)),
+            matured_by_day: self.db().matured_by_day(60.0)?,
+            jlpt,
+            comfortable_level,
+            rank_bands: self.db().known_in_rank_bands(&[1000, 2000, 5000, 10000])?,
+        })
+    }
+}
+
 impl App {
     pub fn document_stats(&self, document: DocumentId) -> Result<DocStats> {
         let counts = self.db.document_status_counts(document)?;

@@ -8,6 +8,7 @@
 
 pub mod download;
 pub mod frequency;
+pub mod jlpt;
 pub mod kanji;
 mod lookup;
 pub mod register;

@@ -2351,6 +2351,7 @@ dependencies = [
 name = "jrc-dict"
 version = "0.1.0"
 dependencies = [
+ "csv",
  "flate2",
  "jrc-core",
  "quick-xml 0.39.4",

@@ -25,7 +25,7 @@ pub use dict::DictFormRow;
 pub use kanji::KanjiRow;
 pub use documents::{DocumentSummary, NewSentence, NewToken, TokenRow};
 pub use sessions::ReadingTotals;
-pub use stats::StatusCount;
+pub use stats::{JlptShare, StatusCount};
 pub use words::{DocWord, WordRow};
 
 use std::path::Path;

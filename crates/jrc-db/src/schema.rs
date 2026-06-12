@@ -5,7 +5,7 @@ use rusqlite::Connection;
 use crate::Result;
 
 /// Current schema version. Bump when adding migration steps.
-const SCHEMA_VERSION: i64 = 6;
+const SCHEMA_VERSION: i64 = 7;
 
 const SCHEMA_V1: &str = r#"
 CREATE TABLE IF NOT EXISTS meta (
@@ -138,6 +138,14 @@ CREATE TABLE IF NOT EXISTS chat_annotations (
 );
 CREATE INDEX IF NOT EXISTS idx_chat_annotations_msg
     ON chat_annotations(message_id);
+
+-- v7: community JLPT vocabulary lists, for level grading.
+CREATE TABLE IF NOT EXISTS jlpt_words (
+    level INTEGER NOT NULL,
+    word  TEXT NOT NULL,
+    kana  TEXT NOT NULL,
+    PRIMARY KEY (level, word, kana)
+);
 
 -- v6: kanji reference data (KANJIDIC2 joined with KanjiVG strokes).
 CREATE TABLE IF NOT EXISTS kanji (

@@ -11,11 +11,15 @@ pub struct DataStatus {
     pub dict_entries: u64,
     pub frequency_words: u64,
     pub kanji: u64,
+    pub jlpt_words: u64,
 }
 
 impl DataStatus {
     pub fn is_ready(&self) -> bool {
-        self.dict_entries > 0 && self.frequency_words > 0 && self.kanji > 0
+        self.dict_entries > 0
+            && self.frequency_words > 0
+            && self.kanji > 0
+            && self.jlpt_words > 0
     }
 }
 
@@ -25,6 +29,7 @@ impl App {
             dict_entries: self.db.dict_entry_count()?,
             frequency_words: self.db.frequency_count()?,
             kanji: self.db.kanji_count()?,
+            jlpt_words: self.db.jlpt_count()?,
         })
     }
 
@@ -59,6 +64,14 @@ impl App {
             let kanjivg = jrc_dict::kanji::ensure_kanjivg(&self.data_dir)?;
             on_progress("Parsing and importing kanji…");
             self.import_kanji_data(&kanjidic, &kanjivg)?;
+        }
+        if self.db.jlpt_count()? == 0 {
+            on_progress("Downloading JLPT vocabulary lists…");
+            let path = jrc_dict::jlpt::ensure_jlpt_lists(&self.data_dir)?;
+            on_progress("Importing JLPT lists…");
+            let words = jrc_dict::jlpt::load_jlpt_lists(&path)?;
+            self.db
+                .import_jlpt(words.into_iter().map(|w| (w.level, w.word, w.kana)))?;
         }
         on_progress("Reference data ready.");
         self.data_status()

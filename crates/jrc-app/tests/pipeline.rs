@@ -59,6 +59,9 @@ fn app() -> App {
             strokes: vec![],
         }])
         .unwrap();
+    app.db()
+        .import_jlpt(vec![(5, "猫".into(), "ねこ".into())])
+        .unwrap();
     assert!(app.data_status().unwrap().is_ready());
     app
 }

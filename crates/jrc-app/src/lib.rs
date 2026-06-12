@@ -24,7 +24,7 @@ pub use finish::{SweepCandidate, SweepPlan};
 pub use mining::MiningCandidate;
 pub use review::ReviewItem;
 pub use sources::{AozoraWork, WikisourceHit};
-pub use stats::{DifficultyBand, DocStats, Recommendation};
+pub use stats::{DifficultyBand, DocStats, Recommendation, StatsOverview};
 
 use std::path::{Path, PathBuf};
 
