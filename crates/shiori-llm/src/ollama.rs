@@ -216,11 +216,7 @@ impl Explainer for OllamaExplainer {
         self.complete(&build_feedback_prompt(prompt, user_text))
     }
 
-    fn chat(
-        &self,
-        system: &str,
-        history: &[crate::ChatMessage],
-    ) -> Result<String, LlmError> {
+    fn chat(&self, system: &str, history: &[crate::ChatMessage]) -> Result<String, LlmError> {
         #[derive(Deserialize)]
         struct ChatResponse {
             message: ChatMessageContent,
@@ -330,9 +326,6 @@ mod tests {
         }"#;
         let m: OllamaModel = serde_json::from_str(json).unwrap();
         assert_eq!(m.model, "llama3.2:latest");
-        assert_eq!(
-            m.details.unwrap().parameter_size.as_deref(),
-            Some("3.2B")
-        );
+        assert_eq!(m.details.unwrap().parameter_size.as_deref(), Some("3.2B"));
     }
 }

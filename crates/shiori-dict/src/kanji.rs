@@ -47,9 +47,7 @@ pub struct KanjiEntry {
 }
 
 fn agent() -> ureq::Agent {
-    ureq::AgentBuilder::new()
-        .user_agent("shiori/0.1")
-        .build()
+    ureq::AgentBuilder::new().user_agent("shiori/0.1").build()
 }
 
 fn download_to(url: &str, target: &Path) -> Result<(), DictError> {
@@ -90,10 +88,7 @@ fn read_gz(path: &Path) -> Result<String, DictError> {
 }
 
 /// Parse the full KANJIDIC2 + KanjiVG archives into joined entries.
-pub fn load_kanji(
-    kanjidic2_gz: &Path,
-    kanjivg_gz: &Path,
-) -> Result<Vec<KanjiEntry>, DictError> {
+pub fn load_kanji(kanjidic2_gz: &Path, kanjivg_gz: &Path) -> Result<Vec<KanjiEntry>, DictError> {
     let mut entries = parse_kanjidic2(&read_gz(kanjidic2_gz)?)?;
     let strokes = parse_kanjivg(&read_gz(kanjivg_gz)?)?;
     for entry in &mut entries {
@@ -137,7 +132,9 @@ pub fn parse_kanjidic2(xml: &str) -> Result<Vec<KanjiEntry>, DictError> {
                 }
             }
             Ok(Event::Text(t)) => {
-                let Some(entry) = current.as_mut() else { continue };
+                let Some(entry) = current.as_mut() else {
+                    continue;
+                };
                 let text = t.decode().unwrap_or_default().into_owned();
                 match tag.as_str() {
                     "literal" => entry.literal = text,
@@ -159,9 +156,8 @@ pub fn parse_kanjidic2(xml: &str) -> Result<Vec<KanjiEntry>, DictError> {
                     "nanori" => entry.nanori.push(text),
                     "variant" => {
                         if attr.as_deref() == Some("ucs") {
-                            if let Some(c) = u32::from_str_radix(&text, 16)
-                                .ok()
-                                .and_then(char::from_u32)
+                            if let Some(c) =
+                                u32::from_str_radix(&text, 16).ok().and_then(char::from_u32)
                             {
                                 entry.variants.push(c.to_string());
                             }
@@ -208,8 +204,7 @@ pub fn parse_kanjivg(xml: &str) -> Result<HashMap<u32, Vec<String>>, DictError> 
                     current = code.map(|c| (c, Vec::new()));
                 }
                 b"path" => {
-                    if let (Some((_, strokes)), Some(d)) =
-                        (current.as_mut(), attr_value(&e, b"d"))
+                    if let (Some((_, strokes)), Some(d)) = (current.as_mut(), attr_value(&e, b"d"))
                     {
                         strokes.push(d);
                     }

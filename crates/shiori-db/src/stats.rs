@@ -54,8 +54,9 @@ impl Db {
     pub fn jlpt_count(&self) -> Result<u64> {
         Ok(self
             .conn()
-            .query_row("SELECT COUNT(*) FROM jlpt_words", [], |r| r.get::<_, i64>(0))?
-            as u64)
+            .query_row("SELECT COUNT(*) FROM jlpt_words", [], |r| {
+                r.get::<_, i64>(0)
+            })? as u64)
     }
 
     /// Per level: how much of that level's vocabulary the user knows.
@@ -90,9 +91,7 @@ impl Db {
              WHERE date(due) <= date('now', '+' || ?1 || ' days')
              GROUP BY day ORDER BY day",
         )?;
-        let rows = stmt.query_map([days], |r| {
-            Ok((r.get(0)?, r.get::<_, i64>(1)? as u32))
-        })?;
+        let rows = stmt.query_map([days], |r| Ok((r.get(0)?, r.get::<_, i64>(1)? as u32)))?;
         Ok(rows.collect::<std::result::Result<_, _>>()?)
     }
 
@@ -104,9 +103,7 @@ impl Db {
                  FROM review_log GROUP BY word_id
              ) GROUP BY day ORDER BY day",
         )?;
-        let rows = stmt.query_map([], |r| {
-            Ok((r.get(0)?, r.get::<_, i64>(1)? as u32))
-        })?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get::<_, i64>(1)? as u32)))?;
         Ok(rows.collect::<std::result::Result<_, _>>()?)
     }
 
@@ -133,9 +130,7 @@ impl Db {
                  FROM review_log WHERE stability >= ?1 GROUP BY word_id
              ) GROUP BY day ORDER BY day",
         )?;
-        let rows = stmt.query_map([stability], |r| {
-            Ok((r.get(0)?, r.get::<_, i64>(1)? as u32))
-        })?;
+        let rows = stmt.query_map([stability], |r| Ok((r.get(0)?, r.get::<_, i64>(1)? as u32)))?;
         Ok(rows.collect::<std::result::Result<_, _>>()?)
     }
 

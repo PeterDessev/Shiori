@@ -32,7 +32,8 @@ pub fn is_kana_only(s: &str) -> bool {
 pub fn contains_kanji(s: &str) -> bool {
     s.chars().any(|c| {
         let u = c as u32;
-        (0x4E00..=0x9FFF).contains(&u) || (0x3400..=0x4DBF).contains(&u) || u == 0x3005 // 々
+        (0x4E00..=0x9FFF).contains(&u) || (0x3400..=0x4DBF).contains(&u) || u == 0x3005
+        // 々
     })
 }
 

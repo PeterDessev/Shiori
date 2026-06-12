@@ -40,7 +40,11 @@ mod tests {
     use super::*;
 
     fn app() -> App {
-        App::with_db(shiori_db::Db::open_in_memory().unwrap(), std::env::temp_dir()).unwrap()
+        App::with_db(
+            shiori_db::Db::open_in_memory().unwrap(),
+            std::env::temp_dir(),
+        )
+        .unwrap()
     }
 
     #[test]

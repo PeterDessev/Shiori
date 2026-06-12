@@ -1,9 +1,9 @@
 //! SRS card storage and review log.
 
 use chrono::{DateTime, Utc};
+use rusqlite::params;
 use shiori_core::{SentenceId, WordId};
 use shiori_srs::{Card, CardState, Rating};
-use rusqlite::params;
 
 use crate::{Db, Result};
 
@@ -192,7 +192,8 @@ mod tests {
         let card_due = scheduler.review(&Card::new(now), shiori_srs::Rating::Again, now);
         let card_future = scheduler.review(&Card::new(now), shiori_srs::Rating::Easy, now);
 
-        db.upsert_card(cat, Some(sentences[0].id), &card_due).unwrap();
+        db.upsert_card(cat, Some(sentences[0].id), &card_due)
+            .unwrap();
         db.upsert_card(run, Some(sentences[1].id), &card_future)
             .unwrap();
         db.set_word_status(cat, KnowledgeStatus::Learning).unwrap();
@@ -213,7 +214,8 @@ mod tests {
 
         // Upsert updates in place.
         let updated = scheduler.review(&card_due, shiori_srs::Rating::Good, soon);
-        db.upsert_card(cat, Some(sentences[0].id), &updated).unwrap();
+        db.upsert_card(cat, Some(sentences[0].id), &updated)
+            .unwrap();
         assert_eq!(db.card_count().unwrap(), 2);
         assert_eq!(db.card(cat).unwrap().unwrap().card, updated);
     }

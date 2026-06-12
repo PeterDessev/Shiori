@@ -22,8 +22,7 @@ pub const AOZORA_CATALOG_FILENAME: &str = "aozora_catalog.zip";
 const WIKISOURCE_API: &str = "https://ja.wikisource.org/w/api.php";
 const WIKISOURCE_REST: &str = "https://ja.wikisource.org/w/rest.php/v1/page";
 
-const USER_AGENT: &str =
-    "Shiori/0.1 (https://github.com/; local desktop app) ureq/2";
+const USER_AGENT: &str = "Shiori/0.1 (https://github.com/; local desktop app) ureq/2";
 
 /// One public-domain work from the Aozora catalog.
 #[derive(Debug, Clone)]
@@ -104,7 +103,11 @@ impl App {
             .map_err(|e| AppError::Invalid(format!("bad catalog zip: {e}")))?
             .read_to_end(&mut csv_bytes)?;
         // UTF-8 with BOM.
-        let start = if csv_bytes.starts_with(&[0xEF, 0xBB, 0xBF]) { 3 } else { 0 };
+        let start = if csv_bytes.starts_with(&[0xEF, 0xBB, 0xBF]) {
+            3
+        } else {
+            0
+        };
 
         let mut reader = csv::ReaderBuilder::new()
             .has_headers(true)
@@ -265,8 +268,11 @@ mod tests {
 
     #[test]
     fn catalog_parsing_filters_and_dedupes() {
-        let app =
-            App::with_db(shiori_db::Db::open_in_memory().unwrap(), std::env::temp_dir()).unwrap();
+        let app = App::with_db(
+            shiori_db::Db::open_in_memory().unwrap(),
+            std::env::temp_dir(),
+        )
+        .unwrap();
         // Build a tiny catalog zip in memory: header + 4 rows exercising
         // dedupe (translator row), copyright filter, and host filter.
         let header: Vec<String> = (0..55).map(|i| format!("c{i}")).collect();
@@ -287,15 +293,38 @@ mod tests {
         let csv = format!(
             "{}\r\n{}\r\n{}\r\n{}\r\n{}\r\n",
             header.join(","),
-            row("000001", "こころ", "著者", "なし", "https://www.aozora.gr.jp/cards/x/files/1_2.html"),
-            row("000001", "こころ", "翻訳者", "なし", "https://www.aozora.gr.jp/cards/x/files/1_2.html"),
-            row("000002", "著作権あり", "著者", "あり", "https://www.aozora.gr.jp/cards/y/files/3_4.html"),
-            row("000003", "外部", "著者", "なし", "https://example.com/foo.html"),
+            row(
+                "000001",
+                "こころ",
+                "著者",
+                "なし",
+                "https://www.aozora.gr.jp/cards/x/files/1_2.html"
+            ),
+            row(
+                "000001",
+                "こころ",
+                "翻訳者",
+                "なし",
+                "https://www.aozora.gr.jp/cards/x/files/1_2.html"
+            ),
+            row(
+                "000002",
+                "著作権あり",
+                "著者",
+                "あり",
+                "https://www.aozora.gr.jp/cards/y/files/3_4.html"
+            ),
+            row(
+                "000003",
+                "外部",
+                "著者",
+                "なし",
+                "https://example.com/foo.html"
+            ),
         );
         let mut zip_bytes = Vec::new();
         {
-            let mut writer =
-                zip::ZipWriter::new(std::io::Cursor::new(&mut zip_bytes));
+            let mut writer = zip::ZipWriter::new(std::io::Cursor::new(&mut zip_bytes));
             let mut content = vec![0xEF, 0xBB, 0xBF];
             content.extend_from_slice(csv.as_bytes());
             zip::write::FileOptions::<()>::default();

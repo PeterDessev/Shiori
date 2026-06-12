@@ -368,7 +368,12 @@ pub fn parse_shortcut(name: &str) -> Option<Shortcut> {
     if key == eframe::egui::Key::Escape {
         return None;
     }
-    Some(Shortcut { ctrl, alt, shift, key })
+    Some(Shortcut {
+        ctrl,
+        alt,
+        shift,
+        key,
+    })
 }
 
 /// Canonical display/storage form of a combo: "Ctrl+Alt+Shift+Key".
@@ -463,7 +468,15 @@ mod tests {
 
     #[test]
     fn key_name_validation() {
-        for name in ["Space", "Enter", "ArrowRight", "A", "l", "Ctrl+E", "ctrl + shift + 4"] {
+        for name in [
+            "Space",
+            "Enter",
+            "ArrowRight",
+            "A",
+            "l",
+            "Ctrl+E",
+            "ctrl + shift + 4",
+        ] {
             assert!(is_valid_key_name(name), "{name} should be valid");
         }
         for name in ["NotAKey", "", "Escape", "Ctrl+Escape", "Meta+K", "Ctrl+"] {
@@ -517,7 +530,10 @@ mod tests {
             None,
             "Ctrl+L differs from plain L"
         );
-        assert_eq!(sc.conflict("l", ShortcutId::ReviewReveal), Some("Reader · learn word"));
+        assert_eq!(
+            sc.conflict("l", ShortcutId::ReviewReveal),
+            Some("Reader · learn word")
+        );
         assert_eq!(sc.conflict("Ctrl+Shift+9", ShortcutId::ReaderLearn), None);
     }
 }

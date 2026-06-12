@@ -3,11 +3,11 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-use shiori_core::{PartOfSpeech, Token};
 use lindera::dictionary::load_dictionary;
 use lindera::mode::Mode;
 use lindera::segmenter::Segmenter;
 use lindera::tokenizer::Tokenizer;
+use shiori_core::{PartOfSpeech, Token};
 
 use crate::kana::{is_kana_only, katakana_to_hiragana};
 use crate::pos::map_pos;
@@ -62,8 +62,8 @@ pub struct Analyzer {
 
 impl Analyzer {
     pub fn new() -> Result<Self, NlpError> {
-        let dictionary = load_dictionary("embedded://ipadic")
-            .map_err(|e| NlpError::Tokenizer(e.to_string()))?;
+        let dictionary =
+            load_dictionary("embedded://ipadic").map_err(|e| NlpError::Tokenizer(e.to_string()))?;
         let segmenter = Segmenter::new(Mode::Normal, dictionary, None);
         Ok(Self {
             tokenizer: Tokenizer::new(segmenter),
@@ -222,7 +222,9 @@ mod tests {
 
     #[test]
     fn lemmatizes_conjugated_verbs_with_base_reading() {
-        let tokens = analyzer().tokenize_sentence("昨日寿司を食べました。").unwrap();
+        let tokens = analyzer()
+            .tokenize_sentence("昨日寿司を食べました。")
+            .unwrap();
         let eat = tokens
             .iter()
             .find(|t| t.lemma == "食べる")

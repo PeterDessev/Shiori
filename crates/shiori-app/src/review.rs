@@ -40,7 +40,8 @@ impl App {
         }
         let card = Card::new(Utc::now());
         self.db.upsert_card(word_id, Some(sentence_id), &card)?;
-        self.db.set_word_status(word_id, KnowledgeStatus::Learning)?;
+        self.db
+            .set_word_status(word_id, KnowledgeStatus::Learning)?;
         Ok(())
     }
 
@@ -73,7 +74,8 @@ impl App {
         let sentence = sentence_id.or(existing.and_then(|c| c.sentence_id));
         self.db
             .upsert_card(word_id, sentence, &Card::new(Utc::now()))?;
-        self.db.set_word_status(word_id, KnowledgeStatus::Learning)?;
+        self.db
+            .set_word_status(word_id, KnowledgeStatus::Learning)?;
         Ok(())
     }
 

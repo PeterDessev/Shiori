@@ -74,7 +74,8 @@ impl App {
         if self.db().card(word_id)?.is_some() {
             return Ok(());
         }
-        self.db().upsert_card(word_id, None, &Card::new(Utc::now()))?;
+        self.db()
+            .upsert_card(word_id, None, &Card::new(Utc::now()))?;
         self.db()
             .set_word_status(word_id, KnowledgeStatus::Learning)?;
         Ok(())
@@ -109,7 +110,11 @@ mod tests {
     use super::*;
 
     fn app() -> App {
-        App::with_db(shiori_db::Db::open_in_memory().unwrap(), std::env::temp_dir()).unwrap()
+        App::with_db(
+            shiori_db::Db::open_in_memory().unwrap(),
+            std::env::temp_dir(),
+        )
+        .unwrap()
     }
 
     #[test]

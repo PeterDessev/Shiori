@@ -5,7 +5,7 @@ use eframe::egui;
 use egui_extras::{Column, TableBuilder};
 use shiori_core::DocumentId;
 
-use crate::app::{ShioriGui, MetaEdit, SortKey};
+use crate::app::{MetaEdit, ShioriGui, SortKey};
 use crate::views::band_color;
 
 impl ShioriGui {
@@ -122,28 +122,24 @@ impl ShioriGui {
         let mut to_edit: Option<usize> = None;
         let mut clicked_sort: Option<SortKey> = None;
 
-        let header = |ui: &mut egui::Ui,
-                      label: &str,
-                      key: SortKey,
-                      current: SortKey,
-                      asc: bool|
-         -> bool {
-            let arrow = if current == key {
-                if asc {
-                    " ▲"
+        let header =
+            |ui: &mut egui::Ui, label: &str, key: SortKey, current: SortKey, asc: bool| -> bool {
+                let arrow = if current == key {
+                    if asc {
+                        " ▲"
+                    } else {
+                        " ▼"
+                    }
                 } else {
-                    " ▼"
-                }
-            } else {
-                ""
+                    ""
+                };
+                ui.add(
+                    egui::Label::new(egui::RichText::new(format!("{label}{arrow}")).strong())
+                        .sense(egui::Sense::click()),
+                )
+                .on_hover_cursor(egui::CursorIcon::PointingHand)
+                .clicked()
             };
-            ui.add(
-                egui::Label::new(egui::RichText::new(format!("{label}{arrow}")).strong())
-                    .sense(egui::Sense::click()),
-            )
-            .on_hover_cursor(egui::CursorIcon::PointingHand)
-            .clicked()
-        };
 
         let sort_key = self.sort_key;
         let sort_asc = self.sort_asc;
@@ -225,12 +221,11 @@ impl ShioriGui {
                             ui.label(&summary.document.published);
                         });
                         row.col(|ui| {
-                            ui.label(format!("{}", summary.token_count)).on_hover_text(
-                                format!(
+                            ui.label(format!("{}", summary.token_count))
+                                .on_hover_text(format!(
                                     "{} tokens · {} sentences",
                                     summary.token_count, summary.sentence_count
-                                ),
-                            );
+                                ));
                         });
                         row.col(|ui| {
                             let frac = summary.document.last_sentence as f32
@@ -359,7 +354,9 @@ impl ShioriGui {
         };
         match self.sort_key {
             SortKey::Added => order.sort_by_key(|i| lib[*i].document.added_at),
-            SortKey::Title => order.sort_by(|a, b| lib[*a].document.title.cmp(&lib[*b].document.title)),
+            SortKey::Title => {
+                order.sort_by(|a, b| lib[*a].document.title.cmp(&lib[*b].document.title))
+            }
             SortKey::Author => {
                 order.sort_by(|a, b| lib[*a].document.author.cmp(&lib[*b].document.author))
             }
@@ -437,9 +434,7 @@ impl ShioriGui {
                                 field(ui, "Publisher", &summary.document.publisher);
                                 field(ui, "Published", &summary.document.published);
                                 ui.weak("Added");
-                                ui.label(
-                                    summary.document.added_at.format("%Y-%m-%d").to_string(),
-                                );
+                                ui.label(summary.document.added_at.format("%Y-%m-%d").to_string());
                                 ui.end_row();
                                 ui.weak("Size");
                                 ui.label(format!(
@@ -478,9 +473,8 @@ impl ShioriGui {
                                 let gained: u32 =
                                     info.top_unknown[..n].iter().map(|c| c.occurrences).sum();
                                 let now = stats.known_share() * 100.0;
-                                let after = ((stats.known_tokens
-                                    + stats.ignored_tokens
-                                    + gained) as f64
+                                let after = ((stats.known_tokens + stats.ignored_tokens + gained)
+                                    as f64
                                     / stats.content_tokens as f64)
                                     * 100.0;
                                 ui.add_space(4.0);
@@ -517,9 +511,7 @@ impl ShioriGui {
                         if !info.top_unknown.is_empty() {
                             ui.add_space(8.0);
                             ui.separator();
-                            ui.label(
-                                egui::RichText::new("Most useful unknown words").strong(),
-                            );
+                            ui.label(egui::RichText::new("Most useful unknown words").strong());
                             ui.weak("Click a word in the text while reading to learn it.");
                             ui.add_space(2.0);
                             egui::Grid::new("book-info-unknown")
@@ -673,7 +665,9 @@ impl ShioriGui {
     }
 
     fn meta_edit_dialog(&mut self, ctx: &egui::Context) {
-        let Some(edit) = &mut self.meta_edit else { return };
+        let Some(edit) = &mut self.meta_edit else {
+            return;
+        };
         let mut open = true;
         let mut save = false;
         let mut cancel = false;
@@ -687,7 +681,10 @@ impl ShioriGui {
                     .spacing([8.0, 8.0])
                     .show(ui, |ui| {
                         ui.label("Title:");
-                        ui.add_sized([280.0, 20.0], egui::TextEdit::singleline(&mut edit.meta.title));
+                        ui.add_sized(
+                            [280.0, 20.0],
+                            egui::TextEdit::singleline(&mut edit.meta.title),
+                        );
                         ui.end_row();
                         ui.label("Author:");
                         ui.add_sized(
@@ -711,7 +708,10 @@ impl ShioriGui {
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
                     let valid = !edit.meta.title.trim().is_empty();
-                    if ui.add_enabled(valid, egui::Button::new("💾 Save")).clicked() {
+                    if ui
+                        .add_enabled(valid, egui::Button::new("💾 Save"))
+                        .clicked()
+                    {
                         save = true;
                     }
                     if ui.button("Cancel").clicked() {

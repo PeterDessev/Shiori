@@ -16,13 +16,9 @@ pub use chat::{
     chat_system_prompt, parse_chat_response, AnnotationSeverity, Challenge, ChatAnnotation,
     ChatMessage, ChatRole, ChatTurnOutcome,
 };
-pub use ollama::{
-    OllamaClient, OllamaExplainer, OllamaModel, PullProgress, DEFAULT_OLLAMA_URL,
-};
+pub use ollama::{OllamaClient, OllamaExplainer, OllamaModel, PullProgress, DEFAULT_OLLAMA_URL};
 pub use openai_compat::OpenAiCompatExplainer;
-pub use prompts::{
-    build_explain_prompt, build_feedback_prompt, writing_prompts, SentenceContext,
-};
+pub use prompts::{build_explain_prompt, build_feedback_prompt, writing_prompts, SentenceContext};
 
 /// Clip a string to at most `max` characters (for error displays).
 pub(crate) fn truncate(s: &str, max: usize) -> &str {

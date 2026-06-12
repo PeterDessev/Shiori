@@ -38,9 +38,7 @@ pub fn ensure_jlpt_lists(data_dir: &Path) -> Result<PathBuf, DictError> {
         return Ok(target);
     }
     std::fs::create_dir_all(data_dir)?;
-    let agent = ureq::AgentBuilder::new()
-        .user_agent("shiori/0.1")
-        .build();
+    let agent = ureq::AgentBuilder::new().user_agent("shiori/0.1").build();
     let mut merged = String::from("level,kana,kanji\n");
     for level in 1..=5u8 {
         let response = agent.get(&level_url(level)).call()?;
@@ -84,8 +82,7 @@ pub fn load_jlpt_lists(path: &Path) -> Result<Vec<JlptWord>, DictError> {
     let mut out = Vec::new();
     for line in text.lines().skip(1) {
         let mut parts = line.splitn(3, ',');
-        let (Some(level), Some(kana), Some(word)) =
-            (parts.next(), parts.next(), parts.next())
+        let (Some(level), Some(kana), Some(word)) = (parts.next(), parts.next(), parts.next())
         else {
             continue;
         };

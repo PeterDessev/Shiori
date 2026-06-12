@@ -33,8 +33,12 @@ impl App {
 
         let mut words = Vec::new();
         for seq in self.db().dict_search_seqs(query, 30)? {
-            let Some(json) = self.db().dict_entry_json(seq)? else { continue };
-            let Ok(entry) = serde_json::from_str::<DictEntry>(&json) else { continue };
+            let Some(json) = self.db().dict_entry_json(seq)? else {
+                continue;
+            };
+            let Ok(entry) = serde_json::from_str::<DictEntry>(&json) else {
+                continue;
+            };
             let word = self
                 .db()
                 .words_by_lemma(entry.headword())?
@@ -77,8 +81,11 @@ mod tests {
     use shiori_db::DictFormRow;
 
     fn app_with_dict() -> App {
-        let app =
-            App::with_db(shiori_db::Db::open_in_memory().unwrap(), std::env::temp_dir()).unwrap();
+        let app = App::with_db(
+            shiori_db::Db::open_in_memory().unwrap(),
+            std::env::temp_dir(),
+        )
+        .unwrap();
         let entry_json = serde_json::json!({
             "id": "1467640",
             "kanji": [{"common": true, "text": "猫", "tags": []}],

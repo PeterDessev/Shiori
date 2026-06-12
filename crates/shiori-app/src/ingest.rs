@@ -54,7 +54,9 @@ impl App {
             ));
         }
 
-        Ok(self.db.import_document(&meta, &hash, Utc::now(), &sentences)?)
+        Ok(self
+            .db
+            .import_document(&meta, &hash, Utc::now(), &sentences)?)
     }
 
     /// Import a file from disk (txt/md, HTML, EPUB, or PDF — see

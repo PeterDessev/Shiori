@@ -1,11 +1,11 @@
 //! Document, sentence, and token storage.
 
 use chrono::{DateTime, Utc};
-use shiori_core::{
-    Document, DocumentId, DocumentMeta, KnowledgeStatus, PartOfSpeech, Sentence, SentenceId,
-    Token, WordId,
-};
 use rusqlite::params;
+use shiori_core::{
+    Document, DocumentId, DocumentMeta, KnowledgeStatus, PartOfSpeech, Sentence, SentenceId, Token,
+    WordId,
+};
 
 use crate::{Db, DbError, Result};
 
@@ -104,12 +104,10 @@ impl Db {
                 "INSERT INTO sentences(document_id, idx, paragraph, text)
                  VALUES (?1, ?2, ?3, ?4)",
             )?;
-            let mut find_word = tx.prepare(
-                "SELECT id FROM words WHERE lemma = ?1 AND reading = ?2 AND pos = ?3",
-            )?;
-            let mut insert_word = tx.prepare(
-                "INSERT INTO words(lemma, reading, pos) VALUES (?1, ?2, ?3)",
-            )?;
+            let mut find_word =
+                tx.prepare("SELECT id FROM words WHERE lemma = ?1 AND reading = ?2 AND pos = ?3")?;
+            let mut insert_word =
+                tx.prepare("INSERT INTO words(lemma, reading, pos) VALUES (?1, ?2, ?3)")?;
             let mut insert_token = tx.prepare(
                 "INSERT INTO tokens(sentence_id, idx, word_id, surface, start, end)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
@@ -229,7 +227,13 @@ impl Db {
         let n = self.conn().execute(
             "UPDATE documents SET title = ?2, author = ?3, publisher = ?4, published = ?5
              WHERE id = ?1",
-            params![id.0, meta.title, meta.author, meta.publisher, meta.published],
+            params![
+                id.0,
+                meta.title,
+                meta.author,
+                meta.publisher,
+                meta.published
+            ],
         )?;
         if n == 0 {
             return Err(DbError::NotFound("document"));
@@ -303,7 +307,12 @@ impl Db {
              LIMIT ?4",
         )?;
         let rows = stmt.query_map(
-            params![word.0, exclude.map(|s| s.0), home_document.map(|d| d.0), limit],
+            params![
+                word.0,
+                exclude.map(|s| s.0),
+                home_document.map(|d| d.0),
+                limit
+            ],
             |r| {
                 Ok((
                     Sentence {

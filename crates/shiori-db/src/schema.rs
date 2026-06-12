@@ -232,9 +232,11 @@ mod tests {
         migrate(&conn).unwrap();
 
         let author: String = conn
-            .query_row("SELECT author FROM documents WHERE title = 'old doc'", [], |r| {
-                r.get(0)
-            })
+            .query_row(
+                "SELECT author FROM documents WHERE title = 'old doc'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
         assert_eq!(author, "");
         let last_sentence: i64 = conn
@@ -246,9 +248,11 @@ mod tests {
             .unwrap();
         assert_eq!(last_sentence, 0);
         let version: String = conn
-            .query_row("SELECT value FROM meta WHERE key = 'schema_version'", [], |r| {
-                r.get(0)
-            })
+            .query_row(
+                "SELECT value FROM meta WHERE key = 'schema_version'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
         assert_eq!(version, SCHEMA_VERSION.to_string());
 

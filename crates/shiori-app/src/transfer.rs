@@ -167,8 +167,11 @@ mod tests {
 
     #[test]
     fn apkg_export_import_roundtrip() {
-        let app =
-            App::with_db(shiori_db::Db::open_in_memory().unwrap(), std::env::temp_dir()).unwrap();
+        let app = App::with_db(
+            shiori_db::Db::open_in_memory().unwrap(),
+            std::env::temp_dir(),
+        )
+        .unwrap();
         // A learning word with scheduling.
         let word = app
             .ensure_word(&shiori_core::WordKey::new(
@@ -193,8 +196,11 @@ mod tests {
         assert_eq!(app.export_apkg(&path).unwrap(), 1);
 
         // Import into a fresh database.
-        let other =
-            App::with_db(shiori_db::Db::open_in_memory().unwrap(), std::env::temp_dir()).unwrap();
+        let other = App::with_db(
+            shiori_db::Db::open_in_memory().unwrap(),
+            std::env::temp_dir(),
+        )
+        .unwrap();
         let (imported, skipped) = other.import_apkg(&path).unwrap();
         assert_eq!((imported, skipped), (1, 0));
 

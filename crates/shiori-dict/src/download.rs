@@ -23,9 +23,7 @@ pub const JMDICT_FILENAME: &str = "jmdict-eng.json";
 pub const FREQUENCY_FILENAME: &str = "frequency.txt";
 
 fn agent() -> ureq::Agent {
-    ureq::AgentBuilder::new()
-        .user_agent("shiori/0.1")
-        .build()
+    ureq::AgentBuilder::new().user_agent("shiori/0.1").build()
 }
 
 /// Ensure the JMdict JSON exists in `data_dir`, downloading and unpacking
@@ -90,7 +88,9 @@ fn latest_jmdict_asset_url() -> Result<String, DictError> {
 fn pick_jmdict_asset(release: &serde_json::Value) -> Option<String> {
     release.get("assets")?.as_array()?.iter().find_map(|asset| {
         let name = asset.get("name")?.as_str()?;
-        if name.starts_with("jmdict-eng-") && name.ends_with(".json.tgz") && !name.contains("common")
+        if name.starts_with("jmdict-eng-")
+            && name.ends_with(".json.tgz")
+            && !name.contains("common")
         {
             asset
                 .get("browser_download_url")?

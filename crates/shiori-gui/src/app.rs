@@ -495,8 +495,7 @@ impl ShioriGui {
 
     /// Persist the settings draft and apply it (rebuilds the LLM backend).
     pub fn apply_settings(&mut self) {
-        let layout_changed = self.settings.reader_font_size
-            != self.settings_draft.reader_font_size
+        let layout_changed = self.settings.reader_font_size != self.settings_draft.reader_font_size
             || self.settings.reader_line_spacing != self.settings_draft.reader_line_spacing
             || self.settings.furigana != self.settings_draft.furigana
             || self.settings.furigana_first_x != self.settings_draft.furigana_first_x;
@@ -546,7 +545,10 @@ impl ShioriGui {
     }
 
     /// Run a closure against the app, routing failures to the error toast.
-    pub fn with_app<T>(&mut self, f: impl FnOnce(&App) -> Result<T, shiori_app::AppError>) -> Option<T> {
+    pub fn with_app<T>(
+        &mut self,
+        f: impl FnOnce(&App) -> Result<T, shiori_app::AppError>,
+    ) -> Option<T> {
         let app = self.app.clone()?;
         let guard = match app.lock() {
             Ok(g) => g,
@@ -751,8 +753,7 @@ impl ShioriGui {
             let groups = compute_groups(&sentences);
             let (para_ranges, para_of_sentence) = paragraph_structure(&sentences);
             let word_occurrence = word_occurrences(&sentences);
-            let pending_restore =
-                (doc.last_sentence > 0).then_some(doc.last_sentence as usize);
+            let pending_restore = (doc.last_sentence > 0).then_some(doc.last_sentence as usize);
             let velocity = app.reading_velocity_cps()?;
             Ok(ReaderState {
                 doc,
@@ -833,7 +834,9 @@ impl ShioriGui {
     /// saves one-past-the-end, which reads as 100% (finished) in the
     /// library and unlocks the finish sweep.
     pub fn persist_reading_position(&mut self) {
-        let Some(reader) = self.reader.as_ref() else { return };
+        let Some(reader) = self.reader.as_ref() else {
+            return;
+        };
         if reader.page_starts.is_empty() {
             // Not laid out yet; nothing meaningful to save.
             return;
@@ -843,7 +846,9 @@ impl ShioriGui {
             reader.sentences.len() as u32
         } else {
             let para = reader.page_starts.get(page).copied().unwrap_or(0);
-            let Some(&(s0, _)) = reader.para_ranges.get(para) else { return };
+            let Some(&(s0, _)) = reader.para_ranges.get(para) else {
+                return;
+            };
             s0 as u32
         };
         let doc_id = reader.doc.id;
@@ -1042,9 +1047,15 @@ impl ShioriGui {
 
     /// Request an LLM explanation of the selected sentence.
     pub fn request_explanation(&mut self, ctx: &egui::Context) {
-        let Some(reader) = &mut self.reader else { return };
-        let Some((s_idx, g_idx)) = reader.selected else { return };
-        let Some(view) = reader.sentences.get(s_idx) else { return };
+        let Some(reader) = &mut self.reader else {
+            return;
+        };
+        let Some((s_idx, g_idx)) = reader.selected else {
+            return;
+        };
+        let Some(view) = reader.sentences.get(s_idx) else {
+            return;
+        };
         let sentence = view.sentence.text.clone();
         let focus = reader
             .groups
@@ -1133,9 +1144,9 @@ impl ShioriGui {
         };
 
         let Some((msg_id, sentences)) = self.with_app(|app| {
-            let id = app
-                .db()
-                .add_chat_message(conversation, "user", &content, chrono::Utc::now())?;
+            let id =
+                app.db()
+                    .add_chat_message(conversation, "user", &content, chrono::Utc::now())?;
             Ok((id, app.analyze_chat_text(&content)?))
         }) else {
             return;
@@ -1189,7 +1200,9 @@ impl ShioriGui {
 
     /// Store and display a finished chat turn.
     fn apply_chat_reply(&mut self, user_msg_id: i64, outcome: shiori_llm::ChatTurnOutcome) {
-        let Some(conversation) = self.production.current else { return };
+        let Some(conversation) = self.production.current else {
+            return;
+        };
 
         let annotations: Vec<shiori_db::ChatAnnotationRow> = outcome
             .annotations
@@ -1204,12 +1217,9 @@ impl ShioriGui {
         let reply = outcome.reply;
         let stored = self.with_app(|app| {
             app.db().add_chat_annotations(user_msg_id, &annotations)?;
-            let id = app.db().add_chat_message(
-                conversation,
-                "assistant",
-                &reply,
-                chrono::Utc::now(),
-            )?;
+            let id =
+                app.db()
+                    .add_chat_message(conversation, "assistant", &reply, chrono::Utc::now())?;
             Ok((id, app.analyze_chat_text(&reply)?))
         });
         if let Some(message) = self
@@ -1385,13 +1395,7 @@ impl ShioriGui {
 
     /// VS-Code-style icon rail on the left edge.
     fn show_nav_rail(&mut self, ctx: &egui::Context) {
-        fn item(
-            ui: &mut egui::Ui,
-            selected: bool,
-            icon: &str,
-            tip: String,
-            enabled: bool,
-        ) -> bool {
+        fn item(ui: &mut egui::Ui, selected: bool, icon: &str, tip: String, enabled: bool) -> bool {
             ui.add_enabled(
                 enabled,
                 egui::SelectableLabel::new(selected, egui::RichText::new(icon).size(22.0)),
@@ -1456,7 +1460,13 @@ impl ShioriGui {
                     ) {
                         nav = Some(View::Sources);
                     }
-                    if item(ui, self.view == View::Stats, "📊", "Statistics".into(), true) {
+                    if item(
+                        ui,
+                        self.view == View::Stats,
+                        "📊",
+                        "Statistics".into(),
+                        true,
+                    ) {
                         nav = Some(View::Stats);
                     }
                     if item(
@@ -1468,7 +1478,13 @@ impl ShioriGui {
                     ) {
                         nav = Some(View::Production);
                     }
-                    if item(ui, self.view == View::Settings, "⚙", "Settings".into(), true) {
+                    if item(
+                        ui,
+                        self.view == View::Settings,
+                        "⚙",
+                        "Settings".into(),
+                        true,
+                    ) {
                         nav = Some(View::Settings);
                     }
                 });

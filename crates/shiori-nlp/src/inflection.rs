@@ -54,9 +54,7 @@ fn phrase_end(tokens: &[Token], start: usize) -> usize {
             if end < tokens.len()
                 && matches!(
                     tokens[end].pos,
-                    PartOfSpeech::Noun
-                        | PartOfSpeech::ProperNoun
-                        | PartOfSpeech::AdjectivalNoun
+                    PartOfSpeech::Noun | PartOfSpeech::ProperNoun | PartOfSpeech::AdjectivalNoun
                 ) =>
         {
             end = absorb_noun_suffixes(tokens, end + 1);
@@ -250,7 +248,10 @@ mod tests {
             .iter()
             .find(|(s, e)| (*s..*e).contains(&idx))
             .unwrap();
-        let surface: String = tokens[start..end].iter().map(|t| t.surface.as_str()).collect();
+        let surface: String = tokens[start..end]
+            .iter()
+            .map(|t| t.surface.as_str())
+            .collect();
         (surface, analyze_inflection(&tokens[start..end]))
     }
 
@@ -361,7 +362,10 @@ mod tests {
         assert_eq!(de_group.1 - de_group.0, 1, "で must stand alone after 学校");
         // …while the verb still groups: 勉強した = 勉強(noun) し(verb) た(aux).
         let shi = tokens.iter().position(|t| t.surface == "し").unwrap();
-        let shi_group = groups.iter().find(|(s, e)| (*s..*e).contains(&shi)).unwrap();
+        let shi_group = groups
+            .iter()
+            .find(|(s, e)| (*s..*e).contains(&shi))
+            .unwrap();
         let surface: String = tokens[shi_group.0..shi_group.1]
             .iter()
             .map(|t| t.surface.as_str())

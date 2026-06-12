@@ -175,8 +175,8 @@ pub fn strip_html(html: &str) -> String {
                 });
             }
             "br" => push_newline(&mut out),
-            "p" | "div" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "li" | "tr"
-            | "blockquote" | "section" | "article"
+            "p" | "div" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "li" | "tr" | "blockquote"
+            | "section" | "article"
                 if closing =>
             {
                 push_newline(&mut out)
@@ -305,7 +305,8 @@ mod tests {
 
     #[test]
     fn ruby_annotations_are_stripped() {
-        let html = "<p>その<ruby><rb>漢字</rb><rp>（</rp><rt>かんじ</rt><rp>）</rp></ruby>は難しい。</p>";
+        let html =
+            "<p>その<ruby><rb>漢字</rb><rp>（</rp><rt>かんじ</rt><rp>）</rp></ruby>は難しい。</p>";
         assert_eq!(strip_html(html), "その漢字は難しい。");
         // EPUB3 style without rb.
         let html = "<ruby>本<rt>ほん</rt></ruby>を読む";
@@ -328,7 +329,10 @@ mod tests {
 
     #[test]
     fn malformed_entities_pass_through() {
-        assert_eq!(strip_html("R&D and &unknown; stay"), "R&D and &unknown; stay");
+        assert_eq!(
+            strip_html("R&D and &unknown; stay"),
+            "R&D and &unknown; stay"
+        );
     }
 
     #[test]

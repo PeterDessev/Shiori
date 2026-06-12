@@ -141,7 +141,9 @@ impl ShioriGui {
             Ok(key)
         });
         let Some(key) = key else { return };
-        let Some(word) = self.with_app(|app| app.ensure_word(&key)) else { return };
+        let Some(word) = self.with_app(|app| app.ensure_word(&key)) else {
+            return;
+        };
         if self
             .with_app(|app| app.start_learning_uncontexted(word.id))
             .is_some()
@@ -197,7 +199,10 @@ fn kanji_card(ui: &mut egui::Ui, kanji: &shiori_db::KanjiRow) {
             }
         });
         if !kanji.variants.is_empty() {
-            ui.weak(format!("variant/archaic forms: {}", kanji.variants.join("、")));
+            ui.weak(format!(
+                "variant/archaic forms: {}",
+                kanji.variants.join("、")
+            ));
         }
     });
 }
@@ -206,8 +211,7 @@ fn kanji_card(ui: &mut egui::Ui, kanji: &shiori_db::KanjiRow) {
 /// coordinate space; strokes shade from accent (first) to gray (last)
 /// and carry their stroke number at the starting point.
 fn draw_kanji_strokes(ui: &mut egui::Ui, strokes: &[String], size: f32) {
-    let (rect, _) =
-        ui.allocate_exact_size(egui::vec2(size, size), egui::Sense::hover());
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(size, size), egui::Sense::hover());
     let painter = ui.painter();
     painter.rect_stroke(
         rect,
@@ -227,7 +231,9 @@ fn draw_kanji_strokes(ui: &mut egui::Ui, strokes: &[String], size: f32) {
     let n = strokes.len().max(1) as f32;
 
     for (i, d) in strokes.iter().enumerate() {
-        let Ok(path) = kurbo::BezPath::from_svg(d) else { continue };
+        let Ok(path) = kurbo::BezPath::from_svg(d) else {
+            continue;
+        };
         let t = i as f32 / n;
         let color = egui::Color32::from_rgb(
             (accent.r() as f32 * (1.0 - t) + done.r() as f32 * t) as u8,

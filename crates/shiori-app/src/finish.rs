@@ -109,7 +109,8 @@ impl App {
     /// Apply a (possibly user-edited) sweep.
     pub fn apply_finish_sweep(&self, known: &[WordId], ignored: &[WordId]) -> Result<()> {
         self.db().bulk_set_status(known, KnowledgeStatus::Known)?;
-        self.db().bulk_set_status(ignored, KnowledgeStatus::Ignored)?;
+        self.db()
+            .bulk_set_status(ignored, KnowledgeStatus::Ignored)?;
         Ok(())
     }
 }
@@ -132,8 +133,11 @@ mod tests {
     }
 
     fn app_with_doc() -> (App, DocumentId) {
-        let app =
-            App::with_db(shiori_db::Db::open_in_memory().unwrap(), std::env::temp_dir()).unwrap();
+        let app = App::with_db(
+            shiori_db::Db::open_in_memory().unwrap(),
+            std::env::temp_dir(),
+        )
+        .unwrap();
         let sentences = vec![NewSentence {
             paragraph: 0,
             text: "メロスは猫と京都へ走る。".into(),
@@ -197,10 +201,7 @@ mod tests {
             .unwrap();
 
         let plan = app.finish_sweep_plan(doc).unwrap();
-        assert!(plan
-            .to_ignored
-            .iter()
-            .all(|c| c.word.key.lemma != "メロス"));
+        assert!(plan.to_ignored.iter().all(|c| c.word.key.lemma != "メロス"));
 
         let known: Vec<WordId> = plan.to_known.iter().map(|c| c.word.id).collect();
         let ignored: Vec<WordId> = plan.to_ignored.iter().map(|c| c.word.id).collect();

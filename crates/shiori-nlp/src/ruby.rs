@@ -154,14 +154,21 @@ mod tests {
         );
         assert_eq!(
             ruby_segments("持ち主", "もちぬし"),
-            vec![seg("持", Some("も")), seg("ち", None), seg("主", Some("ぬし"))]
+            vec![
+                seg("持", Some("も")),
+                seg("ち", None),
+                seg("主", Some("ぬし"))
+            ]
         );
     }
 
     #[test]
     fn kana_only_words_need_no_furigana() {
         assert_eq!(ruby_segments("これ", "これ"), vec![seg("これ", None)]);
-        assert_eq!(ruby_segments("コーヒー", "こーひー"), vec![seg("コーヒー", None)]);
+        assert_eq!(
+            ruby_segments("コーヒー", "こーひー"),
+            vec![seg("コーヒー", None)]
+        );
     }
 
     #[test]

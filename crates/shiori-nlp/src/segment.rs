@@ -125,10 +125,10 @@ mod tests {
 
     #[test]
     fn groups_repeated_enders() {
-        assert_eq!(split_sentences("なんだって！？嘘だろ。"), vec![
-            "なんだって！？",
-            "嘘だろ。"
-        ]);
+        assert_eq!(
+            split_sentences("なんだって！？嘘だろ。"),
+            vec!["なんだって！？", "嘘だろ。"]
+        );
     }
 
     #[test]

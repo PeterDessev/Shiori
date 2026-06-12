@@ -20,11 +20,7 @@ impl ShioriGui {
                 ui.heading("Find books online");
                 ui.add_space(10.0);
                 ui.selectable_value(&mut self.sources.tab, SourceTab::Aozora, "青空文庫");
-                ui.selectable_value(
-                    &mut self.sources.tab,
-                    SourceTab::Wikisource,
-                    "Wikisource",
-                );
+                ui.selectable_value(&mut self.sources.tab, SourceTab::Wikisource, "Wikisource");
                 if self.import_jobs > 0 {
                     ui.spinner();
                     ui.weak(format!("importing {}…", self.import_jobs));
@@ -53,8 +49,8 @@ impl ShioriGui {
                         }
                     }
                     SourceTab::Wikisource => {
-                        let enter = response.lost_focus()
-                            && ui.input(|i| i.key_pressed(egui::Key::Enter));
+                        let enter =
+                            response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
                         if ui.button("Search").clicked() || enter {
                             search_ws = true;
                         }
@@ -145,11 +141,7 @@ impl ShioriGui {
                             *import = Some(SourceImport::Aozora(work.clone()));
                         }
                         ui.label(egui::RichText::new(&work.title).strong());
-                        ui.weak(format!(
-                            "{} · {}",
-                            work.author,
-                            work.orthography
-                        ));
+                        ui.weak(format!("{} · {}", work.author, work.orthography));
                     });
                     ui.add_space(2.0);
                 }

@@ -23,8 +23,8 @@ mod words;
 pub use cards::CardRow;
 pub use chat::{ChatAnnotationRow, ChatMessageRow, ConversationRow};
 pub use dict::DictFormRow;
-pub use kanji::KanjiRow;
 pub use documents::{DocumentSummary, NewSentence, NewToken, TokenRow};
+pub use kanji::KanjiRow;
 pub use sessions::ReadingTotals;
 pub use stats::{JlptShare, StatusCount};
 pub use words::{DocWord, WordRow};
@@ -102,9 +102,11 @@ mod tests {
         let db = Db::open_in_memory().unwrap();
         let version: i64 = db
             .conn()
-            .query_row("SELECT value FROM meta WHERE key = 'schema_version'", [], |r| {
-                r.get::<_, String>(0)
-            })
+            .query_row(
+                "SELECT value FROM meta WHERE key = 'schema_version'",
+                [],
+                |r| r.get::<_, String>(0),
+            )
             .unwrap()
             .parse()
             .unwrap();

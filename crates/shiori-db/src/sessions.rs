@@ -2,8 +2,8 @@
 //! one row per continuous sitting with a document.
 
 use chrono::{DateTime, Utc};
-use shiori_core::DocumentId;
 use rusqlite::params;
+use shiori_core::DocumentId;
 
 use crate::{Db, Result};
 
@@ -17,11 +17,7 @@ pub struct ReadingTotals {
 impl Db {
     /// Open a new (empty) reading session row; time is added as it is
     /// earned via [`Db::add_reading_time`].
-    pub fn start_reading_session(
-        &self,
-        document: DocumentId,
-        at: DateTime<Utc>,
-    ) -> Result<i64> {
+    pub fn start_reading_session(&self, document: DocumentId, at: DateTime<Utc>) -> Result<i64> {
         self.conn().execute(
             "INSERT INTO reading_sessions(document_id, started_at, ended_at, seconds, chars)
              VALUES (?1, ?2, ?2, 0, 0)",

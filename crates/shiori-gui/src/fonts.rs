@@ -88,9 +88,7 @@ pub fn download_font(data_dir: &Path, font: ReaderFont) -> Result<(), String> {
     if let Some(parent) = target.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    let agent = ureq::AgentBuilder::new()
-        .user_agent("shiori/0.1")
-        .build();
+    let agent = ureq::AgentBuilder::new().user_agent("shiori/0.1").build();
     let response = agent.get(url).call().map_err(|e| e.to_string())?;
     let mut bytes = Vec::new();
     std::io::Read::read_to_end(&mut response.into_reader(), &mut bytes)
@@ -110,11 +108,7 @@ pub fn download_font(data_dir: &Path, font: ReaderFont) -> Result<(), String> {
 /// proportional and monospace text. Returns `false` when the choice is a
 /// Noto font that has not been downloaded yet (caller should download
 /// and retry); the system option always succeeds.
-pub fn install_japanese_fonts(
-    ctx: &egui::Context,
-    data_dir: &Path,
-    font: ReaderFont,
-) -> bool {
+pub fn install_japanese_fonts(ctx: &egui::Context, data_dir: &Path, font: ReaderFont) -> bool {
     let bytes = match font_cache_path(data_dir, font) {
         Some(path) => match std::fs::read(&path) {
             Ok(bytes) => {

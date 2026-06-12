@@ -165,7 +165,9 @@ mod tests {
         let conv = db.create_conversation(now, "").unwrap();
         db.set_conversation_title(conv, "天気の話").unwrap();
 
-        let m1 = db.add_chat_message(conv, "user", "今日はいい天気ですね", now).unwrap();
+        let m1 = db
+            .add_chat_message(conv, "user", "今日はいい天気ですね", now)
+            .unwrap();
         let m2 = db
             .add_chat_message(conv, "assistant", "そうですね！", now)
             .unwrap();

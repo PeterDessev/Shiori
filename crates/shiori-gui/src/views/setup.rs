@@ -2,7 +2,7 @@
 
 use eframe::egui;
 
-use crate::app::{ShioriGui, Phase};
+use crate::app::{Phase, ShioriGui};
 
 impl ShioriGui {
     pub fn show_setup(&mut self, ctx: &egui::Context) {

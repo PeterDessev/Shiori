@@ -29,7 +29,8 @@ fn to_json(v: &[String]) -> String {
 }
 
 fn from_json(s: Option<String>) -> Vec<String> {
-    s.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
+    s.and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
 }
 
 impl Db {
@@ -75,8 +76,7 @@ impl Db {
     pub fn kanji_count(&self) -> Result<u64> {
         Ok(self
             .conn()
-            .query_row("SELECT COUNT(*) FROM kanji", [], |r| r.get::<_, i64>(0))?
-            as u64)
+            .query_row("SELECT COUNT(*) FROM kanji", [], |r| r.get::<_, i64>(0))? as u64)
     }
 
     /// Look one kanji up by the character itself.

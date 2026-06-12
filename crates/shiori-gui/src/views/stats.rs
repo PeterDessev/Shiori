@@ -37,20 +37,22 @@ impl ShioriGui {
                             .map(|(_, n)| *n)
                             .unwrap_or(0)
                     };
-                    egui::Grid::new("vocab-grid").spacing([20.0, 4.0]).show(ui, |ui| {
-                        ui.label("Known");
-                        ui.strong(count_of(KnowledgeStatus::Known).to_string());
-                        ui.end_row();
-                        ui.label("Learning");
-                        ui.strong(count_of(KnowledgeStatus::Learning).to_string());
-                        ui.end_row();
-                        ui.label("Seen but unknown");
-                        ui.strong(count_of(KnowledgeStatus::Unknown).to_string());
-                        ui.end_row();
-                        ui.label("Ignored");
-                        ui.strong(count_of(KnowledgeStatus::Ignored).to_string());
-                        ui.end_row();
-                    });
+                    egui::Grid::new("vocab-grid")
+                        .spacing([20.0, 4.0])
+                        .show(ui, |ui| {
+                            ui.label("Known");
+                            ui.strong(count_of(KnowledgeStatus::Known).to_string());
+                            ui.end_row();
+                            ui.label("Learning");
+                            ui.strong(count_of(KnowledgeStatus::Learning).to_string());
+                            ui.end_row();
+                            ui.label("Seen but unknown");
+                            ui.strong(count_of(KnowledgeStatus::Unknown).to_string());
+                            ui.end_row();
+                            ui.label("Ignored");
+                            ui.strong(count_of(KnowledgeStatus::Ignored).to_string());
+                            ui.end_row();
+                        });
 
                     // Level grading.
                     if !overview.jlpt.is_empty() {
@@ -76,16 +78,14 @@ impl ShioriGui {
                             };
                             ui.horizontal(|ui| {
                                 ui.label(format!("N{}", share.level));
-                                ui.add(
-                                    egui::ProgressBar::new(frac)
-                                        .desired_width(220.0)
-                                        .text(format!(
-                                            "{}/{} ({:.0}%)",
-                                            share.known,
-                                            share.total,
-                                            frac * 100.0
-                                        )),
-                                );
+                                ui.add(egui::ProgressBar::new(frac).desired_width(220.0).text(
+                                    format!(
+                                        "{}/{} ({:.0}%)",
+                                        share.known,
+                                        share.total,
+                                        frac * 100.0
+                                    ),
+                                ));
                             });
                         }
                         ui.add_space(4.0);
@@ -103,29 +103,31 @@ impl ShioriGui {
 
                     ui.add_space(12.0);
                     ui.heading("Reviews");
-                    egui::Grid::new("review-grid").spacing([20.0, 4.0]).show(ui, |ui| {
-                        ui.label("Active cards");
-                        ui.strong(cards.to_string());
-                        ui.end_row();
-                        ui.label("Due now");
-                        ui.strong(self.due_count.to_string());
-                        ui.end_row();
-                        ui.label("Reviews today");
-                        ui.strong(today.to_string());
-                        ui.end_row();
-                        ui.label("Reviews all time");
-                        ui.strong(total_reviews.to_string());
-                        ui.end_row();
-                        ui.label("Retention (30 days)");
-                        ui.strong(match overview.retention_30d {
-                            Some(r) => format!("{:.0}%", r * 100.0),
-                            None => "—".into(),
+                    egui::Grid::new("review-grid")
+                        .spacing([20.0, 4.0])
+                        .show(ui, |ui| {
+                            ui.label("Active cards");
+                            ui.strong(cards.to_string());
+                            ui.end_row();
+                            ui.label("Due now");
+                            ui.strong(self.due_count.to_string());
+                            ui.end_row();
+                            ui.label("Reviews today");
+                            ui.strong(today.to_string());
+                            ui.end_row();
+                            ui.label("Reviews all time");
+                            ui.strong(total_reviews.to_string());
+                            ui.end_row();
+                            ui.label("Retention (30 days)");
+                            ui.strong(match overview.retention_30d {
+                                Some(r) => format!("{:.0}%", r * 100.0),
+                                None => "—".into(),
+                            });
+                            ui.end_row();
+                            ui.label("New words/day (30 days)");
+                            ui.strong(format!("{:.1}", overview.learning_rate_30d));
+                            ui.end_row();
                         });
-                        ui.end_row();
-                        ui.label("New words/day (30 days)");
-                        ui.strong(format!("{:.1}", overview.learning_rate_30d));
-                        ui.end_row();
-                    });
 
                     if !overview.due_forecast.is_empty() {
                         ui.add_space(6.0);
@@ -194,8 +196,7 @@ impl ShioriGui {
                             ui.strong("Verdict");
                             ui.end_row();
                             for summary in &self.library {
-                                let Some(stats) = self.doc_stats.get(&summary.document.id.0)
-                                else {
+                                let Some(stats) = self.doc_stats.get(&summary.document.id.0) else {
                                     continue;
                                 };
                                 ui.label(&summary.document.title);
@@ -252,10 +253,7 @@ fn due_forecast_bars(ui: &mut egui::Ui, forecast: &[(String, u32)]) {
 /// GitHub-style calendar of credited reading time, last ~18 weeks.
 fn reading_heatmap(ui: &mut egui::Ui, by_day: &[(String, f64)]) {
     use std::collections::HashMap;
-    let minutes: HashMap<&str, f64> = by_day
-        .iter()
-        .map(|(d, s)| (d.as_str(), s / 60.0))
-        .collect();
+    let minutes: HashMap<&str, f64> = by_day.iter().map(|(d, s)| (d.as_str(), s / 60.0)).collect();
 
     const WEEKS: i64 = 18;
     let cell = 11.0;
@@ -266,10 +264,7 @@ fn reading_heatmap(ui: &mut egui::Ui, by_day: &[(String, f64)]) {
         - chrono::Duration::days((WEEKS - 1) * 7 + today.weekday().num_days_from_monday() as i64);
 
     let (rect, _) = ui.allocate_exact_size(
-        egui::vec2(
-            WEEKS as f32 * (cell + gap),
-            7.0 * (cell + gap),
-        ),
+        egui::vec2(WEEKS as f32 * (cell + gap), 7.0 * (cell + gap)),
         egui::Sense::hover(),
     );
     let painter = ui.painter();

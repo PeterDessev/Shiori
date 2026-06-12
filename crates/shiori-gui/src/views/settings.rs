@@ -165,11 +165,8 @@ impl ShioriGui {
                 ui.end_row();
                 ui.label("Line spacing:");
                 ui.add(
-                    egui::Slider::new(
-                        &mut self.settings_draft.reader_line_spacing,
-                        0.6..=2.0,
-                    )
-                    .fixed_decimals(1),
+                    egui::Slider::new(&mut self.settings_draft.reader_line_spacing, 0.6..=2.0)
+                        .fixed_decimals(1),
                 );
                 ui.end_row();
             });
@@ -198,8 +195,7 @@ impl ShioriGui {
         }
         ui.horizontal(|ui| {
             ui.add_enabled(
-                self.settings_draft.furigana
-                    == crate::settings::FuriganaMode::UnknownFirstX,
+                self.settings_draft.furigana == crate::settings::FuriganaMode::UnknownFirstX,
                 egui::DragValue::new(&mut self.settings_draft.furigana_first_x)
                     .range(1..=50)
                     .prefix("X = "),
@@ -255,24 +251,24 @@ impl ShioriGui {
         let field_width = (ui.available_width() - 160.0).clamp(240.0, 520.0);
         match self.settings_draft.llm_provider {
             LlmProvider::Anthropic => {
-                egui::Grid::new("llm-grid").spacing([10.0, 8.0]).show(ui, |ui| {
-                    ui.label("API key:");
-                    ui.add_sized(
-                        [field_width, 22.0],
-                        egui::TextEdit::singleline(
-                            &mut self.settings_draft.anthropic_api_key,
-                        )
-                        .password(true)
-                        .hint_text("sk-ant-…"),
-                    );
-                    ui.end_row();
-                    ui.label("Model:");
-                    ui.add_sized(
-                        [field_width, 22.0],
-                        egui::TextEdit::singleline(&mut self.settings_draft.llm_model),
-                    );
-                    ui.end_row();
-                });
+                egui::Grid::new("llm-grid")
+                    .spacing([10.0, 8.0])
+                    .show(ui, |ui| {
+                        ui.label("API key:");
+                        ui.add_sized(
+                            [field_width, 22.0],
+                            egui::TextEdit::singleline(&mut self.settings_draft.anthropic_api_key)
+                                .password(true)
+                                .hint_text("sk-ant-…"),
+                        );
+                        ui.end_row();
+                        ui.label("Model:");
+                        ui.add_sized(
+                            [field_width, 22.0],
+                            egui::TextEdit::singleline(&mut self.settings_draft.llm_model),
+                        );
+                        ui.end_row();
+                    });
                 ui.weak(
                     "The key is stored locally in settings.json and only ever sent \
                      to the Anthropic API. Leave empty to use the \
@@ -294,11 +290,9 @@ impl ShioriGui {
                         ui.label("API key:");
                         ui.add_sized(
                             [field_width, 22.0],
-                            egui::TextEdit::singleline(
-                                &mut self.settings_draft.custom_api_key,
-                            )
-                            .password(true)
-                            .hint_text("optional for local servers"),
+                            egui::TextEdit::singleline(&mut self.settings_draft.custom_api_key)
+                                .password(true)
+                                .hint_text("optional for local servers"),
                         );
                         ui.end_row();
                         ui.label("Model:");
@@ -331,15 +325,17 @@ impl ShioriGui {
 
     /// Ollama section: liveness, installed models, in-app pulls.
     fn settings_ollama(&mut self, ui: &mut egui::Ui, field_width: f32) {
-        egui::Grid::new("ollama-grid").spacing([10.0, 8.0]).show(ui, |ui| {
-            ui.label("Server URL:");
-            ui.add_sized(
-                [field_width, 22.0],
-                egui::TextEdit::singleline(&mut self.settings_draft.ollama_url)
-                    .hint_text(shiori_llm::DEFAULT_OLLAMA_URL),
-            );
-            ui.end_row();
-        });
+        egui::Grid::new("ollama-grid")
+            .spacing([10.0, 8.0])
+            .show(ui, |ui| {
+                ui.label("Server URL:");
+                ui.add_sized(
+                    [field_width, 22.0],
+                    egui::TextEdit::singleline(&mut self.settings_draft.ollama_url)
+                        .hint_text(shiori_llm::DEFAULT_OLLAMA_URL),
+                );
+                ui.end_row();
+            });
 
         // Probe once automatically; afterwards on demand.
         if self.ollama_probe.is_none() && !self.ollama_probing {
@@ -417,8 +413,7 @@ impl ShioriGui {
             ui.label("Pull model:");
             ui.add_sized(
                 [200.0, 22.0],
-                egui::TextEdit::singleline(&mut self.ollama_pull_input)
-                    .hint_text("e.g. qwen3:8b"),
+                egui::TextEdit::singleline(&mut self.ollama_pull_input).hint_text("e.g. qwen3:8b"),
             );
             let pulling = self.ollama_pull.is_some();
             if ui
@@ -485,10 +480,7 @@ impl ShioriGui {
                         start_recording = Some(id);
                     }
                     if !recording && !crate::settings::is_valid_key_name(value) {
-                        ui.colored_label(
-                            egui::Color32::from_rgb(220, 90, 90),
-                            "invalid binding",
-                        );
+                        ui.colored_label(egui::Color32::from_rgb(220, 90, 90), "invalid binding");
                     } else {
                         ui.label("");
                     }
@@ -520,7 +512,9 @@ impl ShioriGui {
     /// were still held) or a modifier (detected as a flag dropping while
     /// a key is captured, committed with last frame's modifier state).
     fn handle_shortcut_recording(&mut self, ctx: &egui::Context) {
-        let Some(rec) = &mut self.shortcut_recording else { return };
+        let Some(rec) = &mut self.shortcut_recording else {
+            return;
+        };
         let (events, modifiers) = ctx.input(|i| (i.events.clone(), i.modifiers));
 
         // None = cancelled; Some((mods, key)) = commit.
@@ -565,8 +559,7 @@ impl ShioriGui {
         if let Some((mods, key)) = result {
             let combo = crate::settings::format_shortcut(mods, key);
             if let Some(label) = self.settings_draft.shortcuts.conflict(&combo, id) {
-                self.shortcut_notice =
-                    Some(format!("{combo} is already bound to \"{label}\""));
+                self.shortcut_notice = Some(format!("{combo} is already bound to \"{label}\""));
             } else {
                 *self.settings_draft.shortcuts.get_mut(id) = combo;
                 self.shortcut_notice = None;
@@ -651,8 +644,7 @@ impl ShioriGui {
                             self.notice = Some("settings imported and applied".into());
                         }
                         None => {
-                            self.error =
-                                Some("that file is not a valid settings export".into())
+                            self.error = Some("that file is not a valid settings export".into())
                         }
                     }
                 }

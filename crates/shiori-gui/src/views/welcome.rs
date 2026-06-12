@@ -241,12 +241,7 @@ impl ShioriGui {
 }
 
 /// One numbered section: bold summary line, details folded underneath.
-fn section(
-    ui: &mut egui::Ui,
-    title: &str,
-    summary: &str,
-    details: impl FnOnce(&mut egui::Ui),
-) {
+fn section(ui: &mut egui::Ui, title: &str, summary: &str, details: impl FnOnce(&mut egui::Ui)) {
     ui.add_space(10.0);
     ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
         ui.label(egui::RichText::new(title).size(18.0).strong());

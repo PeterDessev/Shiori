@@ -147,14 +147,12 @@ impl ShioriGui {
                         ui.horizontal_wrapped(|ui| {
                             ui.spacing_mut().item_spacing.x = 0.0;
                             for row in &item.sentence_tokens {
-                                let mut text =
-                                    egui::RichText::new(&row.token.surface).size(26.0);
+                                let mut text = egui::RichText::new(&row.token.surface).size(26.0);
                                 if row.word_id == item.word.id {
                                     text = text.underline().strong().color(accent);
                                 }
                                 ui.add(
-                                    egui::Label::new(text)
-                                        .wrap_mode(egui::TextWrapMode::Extend),
+                                    egui::Label::new(text).wrap_mode(egui::TextWrapMode::Extend),
                                 );
                             }
                         });
@@ -169,7 +167,9 @@ impl ShioriGui {
                     }
                     None => {
                         ui.label(
-                            egui::RichText::new(&item.word.key.lemma).size(34.0).strong(),
+                            egui::RichText::new(&item.word.key.lemma)
+                                .size(34.0)
+                                .strong(),
                         );
                     }
                 }
@@ -211,7 +211,10 @@ impl ShioriGui {
 
         if let Some(rating) = answered {
             let word_id = self.review.queue[0].word.id;
-            if self.with_app(|app| app.answer_review(word_id, rating)).is_some() {
+            if self
+                .with_app(|app| app.answer_review(word_id, rating))
+                .is_some()
+            {
                 self.review.queue.remove(0);
                 self.review.revealed = false;
                 if self.review.queue.is_empty() {

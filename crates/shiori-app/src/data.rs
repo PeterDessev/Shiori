@@ -16,10 +16,7 @@ pub struct DataStatus {
 
 impl DataStatus {
     pub fn is_ready(&self) -> bool {
-        self.dict_entries > 0
-            && self.frequency_words > 0
-            && self.kanji > 0
-            && self.jlpt_words > 0
+        self.dict_entries > 0 && self.frequency_words > 0 && self.kanji > 0 && self.jlpt_words > 0
     }
 }
 

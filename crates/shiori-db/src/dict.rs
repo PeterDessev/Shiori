@@ -67,7 +67,10 @@ impl Db {
     /// common entries first. Powers the dictionary search box.
     pub fn dict_search_seqs(&self, prefix: &str, limit: u32) -> Result<Vec<i64>> {
         // LIKE with an escaped prefix; % and _ in user input are literal.
-        let escaped = prefix.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+        let escaped = prefix
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_");
         let mut stmt = self.conn().prepare(
             "SELECT seq, MAX(text = ?1) AS exact, MAX(is_common) AS common
              FROM dict_forms WHERE text LIKE ?2 || '%' ESCAPE '\\'
@@ -80,11 +83,11 @@ impl Db {
     }
 
     pub fn dict_entry_json(&self, seq: i64) -> Result<Option<String>> {
-        let result = self.conn().query_row(
-            "SELECT json FROM dict_entries WHERE seq = ?1",
-            [seq],
-            |r| r.get(0),
-        );
+        let result =
+            self.conn()
+                .query_row("SELECT json FROM dict_entries WHERE seq = ?1", [seq], |r| {
+                    r.get(0)
+                });
         match result {
             Ok(json) => Ok(Some(json)),
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
@@ -186,8 +189,10 @@ mod tests {
     #[test]
     fn reimport_replaces_dictionary() {
         let db = Db::open_in_memory().unwrap();
-        db.import_dictionary([(1, "{}".to_string(), vec![])]).unwrap();
-        db.import_dictionary([(2, "{}".to_string(), vec![])]).unwrap();
+        db.import_dictionary([(1, "{}".to_string(), vec![])])
+            .unwrap();
+        db.import_dictionary([(2, "{}".to_string(), vec![])])
+            .unwrap();
         assert_eq!(db.dict_entry_count().unwrap(), 1);
         assert_eq!(db.dict_entry_json(1).unwrap(), None);
     }

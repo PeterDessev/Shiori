@@ -8,7 +8,11 @@ fn main() {
     let dict = shiori_dict::Dictionary::parse(&json).expect("parse");
     println!("parsed {} entries in {:?}", dict.len(), start.elapsed());
 
-    for (lemma, reading) in [("食べる", "たべる"), ("行く", "いく"), ("召し上がる", "めしあがる")] {
+    for (lemma, reading) in [
+        ("食べる", "たべる"),
+        ("行く", "いく"),
+        ("召し上がる", "めしあがる"),
+    ] {
         match dict.lookup_best(lemma, reading) {
             Some(e) => println!(
                 "{lemma}: [{}] {} | misc={:?} related={:?}",

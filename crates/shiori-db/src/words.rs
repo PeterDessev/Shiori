@@ -1,7 +1,7 @@
 //! Word knowledge state.
 
-use shiori_core::{DocumentId, KnowledgeStatus, PartOfSpeech, SentenceId, WordId, WordKey};
 use rusqlite::params;
+use shiori_core::{DocumentId, KnowledgeStatus, PartOfSpeech, SentenceId, WordId, WordKey};
 
 use crate::{Db, DbError, Result};
 
@@ -77,7 +77,9 @@ impl Db {
 
     pub fn find_word(&self, key: &WordKey) -> Result<Option<WordRow>> {
         let result = self.conn().query_row(
-            &format!("SELECT {WORD_COLS} FROM words WHERE lemma = ?1 AND reading = ?2 AND pos = ?3"),
+            &format!(
+                "SELECT {WORD_COLS} FROM words WHERE lemma = ?1 AND reading = ?2 AND pos = ?3"
+            ),
             params![key.lemma, key.reading, key.pos.as_str()],
             row_to_word,
         );
@@ -186,10 +188,7 @@ mod tests {
         assert_eq!(word.status, KnowledgeStatus::Unknown);
 
         db.set_word_status(word.id, KnowledgeStatus::Known).unwrap();
-        assert_eq!(
-            db.word(word.id).unwrap().status,
-            KnowledgeStatus::Known
-        );
+        assert_eq!(db.word(word.id).unwrap().status, KnowledgeStatus::Known);
 
         db.set_word_dict_seq(word.id, Some(1467640)).unwrap();
         assert_eq!(db.word(word.id).unwrap().dict_seq, Some(1467640));

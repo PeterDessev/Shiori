@@ -50,7 +50,10 @@ fn main() {
             c.word.key.reading,
             c.occurrences,
             c.corpus_rank.map(|r| r.to_string()).unwrap_or("—".into()),
-            c.entry.as_ref().map(|e| e.short_gloss()).unwrap_or_default()
+            c.entry
+                .as_ref()
+                .map(|e| e.short_gloss())
+                .unwrap_or_default()
         );
     }
 
@@ -71,7 +74,9 @@ fn main() {
             .map(|s| s.text.as_str())
             .unwrap_or("—")
     );
-    let card = app.answer_review(top.word.id, Rating::Good).expect("answer");
+    let card = app
+        .answer_review(top.word.id, Rating::Good)
+        .expect("answer");
     println!(
         "[srs] answered Good → state {:?}, due {}",
         card.state, card.due

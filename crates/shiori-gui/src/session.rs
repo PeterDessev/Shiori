@@ -4,7 +4,7 @@
 
 use std::time::Instant;
 
-use crate::app::{ShioriGui, ReaderState};
+use crate::app::{ReaderState, ShioriGui};
 
 /// Flat away threshold (and credit cap) before a velocity stat exists.
 pub const FLAT_AWAY_SECS: f64 = 300.0;
@@ -98,7 +98,11 @@ impl SessionTracker {
             }
             (Some(exp), VisitEnd::Pause) => {
                 let secs = elapsed.min(2.0 * exp);
-                let frac = if exp > 0.0 { (secs / exp).clamp(0.0, 1.0) } else { 0.0 };
+                let frac = if exp > 0.0 {
+                    (secs / exp).clamp(0.0, 1.0)
+                } else {
+                    0.0
+                };
                 (secs, (page_chars as f64 * frac) as u64)
             }
             (Some(exp), VisitEnd::AutoAway) => (elapsed.min(exp), page_chars as u64),
@@ -135,8 +139,12 @@ impl ShioriGui {
     /// End the current page visit, credit it, and stop the clock.
     /// Idempotent: a second call before `enter_page` is a no-op.
     pub fn end_page_visit(&mut self, end: VisitEnd) {
-        let Some(reader) = self.reader.as_ref() else { return };
-        let Some(entered) = reader.session.page_entered else { return };
+        let Some(reader) = self.reader.as_ref() else {
+            return;
+        };
+        let Some(entered) = reader.session.page_entered else {
+            return;
+        };
         let page_chars = current_page_chars(reader);
         let elapsed = entered.elapsed().as_secs_f64();
         let (secs, chars) = reader.session.credit(elapsed, page_chars, end);
@@ -227,7 +235,7 @@ mod tests {
     #[test]
     fn away_threshold_scales_with_page() {
         let t = tracker(Some(2.0)); // 2 cps
-        // 300-char page → expected 150s → threshold 300s.
+                                    // 300-char page → expected 150s → threshold 300s.
         assert_eq!(t.away_threshold(300), 300.0);
         // Tiny page clamps to the minimum.
         assert_eq!(t.away_threshold(10), MIN_AWAY_SECS);

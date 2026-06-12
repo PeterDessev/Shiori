@@ -401,8 +401,7 @@ impl ShioriGui {
                             } else {
                                 None
                             };
-                            let text =
-                                egui::RichText::new(&row.token.surface).size(font_size);
+                            let text = egui::RichText::new(&row.token.surface).size(font_size);
                             // Tokens never wrap internally: a label that
                             // breaks across lines reports a full-width
                             // union rect, which painted highlights as
@@ -421,12 +420,9 @@ impl ShioriGui {
                             let bg_slot = ui.painter().add(egui::Shape::Noop);
                             let response = ui.add(label);
                             if let Some(fill) = fill {
-                                let rect =
-                                    tight_highlight_rect(response.rect, font_size);
-                                ui.painter().set(
-                                    bg_slot,
-                                    egui::Shape::rect_filled(rect, 0.0, fill),
-                                );
+                                let rect = tight_highlight_rect(response.rect, font_size);
+                                ui.painter()
+                                    .set(bg_slot, egui::Shape::rect_filled(rect, 0.0, fill));
                             }
                             let show_ruby = match furigana_mode {
                                 crate::settings::FuriganaMode::None => false,
@@ -505,14 +501,17 @@ impl ShioriGui {
         }
 
         // Pause overlay: dims the page and swallows pointer input.
-        if self.reader.as_ref().is_some_and(|r| r.session.away.is_some()) {
+        if self
+            .reader
+            .as_ref()
+            .is_some_and(|r| r.session.away.is_some())
+        {
             let screen = ctx.screen_rect();
             egui::Area::new(egui::Id::new("away-overlay"))
                 .order(egui::Order::Foreground)
                 .fixed_pos(screen.min)
                 .show(ctx, |ui| {
-                    let (rect, _) =
-                        ui.allocate_exact_size(screen.size(), egui::Sense::click());
+                    let (rect, _) = ui.allocate_exact_size(screen.size(), egui::Sense::click());
                     let painter = ui.painter();
                     painter.rect_filled(rect, 0.0, egui::Color32::from_black_alpha(170));
                     painter.text(
@@ -547,7 +546,9 @@ impl ShioriGui {
 
     /// Move the selection to the next/previous selectable phrase group.
     fn navigate_selection(&mut self, delta: isize) {
-        let Some(reader) = self.reader.as_ref() else { return };
+        let Some(reader) = self.reader.as_ref() else {
+            return;
+        };
         // Ordered list of (sentence, group, first-token) for every group
         // that contains Japanese.
         let mut selectable: Vec<(usize, usize, usize)> = Vec::new();
@@ -600,8 +601,12 @@ impl ShioriGui {
     /// Select the phrase group containing a clicked token and load the
     /// panel for that token's word.
     fn select_token(&mut self, s_idx: usize, t_idx: usize) {
-        let Some(reader) = self.reader.as_ref() else { return };
-        let Some(g_idx) = reader.group_of(s_idx, t_idx) else { return };
+        let Some(reader) = self.reader.as_ref() else {
+            return;
+        };
+        let Some(g_idx) = reader.group_of(s_idx, t_idx) else {
+            return;
+        };
         let (start, end) = reader.groups[s_idx][g_idx];
         let view = &reader.sentences[s_idx];
 
@@ -707,11 +712,8 @@ impl ShioriGui {
                     ui.add_space(6.0);
                     ui.separator();
                     ui.label(
-                        egui::RichText::new(format!(
-                            "component: {}",
-                            panel.word.key.lemma
-                        ))
-                        .strong(),
+                        egui::RichText::new(format!("component: {}", panel.word.key.lemma))
+                            .strong(),
                     );
                 } else {
                     ruby_headword(ui, &panel.word.key.lemma, &panel.word.key.reading);
@@ -780,20 +782,14 @@ impl ShioriGui {
                                 for reg in &profile.registers {
                                     ui.label(
                                         egui::RichText::new(reg.label()).small().background_color(
-                                            egui::Color32::from_rgba_unmultiplied(
-                                                200, 120, 60, 70,
-                                            ),
+                                            egui::Color32::from_rgba_unmultiplied(200, 120, 60, 70),
                                         ),
                                     );
                                 }
                                 for note in &profile.notes {
-                                    ui.label(
-                                        egui::RichText::new(note).small().background_color(
-                                            egui::Color32::from_rgba_unmultiplied(
-                                                100, 140, 100, 60,
-                                            ),
-                                        ),
-                                    );
+                                    ui.label(egui::RichText::new(note).small().background_color(
+                                        egui::Color32::from_rgba_unmultiplied(100, 140, 100, 60),
+                                    ));
                                 }
                             });
                             ui.add_space(4.0);
@@ -868,8 +864,7 @@ impl ShioriGui {
                     {
                         action = Some(WordAction::Ignore(panel.word.id));
                     }
-                    if panel.word.status != KnowledgeStatus::Unknown
-                        && ui.button("Reset").clicked()
+                    if panel.word.status != KnowledgeStatus::Unknown && ui.button("Reset").clicked()
                     {
                         action = Some(WordAction::Reset(panel.word.id));
                     }
@@ -971,7 +966,11 @@ fn ruby_headword(ui: &mut egui::Ui, lemma: &str, reading: &str) {
     let seg_widths: Vec<f32> = big_galleys
         .iter()
         .zip(&furi_galleys)
-        .map(|(b, f)| b.size().x.max(f.as_ref().map(|f| f.size().x).unwrap_or(0.0)))
+        .map(|(b, f)| {
+            b.size()
+                .x
+                .max(f.as_ref().map(|f| f.size().x).unwrap_or(0.0))
+        })
         .collect();
     let total_width: f32 = seg_widths.iter().sum();
 
@@ -999,14 +998,20 @@ mod tests {
     #[test]
     fn plain_word_gets_its_whole_reading() {
         assert_eq!(token_furigana("猫", "猫", "ネコ"), Some("ねこ".into()));
-        assert_eq!(token_furigana("日本語", "日本語", "ニホンゴ"), Some("にほんご".into()));
+        assert_eq!(
+            token_furigana("日本語", "日本語", "ニホンゴ"),
+            Some("にほんご".into())
+        );
     }
 
     #[test]
     fn conjugated_stem_keeps_kanji_reading_only() {
         // 走っ (from 走る・はしる): ruby segments are 走(はし) + る; the
         // surface diverges after the kanji, so only はし survives.
-        assert_eq!(token_furigana("走っ", "走る", "ハシル"), Some("はし".into()));
+        assert_eq!(
+            token_furigana("走っ", "走る", "ハシル"),
+            Some("はし".into())
+        );
     }
 
     #[test]

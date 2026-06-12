@@ -88,11 +88,7 @@ impl Explainer for AnthropicExplainer {
         self.complete(&build_feedback_prompt(prompt, user_text))
     }
 
-    fn chat(
-        &self,
-        system: &str,
-        history: &[crate::ChatMessage],
-    ) -> Result<String, LlmError> {
+    fn chat(&self, system: &str, history: &[crate::ChatMessage]) -> Result<String, LlmError> {
         let messages: Vec<serde_json::Value> = history
             .iter()
             .map(|m| serde_json::json!({"role": m.role.as_str(), "content": m.content}))

@@ -42,7 +42,12 @@ impl ShioriGui {
                 self.refresh_caches();
                 // Refresh the panel's status line.
                 let reload = self.production.panel.as_ref().map(|p| {
-                    (p.word.id, p.phrase.clone(), p.inflection.clone(), p.compound.is_some())
+                    (
+                        p.word.id,
+                        p.phrase.clone(),
+                        p.inflection.clone(),
+                        p.compound.is_some(),
+                    )
                 });
                 if let Some((word_id, phrase, inflection, had_compound)) = reload {
                     self.production.panel =
@@ -140,7 +145,9 @@ impl ShioriGui {
                 egui::ScrollArea::vertical()
                     .auto_shrink([false; 2])
                     .show(ui, |ui| {
-                        let Some(panel) = &self.production.panel else { return };
+                        let Some(panel) = &self.production.panel else {
+                            return;
+                        };
                         ui.add_space(6.0);
                         ui.horizontal(|ui| {
                             ui.heading(&panel.word.key.lemma);
@@ -257,8 +264,8 @@ impl ShioriGui {
                     send = true;
                 }
                 ui.vertical(|ui| {
-                    let can_send = !self.production.waiting
-                        && !self.production.input.trim().is_empty();
+                    let can_send =
+                        !self.production.waiting && !self.production.input.trim().is_empty();
                     if ui
                         .add_enabled(can_send, egui::Button::new("Send ➤"))
                         .clicked()
@@ -348,9 +355,7 @@ impl ShioriGui {
                                 .inner_margin(egui::Margin::symmetric(10, 8))
                                 .show(ui, |ui| {
                                     ui.set_max_width(max_bubble);
-                                    if let Some(c) =
-                                        chat_message_body(ui, message, m_idx)
-                                    {
+                                    if let Some(c) = chat_message_body(ui, message, m_idx) {
                                         clicked = Some(c);
                                     }
                                 });
@@ -370,9 +375,15 @@ impl ShioriGui {
 
     /// Resolve a clicked phrase group to a word panel + write-up note.
     fn select_chat_word(&mut self, m_idx: usize, s_idx: usize, g_idx: usize) {
-        let Some(message) = self.production.messages.get(m_idx) else { return };
-        let Some((tokens, groups)) = message.sentences.get(s_idx) else { return };
-        let Some(&(start, end)) = groups.get(g_idx) else { return };
+        let Some(message) = self.production.messages.get(m_idx) else {
+            return;
+        };
+        let Some((tokens, groups)) = message.sentences.get(s_idx) else {
+            return;
+        };
+        let Some(&(start, end)) = groups.get(g_idx) else {
+            return;
+        };
         let group: Vec<shiori_core::Token> =
             tokens[start..end].iter().map(|r| r.token.clone()).collect();
         if group.is_empty() {
@@ -404,7 +415,9 @@ impl ShioriGui {
             .find(|a| a.start < phrase_end && phrase_start < a.end)
             .map(|a| a.note.clone());
 
-        let Some(word) = self.with_app(|app| app.ensure_word(&key)) else { return };
+        let Some(word) = self.with_app(|app| app.ensure_word(&key)) else {
+            return;
+        };
         self.production.panel = self.load_word_panel(word.id, phrase, inflection, try_compound);
         self.production.panel_note = note;
     }
@@ -460,9 +473,7 @@ fn chat_message_body(
                 if japanese {
                     let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
                     if response.clicked() {
-                        let group = groups
-                            .iter()
-                            .position(|(s, e)| (*s..*e).contains(&t_idx));
+                        let group = groups.iter().position(|(s, e)| (*s..*e).contains(&t_idx));
                         if let Some(g_idx) = group {
                             clicked = Some((m_idx, s_idx, g_idx));
                         }

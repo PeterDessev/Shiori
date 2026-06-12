@@ -182,9 +182,8 @@ pub fn write_apkg(path: &Path, deck_name: &str, notes: &[AnkiNote]) -> Result<()
 
         let tx = conn.unchecked_transaction()?;
         {
-            let mut insert_note = tx.prepare(
-                "INSERT INTO notes VALUES (?1, ?2, ?3, ?4, -1, '  ', ?5, ?6, 0, 0, '')",
-            )?;
+            let mut insert_note = tx
+                .prepare("INSERT INTO notes VALUES (?1, ?2, ?3, ?4, -1, '  ', ?5, ?6, 0, 0, '')")?;
             let mut insert_card = tx.prepare(
                 "INSERT INTO cards VALUES (?1, ?2, ?3, 0, ?4, -1, ?5, ?6, ?7, ?8, ?9,
                  ?10, ?11, 0, 0, 0, 0, '')",
@@ -206,15 +205,23 @@ pub fn write_apkg(path: &Path, deck_name: &str, notes: &[AnkiNote]) -> Result<()
                     Some(s) => {
                         let due = today_from_crt + s.due_in_days.max(0);
                         insert_card.execute(params![
-                            card_id, note_id, DECK_ID, now_s,
-                            2i64, 2i64, due,
-                            s.interval_days, s.factor.max(1300), s.reps, s.lapses
+                            card_id,
+                            note_id,
+                            DECK_ID,
+                            now_s,
+                            2i64,
+                            2i64,
+                            due,
+                            s.interval_days,
+                            s.factor.max(1300),
+                            s.reps,
+                            s.lapses
                         ])?;
                     }
                     None => {
                         insert_card.execute(params![
-                            card_id, note_id, DECK_ID, now_s,
-                            0i64, 0i64, i as i64, 0i64, 0i64, 0i64, 0i64
+                            card_id, note_id, DECK_ID, now_s, 0i64, 0i64, i as i64, 0i64, 0i64,
+                            0i64, 0i64
                         ])?;
                     }
                 }
@@ -230,7 +237,8 @@ pub fn write_apkg(path: &Path, deck_name: &str, notes: &[AnkiNote]) -> Result<()
     let mut zip = zip::ZipWriter::new(file);
     let options = zip::write::SimpleFileOptions::default()
         .compression_method(zip::CompressionMethod::Deflated);
-    zip.start_file("collection.anki2", options).map_err(zip_err)?;
+    zip.start_file("collection.anki2", options)
+        .map_err(zip_err)?;
     zip.write_all(&db_bytes).map_err(io_err)?;
     zip.start_file("media", options).map_err(zip_err)?;
     zip.write_all(b"{}").map_err(io_err)?;
@@ -244,7 +252,10 @@ pub fn read_apkg(path: &Path) -> Result<Vec<ImportedNote>> {
     let mut archive = zip::ZipArchive::new(file).map_err(zip_err)?;
 
     let names: Vec<String> = archive.file_names().map(String::from).collect();
-    if names.iter().any(|n| n == "meta" || n == "collection.anki21b") {
+    if names
+        .iter()
+        .any(|n| n == "meta" || n == "collection.anki21b")
+    {
         return Err(DbError::NotFound(
             "this .apkg uses Anki's newer format; re-export it with \
              \"Support older Anki versions\" checked",
@@ -274,10 +285,7 @@ pub fn read_apkg(path: &Path) -> Result<Vec<ImportedNote>> {
 }
 
 fn read_collection(db_path: &Path) -> Result<Vec<ImportedNote>> {
-    let conn = Connection::open_with_flags(
-        db_path,
-        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
-    )?;
+    let conn = Connection::open_with_flags(db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
     let crt: i64 = conn.query_row("SELECT crt FROM col", [], |r| r.get(0))?;
     let today_from_crt = (chrono::Utc::now().timestamp() - crt) / 86_400;
 

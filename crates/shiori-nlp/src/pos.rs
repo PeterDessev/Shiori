@@ -47,7 +47,10 @@ mod tests {
         assert_eq!(map_pos("名詞", "固有名詞"), PartOfSpeech::ProperNoun);
         assert_eq!(map_pos("名詞", "代名詞"), PartOfSpeech::Pronoun);
         assert_eq!(map_pos("名詞", "数"), PartOfSpeech::Number);
-        assert_eq!(map_pos("名詞", "形容動詞語幹"), PartOfSpeech::AdjectivalNoun);
+        assert_eq!(
+            map_pos("名詞", "形容動詞語幹"),
+            PartOfSpeech::AdjectivalNoun
+        );
         assert_eq!(map_pos("名詞", "非自立"), PartOfSpeech::DependentNoun);
         assert_eq!(map_pos("動詞", "自立"), PartOfSpeech::Verb);
         assert_eq!(map_pos("動詞", "非自立"), PartOfSpeech::AuxiliaryVerb);

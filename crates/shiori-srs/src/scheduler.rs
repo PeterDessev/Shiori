@@ -167,8 +167,16 @@ impl Scheduler {
 
     /// Stability after a successful review (Hard/Good/Easy).
     fn recall_stability(&self, s: f64, d: f64, r: f64, rating: Rating) -> f64 {
-        let hard_penalty = if rating == Rating::Hard { self.w(15) } else { 1.0 };
-        let easy_bonus = if rating == Rating::Easy { self.w(16) } else { 1.0 };
+        let hard_penalty = if rating == Rating::Hard {
+            self.w(15)
+        } else {
+            1.0
+        };
+        let easy_bonus = if rating == Rating::Easy {
+            self.w(16)
+        } else {
+            1.0
+        };
         let s = s.max(MIN_STABILITY);
         let growth = self.w(8).exp()
             * (11.0 - d)

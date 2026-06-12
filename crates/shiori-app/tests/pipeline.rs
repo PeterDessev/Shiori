@@ -102,9 +102,10 @@ fn mining_ranks_and_filters() {
     let candidates = app.mining_candidates(doc).unwrap();
 
     // Function words (が, を, は, ました…) must never appear.
-    assert!(candidates
-        .iter()
-        .all(|c| c.word.key.pos.is_content_word()), "{candidates:?}");
+    assert!(
+        candidates.iter().all(|c| c.word.key.pos.is_content_word()),
+        "{candidates:?}"
+    );
 
     // 猫 (2 occurrences, corpus rank 4) should beat 魚 (1 occurrence,
     // unlisted).
@@ -179,7 +180,9 @@ fn full_srs_cycle_updates_knowledge() {
         .all(|c| c.word.key.lemma != "猫"));
 
     // Answering a card that does not exist is an error, not a panic.
-    assert!(app.answer_review(shiori_core::WordId(99999), Rating::Good).is_err());
+    assert!(app
+        .answer_review(shiori_core::WordId(99999), Rating::Good)
+        .is_err());
 }
 
 #[test]
@@ -194,8 +197,14 @@ fn marking_known_and_ignored_moves_stats() {
 
     // Mark 猫 known and 魚 ignored.
     let candidates = app.mining_candidates(doc).unwrap();
-    let neko = candidates.iter().find(|c| c.word.key.lemma == "猫").unwrap();
-    let sakana = candidates.iter().find(|c| c.word.key.lemma == "魚").unwrap();
+    let neko = candidates
+        .iter()
+        .find(|c| c.word.key.lemma == "猫")
+        .unwrap();
+    let sakana = candidates
+        .iter()
+        .find(|c| c.word.key.lemma == "魚")
+        .unwrap();
     app.mark_known(neko.word.id).unwrap();
     app.ignore_word(sakana.word.id).unwrap();
 
@@ -217,7 +226,10 @@ fn forgotten_words_reenter_rotation() {
     let app = app();
     let doc = app.import_text("テスト", TEXT).unwrap();
     let candidates = app.mining_candidates(doc).unwrap();
-    let neko = candidates.iter().find(|c| c.word.key.lemma == "猫").unwrap();
+    let neko = candidates
+        .iter()
+        .find(|c| c.word.key.lemma == "猫")
+        .unwrap();
     let (word_id, sentence_id) = (neko.word.id, neko.sentence.id);
 
     // Learn it, answer until it is well known, then mark it known.
@@ -239,7 +251,11 @@ fn forgotten_words_reenter_rotation() {
     assert_eq!(app.due_count().unwrap(), 1);
     let queue = app.due_reviews(10).unwrap();
     assert_eq!(queue[0].word.id, word_id);
-    assert_eq!(queue[0].card.state, CardState::New, "fresh card, not the old one");
+    assert_eq!(
+        queue[0].card.state,
+        CardState::New,
+        "fresh card, not the old one"
+    );
     assert!(queue[0].sentence.is_some(), "context sentence preserved");
 }
 
@@ -249,7 +265,9 @@ fn recommendations_prefer_sweet_spot() {
     // Document A: will be made ~fully known (comfortable).
     let doc_a = app.import_text("A", "猫は空を見た。").unwrap();
     // Document B: completely unknown (too hard).
-    let doc_b = app.import_text("B", "猫が魚を食べました。空は青い。").unwrap();
+    let doc_b = app
+        .import_text("B", "猫が魚を食べました。空は青い。")
+        .unwrap();
 
     // Make everything in A known.
     for w in app.db().document_words(doc_a).unwrap() {
@@ -264,10 +282,7 @@ fn recommendations_prefer_sweet_spot() {
     assert_eq!(recs[0].summary.document.id, doc_a);
     assert_eq!(recs[1].summary.document.id, doc_b);
     assert!(recs[0].score < recs[1].score);
-    assert_eq!(
-        recs[1].stats.band,
-        shiori_app::DifficultyBand::TooHard
-    );
+    assert_eq!(recs[1].stats.band, shiori_app::DifficultyBand::TooHard);
 }
 
 #[test]
