@@ -1,0 +1,26 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: Windows release
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --release -p shiori-gui
+      - name: Package
+        run: Compress-Archive -Path target/release/shiori.exe -DestinationPath shiori-${{ github.ref_name }}-windows-x86_64.zip
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: shiori-${{ github.ref_name }}-windows-x86_64.zip
+          generate_release_notes: true
