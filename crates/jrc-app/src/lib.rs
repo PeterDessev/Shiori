@@ -14,6 +14,7 @@ mod ingest;
 mod mining;
 mod review;
 mod sessions;
+mod sources;
 mod stats;
 
 pub use chat::ChatTokenRow;
@@ -22,6 +23,7 @@ pub use dictionary::{DictSearchHit, DictSearchResults};
 pub use finish::{SweepCandidate, SweepPlan};
 pub use mining::MiningCandidate;
 pub use review::ReviewItem;
+pub use sources::{AozoraWork, WikisourceHit};
 pub use stats::{DifficultyBand, DocStats, Recommendation};
 
 use std::path::{Path, PathBuf};

@@ -2310,6 +2310,7 @@ name = "jrc-app"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "csv",
  "encoding_rs",
  "epub",
  "jrc-core",
@@ -2320,6 +2321,7 @@ dependencies = [
  "pdf-extract",
  "serde_json",
  "thiserror 2.0.18",
+ "ureq",
  "zip 2.4.2",
 ]
 

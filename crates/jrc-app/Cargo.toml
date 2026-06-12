@@ -18,6 +18,9 @@ serde_json.workspace = true
 epub = "2"
 pdf-extract = "0.10"
 encoding_rs = "0.8"
+ureq = { version = "2", features = ["json"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+csv = "1.4"
 
 [dev-dependencies]
 zip = "2"

@@ -7,6 +7,7 @@ mod reader;
 mod review;
 mod settings;
 mod setup;
+mod sources;
 mod stats;
 mod welcome;
 

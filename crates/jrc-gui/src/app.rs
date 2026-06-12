@@ -28,6 +28,8 @@ pub enum Msg {
     OllamaProbe(Result<(String, Vec<jrc_llm::OllamaModel>), String>),
     OllamaPullProgress(String, Option<f32>),
     OllamaPullDone(Result<(), String>),
+    AozoraCatalog(Result<Vec<jrc_app::AozoraWork>, String>),
+    WikisourceResults(Result<Vec<jrc_app::WikisourceHit>, String>),
 }
 
 /// Startup/data lifecycle.
@@ -46,6 +48,7 @@ pub enum View {
     Reader,
     Review,
     Dictionary,
+    Sources,
     Stats,
     Production,
     Settings,
@@ -193,6 +196,24 @@ pub struct DictionaryState {
     pub results: jrc_app::DictSearchResults,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SourceTab {
+    #[default]
+    Aozora,
+    Wikisource,
+}
+
+#[derive(Default)]
+pub struct SourcesState {
+    pub query: String,
+    pub tab: SourceTab,
+    /// Parsed Aozora catalog (public-domain, importable works).
+    pub catalog: Option<Vec<jrc_app::AozoraWork>>,
+    pub catalog_loading: bool,
+    pub ws_results: Vec<jrc_app::WikisourceHit>,
+    pub ws_searching: bool,
+}
+
 /// One chat message prepared for display.
 pub struct ChatMessageView {
     pub id: i64,
@@ -241,6 +262,12 @@ pub struct SweepState {
     /// Inclusion checkbox per `plan.to_known` entry; suspicious words
     /// default to excluded.
     pub include: Vec<bool>,
+}
+
+/// One queued source-import job.
+pub enum SourceImport {
+    Aozora(jrc_app::AozoraWork),
+    Wikisource(String),
 }
 
 /// Press-to-record state for one shortcut binding. The combo is
@@ -293,6 +320,7 @@ pub struct JrcGui {
     pub reader: Option<ReaderState>,
     pub review: ReviewState,
     pub dictionary: DictionaryState,
+    pub sources: SourcesState,
     pub production: ProductionState,
     pub data_status: Option<DataStatus>,
     pub data_dir: PathBuf,
@@ -388,6 +416,7 @@ impl JrcGui {
             reader: None,
             review: ReviewState::default(),
             dictionary: DictionaryState::default(),
+            sources: SourcesState::default(),
             production: ProductionState::default(),
             data_status: None,
             data_dir,
@@ -538,7 +567,7 @@ impl JrcGui {
         }
     }
 
-    fn handle_messages(&mut self) {
+    fn handle_messages(&mut self, ctx: &egui::Context) {
         while let Ok(msg) = self.rx.try_recv() {
             match msg {
                 Msg::AppOpened(Ok(app)) => {
@@ -552,6 +581,9 @@ impl JrcGui {
                     if self.phase == Phase::Ready {
                         self.refresh_caches();
                     }
+                    // Fetch/refresh the Aozora catalog in the background;
+                    // offline falls back to the cached copy.
+                    self.start_catalog_load(ctx, false);
                 }
                 Msg::AppOpened(Err(e)) => {
                     self.error = Some(format!("failed to start: {e}"));
@@ -594,6 +626,22 @@ impl JrcGui {
                 Msg::OllamaProbe(result) => {
                     self.ollama_probing = false;
                     self.ollama_probe = Some(result);
+                }
+                Msg::AozoraCatalog(result) => {
+                    self.sources.catalog_loading = false;
+                    match result {
+                        Ok(works) => self.sources.catalog = Some(works),
+                        // Offline or fetch failure: not an error toast —
+                        // the sources view explains and offers reload.
+                        Err(e) => eprintln!("aozora catalog unavailable: {e}"),
+                    }
+                }
+                Msg::WikisourceResults(result) => {
+                    self.sources.ws_searching = false;
+                    match result {
+                        Ok(hits) => self.sources.ws_results = hits,
+                        Err(e) => self.error = Some(e),
+                    }
                 }
                 Msg::OllamaPullProgress(status, frac) => {
                     self.ollama_pull = Some((status, frac));
@@ -856,6 +904,71 @@ impl JrcGui {
         }
     }
 
+    /// Load (or force-reload) the Aozora catalog in the background.
+    pub fn start_catalog_load(&mut self, ctx: &egui::Context, force: bool) {
+        if self.sources.catalog_loading {
+            return;
+        }
+        let Some(app) = self.app.clone() else { return };
+        self.sources.catalog_loading = true;
+        let tx = self.tx.clone();
+        let ctx = ctx.clone();
+        std::thread::spawn(move || {
+            let result = match app.lock() {
+                Ok(guard) => guard
+                    .ensure_aozora_catalog(force)
+                    .and_then(|path| guard.load_aozora_catalog(&path))
+                    .map_err(|e| e.to_string()),
+                Err(_) => Err("app lock poisoned".into()),
+            };
+            let _ = tx.send(Msg::AozoraCatalog(result));
+            ctx.request_repaint();
+        });
+    }
+
+    /// Search Japanese Wikisource in the background.
+    pub fn start_wikisource_search(&mut self, ctx: &egui::Context) {
+        if self.sources.ws_searching || self.sources.query.trim().is_empty() {
+            return;
+        }
+        let Some(app) = self.app.clone() else { return };
+        self.sources.ws_searching = true;
+        let query = self.sources.query.clone();
+        let tx = self.tx.clone();
+        let ctx = ctx.clone();
+        std::thread::spawn(move || {
+            let result = match app.lock() {
+                Ok(guard) => guard.search_wikisource(&query).map_err(|e| e.to_string()),
+                Err(_) => Err("app lock poisoned".into()),
+            };
+            let _ = tx.send(Msg::WikisourceResults(result));
+            ctx.request_repaint();
+        });
+    }
+
+    /// Download and import one work from a source in the background.
+    pub fn start_source_import(&mut self, ctx: &egui::Context, job: SourceImport) {
+        let Some(app) = self.app.clone() else { return };
+        self.import_jobs += 1;
+        let tx = self.tx.clone();
+        let ctx = ctx.clone();
+        std::thread::spawn(move || {
+            let result = match app.lock() {
+                Ok(guard) => match &job {
+                    SourceImport::Aozora(work) => {
+                        guard.import_aozora_work(work).map_err(|e| e.to_string())
+                    }
+                    SourceImport::Wikisource(title) => guard
+                        .import_wikisource_page(title)
+                        .map_err(|e| e.to_string()),
+                },
+                Err(_) => Err("app lock poisoned".into()),
+            };
+            let _ = tx.send(Msg::ImportDone(result));
+            ctx.request_repaint();
+        });
+    }
+
     /// Jump to the dictionary view with a query (e.g. a kanji chip from
     /// the reader's word panel).
     pub fn open_dictionary(&mut self, query: String) {
@@ -1093,7 +1206,7 @@ impl eframe::App for JrcGui {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.apply_theme(ctx);
         self.apply_fonts(ctx);
-        self.handle_messages();
+        self.handle_messages(ctx);
 
         match self.phase {
             Phase::Starting => {
@@ -1149,6 +1262,7 @@ impl eframe::App for JrcGui {
             View::Reader => self.show_reader(ctx),
             View::Review => self.show_review(ctx),
             View::Dictionary => self.show_dictionary(ctx),
+            View::Sources => self.show_sources(ctx),
             View::Stats => self.show_stats(ctx),
             View::Production => self.show_production(ctx),
             View::Settings => self.show_settings(ctx),
@@ -1284,6 +1398,15 @@ impl JrcGui {
                         true,
                     ) {
                         nav = Some(View::Dictionary);
+                    }
+                    if item(
+                        ui,
+                        self.view == View::Sources,
+                        "🌐",
+                        "Find books online".into(),
+                        true,
+                    ) {
+                        nav = Some(View::Sources);
                     }
                     if item(ui, self.view == View::Stats, "📊", "Statistics".into(), true) {
                         nav = Some(View::Stats);
