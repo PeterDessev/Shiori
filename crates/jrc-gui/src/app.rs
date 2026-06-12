@@ -216,6 +216,8 @@ pub struct JrcGui {
     pub settings: Settings,
     /// Editable copy shown in the settings view (saved explicitly).
     pub settings_draft: Settings,
+    /// Which settings category page is open.
+    pub settings_category: crate::views::SettingsCategory,
     pub sort_key: SortKey,
     pub sort_asc: bool,
     /// Theme applied to the egui context (to detect setting changes).
@@ -277,6 +279,7 @@ impl JrcGui {
             data_dir,
             settings_draft: settings.clone(),
             settings,
+            settings_category: Default::default(),
             sort_key: SortKey::default(),
             sort_asc: true,
             applied_theme: None,

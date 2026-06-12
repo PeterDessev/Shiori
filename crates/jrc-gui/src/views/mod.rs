@@ -10,6 +10,8 @@ mod setup;
 mod stats;
 mod welcome;
 
+pub use settings::SettingsCategory;
+
 use eframe::egui;
 use eframe::egui::Color32;
 
