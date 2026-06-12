@@ -121,6 +121,32 @@ pub enum Theme {
     Sepia,
 }
 
+/// When the reader shows furigana over kanji words.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FuriganaMode {
+    /// Never.
+    None,
+    /// Over every word still at unknown status.
+    Unknown,
+    /// Over the first X instances (in document order, per book) of each
+    /// unknown word; later instances stand on their own.
+    UnknownFirstX,
+    /// Over everything containing kanji.
+    All,
+}
+
+impl FuriganaMode {
+    pub fn label(self) -> &'static str {
+        match self {
+            FuriganaMode::None => "None",
+            FuriganaMode::Unknown => "Unknown words",
+            FuriganaMode::UnknownFirstX => "Unknown words, first X instances",
+            FuriganaMode::All => "All words",
+        }
+    }
+}
+
 /// Which Japanese font renders the app's CJK text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -163,6 +189,9 @@ pub struct Settings {
     pub reader_font_size: f32,
     /// Multiplier on the reader's line and paragraph gaps.
     pub reader_line_spacing: f32,
+    pub furigana: FuriganaMode,
+    /// X for [`FuriganaMode::UnknownFirstX`].
+    pub furigana_first_x: u32,
     pub shortcuts: Shortcuts,
 }
 
@@ -177,6 +206,8 @@ impl Default for Settings {
             reader_font: ReaderFont::System,
             reader_font_size: 21.0,
             reader_line_spacing: 1.0,
+            furigana: FuriganaMode::None,
+            furigana_first_x: 3,
             shortcuts: Shortcuts::default(),
         }
     }

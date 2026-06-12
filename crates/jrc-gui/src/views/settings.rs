@@ -185,6 +185,31 @@ impl JrcGui {
             "The selected word is always highlighted; this adds a subtle tint \
              on unknown vocabulary as well.",
         );
+
+        ui.add_space(12.0);
+        ui.heading("Furigana");
+        for mode in [
+            crate::settings::FuriganaMode::None,
+            crate::settings::FuriganaMode::Unknown,
+            crate::settings::FuriganaMode::UnknownFirstX,
+            crate::settings::FuriganaMode::All,
+        ] {
+            ui.radio_value(&mut self.settings_draft.furigana, mode, mode.label());
+        }
+        ui.horizontal(|ui| {
+            ui.add_enabled(
+                self.settings_draft.furigana
+                    == crate::settings::FuriganaMode::UnknownFirstX,
+                egui::DragValue::new(&mut self.settings_draft.furigana_first_x)
+                    .range(1..=50)
+                    .prefix("X = "),
+            );
+            ui.weak("instances of each word, counted in reading order per book");
+        });
+        ui.weak(
+            "Readings anchor to specific occurrences in the book: the first X \
+             stay annotated no matter how you flip around, the rest never are.",
+        );
     }
 
     fn settings_review(&mut self, ui: &mut egui::Ui) {

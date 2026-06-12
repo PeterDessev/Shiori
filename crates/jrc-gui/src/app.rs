@@ -95,6 +95,11 @@ pub struct ReaderState {
     pub pending_restore: Option<usize>,
     /// Reading clock for this sitting.
     pub session: crate::session::SessionTracker,
+    /// Per sentence, per token: the 1-based occurrence index of that
+    /// token's word within this document, in reading order. Drives the
+    /// "first X instances" furigana mode; instance-anchored, so it never
+    /// changes however the user flips around.
+    pub word_occurrence: Vec<Vec<u32>>,
 }
 
 impl ReaderState {
@@ -136,6 +141,25 @@ fn paragraph_structure(sentences: &[SentenceView]) -> (Vec<(usize, usize)>, Vec<
         }
     }
     (ranges, of_sentence)
+}
+
+/// Number each token with its word's occurrence index (1-based) in
+/// document order.
+fn word_occurrences(sentences: &[SentenceView]) -> Vec<Vec<u32>> {
+    let mut counts: HashMap<i64, u32> = HashMap::new();
+    sentences
+        .iter()
+        .map(|view| {
+            view.tokens
+                .iter()
+                .map(|row| {
+                    let n = counts.entry(row.word_id.0).or_insert(0);
+                    *n += 1;
+                    *n
+                })
+                .collect()
+        })
+        .collect()
 }
 
 /// Compute phrase groups for each sentence.
@@ -364,7 +388,9 @@ impl JrcGui {
     pub fn apply_settings(&mut self) {
         let layout_changed = self.settings.reader_font_size
             != self.settings_draft.reader_font_size
-            || self.settings.reader_line_spacing != self.settings_draft.reader_line_spacing;
+            || self.settings.reader_line_spacing != self.settings_draft.reader_line_spacing
+            || self.settings.furigana != self.settings_draft.furigana
+            || self.settings.furigana_first_x != self.settings_draft.furigana_first_x;
         self.settings = self.settings_draft.clone();
         if let Err(e) = self.settings.save(&self.data_dir) {
             self.error = Some(format!("could not save settings: {e}"));
@@ -574,6 +600,7 @@ impl JrcGui {
             }
             let groups = compute_groups(&sentences);
             let (para_ranges, para_of_sentence) = paragraph_structure(&sentences);
+            let word_occurrence = word_occurrences(&sentences);
             let pending_restore =
                 (doc.last_sentence > 0).then_some(doc.last_sentence as usize);
             let velocity = app.reading_velocity_cps()?;
@@ -593,6 +620,7 @@ impl JrcGui {
                 token_widths: Vec::new(),
                 pending_restore,
                 session: crate::session::SessionTracker::new(velocity),
+                word_occurrence,
             })
         }) {
             self.reader = Some(state);
@@ -615,6 +643,7 @@ impl JrcGui {
         });
         if let (Some(reader), Some(sentences)) = (self.reader.as_mut(), refreshed) {
             reader.groups = compute_groups(&sentences);
+            reader.word_occurrence = word_occurrences(&sentences);
             reader.sentences = sentences;
         }
     }

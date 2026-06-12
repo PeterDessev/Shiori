@@ -45,8 +45,17 @@ impl JrcGui {
 
         let font_size = self.settings.reader_font_size.clamp(14.0, 40.0);
         let spacing_mult = self.settings.reader_line_spacing.clamp(0.6, 2.0);
-        let row_gap = ROW_GAP * spacing_mult;
-        let para_gap = PARA_GAP * spacing_mult;
+        let furigana_mode = self.settings.furigana;
+        let furigana_x = self.settings.furigana_first_x.max(1);
+        let furi_size = (font_size * 0.45).round();
+        // Headroom above every text row for ruby text, when enabled.
+        let furi_gap = if furigana_mode == crate::settings::FuriganaMode::None {
+            0.0
+        } else {
+            furi_size + 3.0
+        };
+        let row_gap = ROW_GAP * spacing_mult + furi_gap;
+        let para_gap = PARA_GAP * spacing_mult + furi_gap;
 
         // ---- reading clock & away handling ----
         // While paused (or just resuming), all reader input is swallowed.
@@ -306,7 +315,9 @@ impl JrcGui {
                         .copied()
                         .unwrap_or(0);
                     let wrap = (avail.x - 4.0).max(120.0);
-                    let budget = (avail.y - 8.0).max(140.0);
+                    // The first row of a page needs ruby headroom that no
+                    // preceding paragraph gap provides.
+                    let budget = (avail.y - 8.0 - furi_gap).max(140.0);
                     let mut starts = vec![0usize];
                     let mut acc = 0.0f32;
                     for (pi, (s0, s1)) in reader.para_ranges.iter().enumerate() {
@@ -354,6 +365,7 @@ impl JrcGui {
                 .copied()
                 .unwrap_or(reader.para_ranges.len());
 
+            ui.add_space(furi_gap);
             for (s0, s1) in &reader.para_ranges[para_begin..para_end] {
                 ui.horizontal_wrapped(|ui| {
                     ui.spacing_mut().item_spacing.x = 0.0;
@@ -406,6 +418,39 @@ impl JrcGui {
                                     bg_slot,
                                     egui::Shape::rect_filled(rect, 0.0, fill),
                                 );
+                            }
+                            let show_ruby = match furigana_mode {
+                                crate::settings::FuriganaMode::None => false,
+                                crate::settings::FuriganaMode::All => true,
+                                crate::settings::FuriganaMode::Unknown => {
+                                    row.status == KnowledgeStatus::Unknown
+                                }
+                                crate::settings::FuriganaMode::UnknownFirstX => {
+                                    row.status == KnowledgeStatus::Unknown
+                                        && reader
+                                            .word_occurrence
+                                            .get(si)
+                                            .and_then(|s| s.get(ti))
+                                            .is_some_and(|&n| n <= furigana_x)
+                                }
+                            };
+                            if show_ruby {
+                                if let Some(ruby) = token_furigana(
+                                    &row.token.surface,
+                                    &row.token.lemma,
+                                    &row.token.reading,
+                                ) {
+                                    ui.painter().text(
+                                        egui::pos2(
+                                            response.rect.center().x,
+                                            response.rect.top() - 1.0,
+                                        ),
+                                        egui::Align2::CENTER_BOTTOM,
+                                        ruby,
+                                        egui::FontId::proportional(furi_size),
+                                        ui.visuals().weak_text_color(),
+                                    );
+                                }
                             }
                             if japanese {
                                 let response =
@@ -808,6 +853,46 @@ impl JrcGui {
     }
 }
 
+/// The ruby text to draw over a token, if it deserves any.
+///
+/// Tokens store their word's lemma reading, not a surface reading. For
+/// unconjugated words those coincide. For a conjugated stem (走っ from
+/// 走る・はしる) the lemma's ruby segments are walked for as long as the
+/// surface still matches them, keeping the kanji-run furigana and
+/// dropping the okurigana the surface no longer has.
+fn token_furigana(surface: &str, lemma: &str, reading: &str) -> Option<String> {
+    if !jrc_nlp::kana::contains_kanji(surface) || reading.is_empty() {
+        return None;
+    }
+    let hira = jrc_nlp::kana::katakana_to_hiragana(reading);
+    if surface == lemma {
+        return Some(hira);
+    }
+    let surf: Vec<char> = surface.chars().collect();
+    let mut out = String::new();
+    let mut consumed = 0;
+    for seg in jrc_nlp::ruby_segments(lemma, &hira) {
+        let seg_chars: Vec<char> = seg.text.chars().collect();
+        if surf[consumed..].starts_with(&seg_chars[..]) {
+            consumed += seg_chars.len();
+            match &seg.furigana {
+                Some(f) => out.push_str(f),
+                None => out.push_str(&seg.text),
+            }
+            if consumed == surf.len() {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+    if out.is_empty() {
+        Some(hira)
+    } else {
+        Some(out)
+    }
+}
+
 /// Draw a headword with furigana positioned over the kanji run it reads,
 /// not clumped over the whole word: 食(た)べる, 引(ひ)き出(だ)し.
 fn ruby_headword(ui: &mut egui::Ui, lemma: &str, reading: &str) {
@@ -857,5 +942,34 @@ fn ruby_headword(ui: &mut egui::Ui, lemma: &str, reading: &str) {
         let bx = x + (width - big.size().x) / 2.0;
         painter.galley(egui::pos2(bx, rect.top() + furi_height), big, text_color);
         x += width;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::token_furigana;
+
+    #[test]
+    fn plain_word_gets_its_whole_reading() {
+        assert_eq!(token_furigana("猫", "猫", "ネコ"), Some("ねこ".into()));
+        assert_eq!(token_furigana("日本語", "日本語", "ニホンゴ"), Some("にほんご".into()));
+    }
+
+    #[test]
+    fn conjugated_stem_keeps_kanji_reading_only() {
+        // 走っ (from 走る・はしる): ruby segments are 走(はし) + る; the
+        // surface diverges after the kanji, so only はし survives.
+        assert_eq!(token_furigana("走っ", "走る", "ハシル"), Some("はし".into()));
+    }
+
+    #[test]
+    fn kana_tokens_get_nothing() {
+        assert_eq!(token_furigana("する", "する", "スル"), None);
+        assert_eq!(token_furigana("は", "は", "ハ"), None);
+    }
+
+    #[test]
+    fn missing_reading_gets_nothing() {
+        assert_eq!(token_furigana("猫", "猫", ""), None);
     }
 }
