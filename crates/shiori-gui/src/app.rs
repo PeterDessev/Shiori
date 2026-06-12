@@ -225,7 +225,7 @@ pub struct ChatMessageView {
     /// Write-up spans (byte offsets into content); user messages only.
     pub annotations: Vec<shiori_db::ChatAnnotationRow>,
     /// Per sentence: clickable tokens (absolute offsets) + phrase groups.
-    pub sentences: Vec<(Vec<shiori_app::ChatTokenRow>, Vec<(usize, usize)>)>,
+    pub sentences: Vec<shiori_app::ChatSentence>,
 }
 
 #[derive(Default)]

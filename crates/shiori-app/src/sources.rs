@@ -276,7 +276,7 @@ mod tests {
         // Build a tiny catalog zip in memory: header + 4 rows exercising
         // dedupe (translator row), copyright filter, and host filter.
         let header: Vec<String> = (0..55).map(|i| format!("c{i}")).collect();
-        let mut row = |id: &str, title: &str, role: &str, copyright: &str, url: &str| {
+        let row = |id: &str, title: &str, role: &str, copyright: &str, url: &str| {
             let mut fields = vec![String::new(); 55];
             fields[0] = id.into();
             fields[1] = title.into();

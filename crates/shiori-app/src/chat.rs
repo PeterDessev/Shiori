@@ -17,13 +17,13 @@ pub struct ChatTokenRow {
     pub word: Option<WordRow>,
 }
 
+/// One analyzed sentence of a chat message: its tokens (offsets made
+/// absolute into the whole message) and their phrase groups.
+pub type ChatSentence = (Vec<ChatTokenRow>, Vec<(usize, usize)>);
+
 impl App {
-    /// Tokenize a chat message for display: per sentence, the tokens
-    /// (offsets made absolute into `text`) and their phrase groups.
-    pub fn analyze_chat_text(
-        &self,
-        text: &str,
-    ) -> Result<Vec<(Vec<ChatTokenRow>, Vec<(usize, usize)>)>> {
+    /// Tokenize a chat message for display, sentence by sentence.
+    pub fn analyze_chat_text(&self, text: &str) -> Result<Vec<ChatSentence>> {
         let analyzed = self.analyzer().analyze(text)?;
         let mut out = Vec::new();
         // Sentences appear in order; walk a cursor to locate each one's

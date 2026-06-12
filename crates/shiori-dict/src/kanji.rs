@@ -154,13 +154,11 @@ pub fn parse_kanjidic2(xml: &str) -> Result<Vec<KanjiEntry>, DictError> {
                     // No m_lang attribute means English.
                     "meaning" if attr.is_none() => entry.meanings.push(text),
                     "nanori" => entry.nanori.push(text),
-                    "variant" => {
-                        if attr.as_deref() == Some("ucs") {
-                            if let Some(c) =
-                                u32::from_str_radix(&text, 16).ok().and_then(char::from_u32)
-                            {
-                                entry.variants.push(c.to_string());
-                            }
+                    "variant" if attr.as_deref() == Some("ucs") => {
+                        if let Some(c) =
+                            u32::from_str_radix(&text, 16).ok().and_then(char::from_u32)
+                        {
+                            entry.variants.push(c.to_string());
                         }
                     }
                     _ => {}

@@ -18,7 +18,7 @@ mod sources;
 mod stats;
 mod transfer;
 
-pub use chat::ChatTokenRow;
+pub use chat::{ChatSentence, ChatTokenRow};
 pub use data::DataStatus;
 pub use dictionary::{DictSearchHit, DictSearchResults};
 pub use finish::{SweepCandidate, SweepPlan};
