@@ -27,6 +27,9 @@ pub struct ReviewItem {
     pub prev_text: Option<String>,
     pub next_text: Option<String>,
     pub entry: Option<DictEntry>,
+    /// Other sentences in the library using this word (other documents
+    /// first), with their document titles.
+    pub examples: Vec<(Sentence, String)>,
 }
 
 impl App {
@@ -99,6 +102,12 @@ impl App {
                     .map(|n| n.text);
             }
             let entry = self.dictionary_entry_for(&word)?;
+            let examples = self.db.word_example_sentences(
+                row.word_id,
+                sentence.as_ref().map(|s| s.id),
+                sentence.as_ref().map(|s| s.document_id),
+                3,
+            )?;
             items.push(ReviewItem {
                 word,
                 card: row.card,
@@ -107,6 +116,7 @@ impl App {
                 prev_text,
                 next_text,
                 entry,
+                examples,
             });
         }
         Ok(items)

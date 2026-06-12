@@ -282,6 +282,44 @@ impl Db {
             })
     }
 
+    /// Up to `limit` sentences from across the library containing a word,
+    /// with their document titles. Sentences from documents other than
+    /// `home_document` come first (cross-book context beats repetition),
+    /// and the card's own sentence is excluded.
+    pub fn word_example_sentences(
+        &self,
+        word: WordId,
+        exclude: Option<SentenceId>,
+        home_document: Option<DocumentId>,
+        limit: u32,
+    ) -> Result<Vec<(Sentence, String)>> {
+        let mut stmt = self.conn().prepare(
+            "SELECT DISTINCT s.id, s.document_id, s.idx, s.paragraph, s.text, d.title
+             FROM tokens t
+             JOIN sentences s ON s.id = t.sentence_id
+             JOIN documents d ON d.id = s.document_id
+             WHERE t.word_id = ?1 AND s.id != COALESCE(?2, -1)
+             ORDER BY (s.document_id = COALESCE(?3, -1)), s.document_id, s.idx
+             LIMIT ?4",
+        )?;
+        let rows = stmt.query_map(
+            params![word.0, exclude.map(|s| s.0), home_document.map(|d| d.0), limit],
+            |r| {
+                Ok((
+                    Sentence {
+                        id: SentenceId(r.get(0)?),
+                        document_id: DocumentId(r.get(1)?),
+                        index: r.get::<_, i64>(2)? as u32,
+                        paragraph: r.get::<_, i64>(3)? as u32,
+                        text: r.get(4)?,
+                    },
+                    r.get(5)?,
+                ))
+            },
+        )?;
+        Ok(rows.collect::<std::result::Result<_, _>>()?)
+    }
+
     /// Tokens of a sentence in order, joined with word status.
     pub fn sentence_tokens(&self, sentence: SentenceId) -> Result<Vec<TokenRow>> {
         let mut stmt = self.conn().prepare(
@@ -441,6 +479,51 @@ pub(crate) mod tests {
         assert!(db
             .update_document_meta(DocumentId(999), &DocumentMeta::default())
             .is_err());
+    }
+
+    #[test]
+    fn word_examples_prefer_other_documents() {
+        let db = Db::open_in_memory().unwrap();
+        let doc1 = import_fixture(&db);
+        // A second document also containing 猫.
+        let doc2 = db
+            .import_document(
+                &DocumentMeta {
+                    title: "second".into(),
+                    ..Default::default()
+                },
+                "hash-2",
+                Utc::now(),
+                &[NewSentence {
+                    paragraph: 0,
+                    text: "猫も歩く。".into(),
+                    tokens: vec![
+                        tok("猫", "猫", "ねこ", PartOfSpeech::Noun, 0),
+                        tok("も", "も", "も", PartOfSpeech::Particle, 3),
+                        tok("歩く", "歩く", "あるく", PartOfSpeech::Verb, 6),
+                    ],
+                }],
+            )
+            .unwrap();
+
+        let s1 = db.sentences(doc1).unwrap();
+        let cat = db
+            .sentence_tokens(s1[0].id)
+            .unwrap()
+            .into_iter()
+            .find(|t| t.token.surface == "猫")
+            .unwrap();
+
+        // Excluding the card's own sentence, the other-document example
+        // ranks first even though it was imported later.
+        let examples = db
+            .word_example_sentences(cat.word_id, Some(s1[0].id), Some(doc1), 5)
+            .unwrap();
+        assert_eq!(examples.len(), 2);
+        assert_eq!(examples[0].1, "second");
+        assert_eq!(examples[0].0.document_id, doc2);
+        assert_eq!(examples[1].0.text, "その猫は走る。");
+        assert!(examples.iter().all(|(s, _)| s.id != s1[0].id));
     }
 
     #[test]

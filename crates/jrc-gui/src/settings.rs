@@ -192,6 +192,8 @@ pub struct Settings {
     pub furigana: FuriganaMode,
     /// X for [`FuriganaMode::UnknownFirstX`].
     pub furigana_first_x: u32,
+    /// Show example sentences from other books on review cards.
+    pub review_examples: bool,
     pub shortcuts: Shortcuts,
 }
 
@@ -208,6 +210,7 @@ impl Default for Settings {
             reader_line_spacing: 1.0,
             furigana: FuriganaMode::None,
             furigana_first_x: 3,
+            review_examples: true,
             shortcuts: Shortcuts::default(),
         }
     }

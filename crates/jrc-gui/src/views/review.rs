@@ -190,6 +190,21 @@ impl JrcGui {
                             ui.weak(labels.join(" · "));
                         }
                     }
+
+                    // The word elsewhere in the library, other books first.
+                    if self.settings.review_examples && !item.examples.is_empty() {
+                        ui.add_space(14.0);
+                        ui.label(
+                            egui::RichText::new("Elsewhere in your library")
+                                .small()
+                                .strong(),
+                        );
+                        for (sentence, title) in &item.examples {
+                            ui.add_space(4.0);
+                            ui.label(egui::RichText::new(&sentence.text).size(16.0));
+                            ui.weak(format!("— {title}"));
+                        }
+                    }
                 }
             });
         });

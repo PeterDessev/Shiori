@@ -214,7 +214,14 @@ impl JrcGui {
 
     fn settings_review(&mut self, ui: &mut egui::Ui) {
         ui.heading("Review");
-        ui.weak("Review options will appear here.");
+        ui.checkbox(
+            &mut self.settings_draft.review_examples,
+            "Show example sentences from other books on cards",
+        );
+        ui.weak(
+            "After revealing the answer, up to three other sentences from \
+             your library that use the word appear, other books first.",
+        );
     }
 
     fn settings_ai(&mut self, ui: &mut egui::Ui) {
