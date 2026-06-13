@@ -1,0 +1,19 @@
+# Zola configuration for the Shiori marketing + docs site.
+# Built and deployed to GitHub Pages by .github/workflows/site.yml.
+
+# Project-site base URL: https://<owner>.github.io/<repo>
+# NOTE: must match the GitHub Pages URL exactly, including the /Shiori subpath.
+base_url = "https://PeterDessev.github.io/Shiori"
+
+title = "Shiori（栞）"
+description = "Learn Japanese by actually reading Japanese — a Windows desktop reading companion built around comprehensible input."
+
+default_language = "en"
+compile_sass = false
+build_search_index = false
+generate_feeds = false
+
+[extra]
+github = "https://github.com/PeterDessev/Shiori"
+releases = "https://github.com/PeterDessev/Shiori/releases"
+issues = "https://github.com/PeterDessev/Shiori/issues"

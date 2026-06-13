@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}{{ config.title }}{% endblock title %}</title>
+  <meta name="description" content="{% block description %}{{ config.description }}{% endblock description %}" />
+  <link rel="icon" href="{{ get_url(path='favicon.ico') }}" />
+  <link rel="stylesheet" href="{{ get_url(path='style.css') }}" />
+  <meta property="og:title" content="{{ config.title }}" />
+  <meta property="og:description" content="{{ config.description }}" />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="{{ get_url(path='img/reader.png') }}" />
+  <meta name="twitter:card" content="summary_large_image" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="{{ get_url(path='/') }}">
+        <img src="{{ get_url(path='img/shiori-64.png') }}" alt="" width="26" height="26" />
+        <span>Shiori<span class="brand-kanji">栞</span></span>
+      </a>
+      <nav class="topnav">
+        <a href="{{ get_url(path='/') }}">Home</a>
+        <a href="{{ get_url(path='@/docs/_index.md') }}">Docs</a>
+        <a href="{{ config.extra.releases }}">Download</a>
+        <a class="ext" href="{{ config.extra.github }}">GitHub&nbsp;↗</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    {% block content %}{% endblock content %}
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <p>
+        <strong>Shiori（栞）</strong> — learn Japanese by reading.
+        Dual-licensed
+        <a href="{{ config.extra.github }}/blob/main/LICENSE-MIT">MIT</a> or
+        <a href="{{ config.extra.github }}/blob/main/LICENSE-APACHE">Apache-2.0</a>.
+      </p>
+      <p class="muted">
+        Shiori ships no dictionary data; it downloads everything on first run.
+        JMdict / KANJIDIC2 © <a href="https://www.edrdg.org/">EDRDG</a> (CC BY-SA),
+        KanjiVG © Ulrich Apel (CC BY-SA 3.0). Books from
+        <a href="https://www.aozora.gr.jp/">Aozora Bunko</a> and
+        <a href="https://ja.wikisource.org/">Japanese Wikisource</a>.
+      </p>
+    </div>
+  </footer>
+</body>
+</html>

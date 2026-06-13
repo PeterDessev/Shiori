@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page.title }} · {{ config.title }}{% endblock title %}
+{% block description %}{{ page.title }} — Shiori documentation.{% endblock description %}
+
+{% block content %}
+<div class="docs-layout">
+  {% set docs = get_section(path="docs/_index.md") %}
+  <aside class="docs-sidebar">
+    <p class="docs-side-title">Documentation</p>
+    <nav>
+      <a href="{{ docs.permalink }}" class="{% if docs.permalink == current_url %}active{% endif %}">Overview</a>
+      {% for p in docs.pages %}
+        <a href="{{ p.permalink }}" class="{% if p.permalink == current_url %}active{% endif %}">{{ p.title }}</a>
+      {% endfor %}
+    </nav>
+  </aside>
+  <article class="docs-content">
+    <h1>{{ page.title }}</h1>
+    {{ page.content | safe }}
+    <nav class="docs-prevnext">
+      {% if page.lower %}<a class="prev" href="{{ page.lower.permalink }}">←&nbsp;{{ page.lower.title }}</a>{% else %}<span></span>{% endif %}
+      {% if page.higher %}<a class="next" href="{{ page.higher.permalink }}">{{ page.higher.title }}&nbsp;→</a>{% endif %}
+    </nav>
+  </article>
+</div>
+{% endblock content %}

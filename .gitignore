@@ -6,3 +6,6 @@
 *.sqlite3-shm
 *.sqlite3-wal
 .claude-research/
+
+# Zola build output for the website
+/site/public

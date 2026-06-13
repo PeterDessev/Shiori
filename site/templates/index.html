@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero">
+  <img class="hero-icon" src="{{ get_url(path='img/shiori-128.png') }}" alt="Shiori" width="84" height="84" />
+  <h1>Learn Japanese by <em>actually reading</em> Japanese.</h1>
+  <p class="hero-sub">
+    Shiori（栞, &ldquo;bookmark&rdquo;）is a desktop reading companion built around
+    comprehensible input: the primary activity is reading real Japanese text, and
+    every other feature exists to support that.
+  </p>
+  <div class="cta-row">
+    <a class="btn btn-primary" href="{{ config.extra.releases }}">Download for Windows</a>
+    <a class="btn btn-ghost" href="{{ get_url(path='@/docs/getting-started.md') }}">Get started →</a>
+  </div>
+  <p class="hero-note">Free &amp; open source · Windows x86_64 · no accounts, no subscription, no cloud</p>
+  <img class="hero-shot" src="{{ get_url(path='img/reader-demo.gif') }}"
+       alt="Reading in Shiori: furigana over unknown words, one click for the dictionary panel, one keypress to learn a word"
+       loading="lazy" />
+</section>
+
+<section class="lede">
+  <p>
+    Import any book. Read it. Click the words you don&rsquo;t know — Shiori shows the
+    dictionary entry, the usage register, the conjugation explained piece by piece —
+    and one click later the word is in spaced repetition, anchored to the exact
+    sentence you found it in. The app tracks every word you&rsquo;ve ever met, grades
+    each book in your library against what you know, and tells you what to read next.
+  </p>
+</section>
+
+<section class="features">
+  <article class="feature">
+    <div class="feature-text">
+      <h2>A reader that knows what you don&rsquo;t</h2>
+      <p>
+        Furigana appears only over words you haven&rsquo;t learned — and in its strictest
+        mode, only over the first few occurrences of each word per book: scaffolding that
+        fades as you read deeper. Clicking a conjugated verb selects the whole phrase
+        (読んでいる, not 読) and explains the form component by component.
+      </p>
+      <p class="feature-aside">
+        The reading clock is honest, too: pages you flip through too fast don&rsquo;t count,
+        and the app pauses itself when you wander off.
+      </p>
+    </div>
+    <div class="feature-media">
+      <img src="{{ get_url(path='img/reader.png') }}" alt="The reader with instance-anchored furigana, unknown-word tinting, and the dictionary panel" loading="lazy" />
+    </div>
+  </article>
+
+  <article class="feature reverse">
+    <div class="feature-text">
+      <h2>Conversation practice that doesn&rsquo;t interrupt</h2>
+      <p>
+        Chat with a native-speaker persona that converses with you and
+        <strong>never corrects you mid-conversation</strong>. Instead, your messages come
+        back marked up like a paper: red underlines for grammar errors, orange for phrasing
+        a native wouldn&rsquo;t use, with the explanation one hover away.
+      </p>
+      <p class="feature-aside">
+        Bring your own brain: Anthropic&rsquo;s API, any local model through Ollama
+        (nothing leaves your machine), or any OpenAI-compatible endpoint.
+      </p>
+    </div>
+    <div class="feature-media">
+      <img src="{{ get_url(path='img/chat.png') }}" alt="Production chat: the partner converses while mistakes get paper-style underlines" loading="lazy" />
+    </div>
+  </article>
+
+  <article class="feature">
+    <div class="feature-text">
+      <h2>A dictionary with stroke order built in</h2>
+      <p>
+        Search JMdict by kanji, kana, or any word form. Every kanji in your query gets a
+        card — readings, meanings, school grade, and a numbered stroke-order diagram drawn
+        from KanjiVG data — and you can add any hit straight to spaced repetition.
+      </p>
+    </div>
+    <div class="feature-media">
+      <img src="{{ get_url(path='img/dictionary.png') }}" alt="Dictionary view: word entries with prefix matches and a kanji card with a numbered stroke-order diagram" loading="lazy" />
+    </div>
+  </article>
+
+  <article class="feature reverse">
+    <div class="feature-text">
+      <h2>Books from the internet, one click away</h2>
+      <p>
+        Search Aozora Bunko&rsquo;s 17,000+ public-domain works and Japanese Wikisource,
+        then import straight into your library — Shift_JIS, ruby markup and all.
+        Aozora&rsquo;s catalog is cached after the first fetch, so every search after that
+        runs locally and instantly.
+      </p>
+    </div>
+    <div class="feature-media">
+      <img src="{{ get_url(path='img/sources.png') }}" alt="Sources view searching the Aozora Bunko catalog" loading="lazy" />
+    </div>
+  </article>
+</section>
+
+<section class="showcase">
+  <h2>Numbers that tell you what to read next</h2>
+  <p class="showcase-sub">
+    Every book is graded against what you actually know, with coverage forecasts, reading
+    velocity, and a JLPT-graded comfortable reading level.
+  </p>
+  <div class="showcase-grid">
+    <figure>
+      <img src="{{ get_url(path='img/library.png') }}" alt="Library with the book info panel: coverage forecast, reading time, most useful unknown words" loading="lazy" />
+      <figcaption>Per-book analytics &amp; a finish-the-book vocabulary sweep.</figcaption>
+    </figure>
+    <figure>
+      <img src="{{ get_url(path='img/stats.png') }}" alt="Statistics: JLPT level grading, review forecast, reading calendar" loading="lazy" />
+      <figcaption>Velocity, retention, forecasts, and a reading calendar.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="everything">
+  <h2>Everything else</h2>
+  <div class="card-grid">
+    <div class="card">
+      <h3>FSRS spaced repetition</h3>
+      <p>Cards show the word inside the sentence you found it in, framed by its neighbors, plus examples from your other books.</p>
+    </div>
+    <div class="card">
+      <h3>Anki interop</h3>
+      <p>Export your cards with scheduling, or import an existing deck — SM-2 state seeds FSRS.</p>
+    </div>
+    <div class="card">
+      <h3>Four knowledge statuses</h3>
+      <p>Unknown / learning / known / ignored, so names and noise never pollute your stats.</p>
+    </div>
+    <div class="card">
+      <h3>Make it yours</h3>
+      <p>Dark / light / sepia themes, gothic or mincho Japanese fonts, rebindable shortcuts, adjustable typography.</p>
+    </div>
+    <div class="card">
+      <h3>Offline-first</h3>
+      <p>Everything but LLM calls and online search works with no network. One SQLite file, one-click backup &amp; restore.</p>
+    </div>
+    <div class="card">
+      <h3>Import anything</h3>
+      <p><code>.txt</code>, <code>.md</code>, <code>.html</code> (Aozora), <code>.epub</code>, <code>.pdf</code> — UTF-8 or Shift_JIS, by dialog or drag-and-drop.</p>
+    </div>
+  </div>
+</section>
+
+<section class="bottom-cta">
+  <h2>Ready to start reading?</h2>
+  <p>
+    Grab the latest <code>shiori-*-windows-x86_64.zip</code>, unzip, and run
+    <code>shiori.exe</code>. On first launch Shiori downloads its reference data
+    (~20&nbsp;MB) and you&rsquo;re reading.
+  </p>
+  <div class="cta-row">
+    <a class="btn btn-primary" href="{{ config.extra.releases }}">Download for Windows</a>
+    <a class="btn btn-ghost" href="{{ get_url(path='@/docs/_index.md') }}">Read the docs →</a>
+  </div>
+</section>
+{% endblock content %}

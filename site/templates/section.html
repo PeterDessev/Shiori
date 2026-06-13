@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}{{ section.title }} · {{ config.title }}{% endblock title %}
+{% block description %}Documentation for Shiori — {{ config.description }}{% endblock description %}
+
+{% block content %}
+<div class="docs-layout">
+  {% set docs = get_section(path="docs/_index.md") %}
+  <aside class="docs-sidebar">
+    <p class="docs-side-title">Documentation</p>
+    <nav>
+      <a href="{{ docs.permalink }}" class="{% if docs.permalink == current_url %}active{% endif %}">Overview</a>
+      {% for p in docs.pages %}
+        <a href="{{ p.permalink }}" class="{% if p.permalink == current_url %}active{% endif %}">{{ p.title }}</a>
+      {% endfor %}
+    </nav>
+  </aside>
+  <article class="docs-content">
+    <h1>{{ section.title }}</h1>
+    {{ section.content | safe }}
+  </article>
+</div>
+{% endblock content %}
