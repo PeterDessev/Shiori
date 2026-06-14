@@ -1,7 +1,16 @@
 //! Dictionary search: one query returns word entries and kanji cards.
+//!
+//! The search box accepts kanji, kana, and rōmaji (which is transliterated
+//! to kana first), and it understands conjugated input: a query like
+//! 食べました or `tabemashita` is reduced to its dictionary root 食べる so
+//! the root entry is found, and the conjugation itself is described.
 
+use std::collections::HashSet;
+
+use shiori_core::{PartOfSpeech, Sentence, WordId};
 use shiori_db::{KanjiRow, WordRow};
 use shiori_dict::DictEntry;
+use shiori_nlp::Inflection;
 
 use crate::{App, Result};
 
@@ -10,8 +19,27 @@ use crate::{App, Result};
 pub struct DictSearchHit {
     pub entry: DictEntry,
     /// The tracked word sharing the headword's lemma, if the user has
-    /// met it while reading (carries knowledge status).
+    /// met it while reading (carries knowledge status and an id for
+    /// pulling example sentences).
     pub word: Option<WordRow>,
+    /// JLPT level the word belongs to (5 = N5 easiest … 1 = N1), if listed.
+    pub jlpt: Option<u8>,
+}
+
+/// What the typed form *is*, when it is a conjugated or compounded unit:
+/// the dictionary root it reduces to and the grammar of its tail.
+#[derive(Debug, Clone)]
+pub struct QueryAnalysis {
+    /// The whole conjugated surface the analyzer recognized (e.g. 食べました).
+    pub surface: String,
+    /// Dictionary root the analyzer reduced it to (e.g. 食べる).
+    pub lemma: String,
+    /// Hiragana reading of the root.
+    pub reading: String,
+    /// Coarse part of speech of the root.
+    pub pos: PartOfSpeech,
+    /// Grammar of the tail after the stem (summary + per-component notes).
+    pub inflection: Inflection,
 }
 
 /// Everything one search query returns.
@@ -19,36 +47,53 @@ pub struct DictSearchHit {
 pub struct DictSearchResults {
     pub words: Vec<DictSearchHit>,
     pub kanji: Vec<KanjiRow>,
+    /// Set when the query was a conjugated/compounded form: explains it.
+    pub analysis: Option<QueryAnalysis>,
 }
 
 impl App {
-    /// Search the dictionary by Japanese text (exact and prefix forms),
-    /// and surface kanji cards for every kanji in the query — or, for a
-    /// kana query, in the top hits' headwords.
+    /// Search the dictionary by Japanese text or rōmaji.
+    ///
+    /// Rōmaji is transliterated to kana first; a conjugated query is also
+    /// reduced to its dictionary root so the root entry surfaces. Kanji
+    /// cards are pulled from every kanji in the (kana-normalized) query —
+    /// or, for an all-kana query, from the top hits' headwords.
     pub fn search_dictionary(&self, query: &str) -> Result<DictSearchResults> {
-        let query = query.trim();
-        if query.is_empty() {
+        let raw = query.trim();
+        if raw.is_empty() {
             return Ok(DictSearchResults::default());
         }
+        // rōmaji → kana; anything already Japanese is searched verbatim.
+        let search = shiori_nlp::romaji_to_kana(raw).unwrap_or_else(|| raw.to_string());
 
+        // Reduce a conjugated/compounded query to its dictionary root.
+        let analysis = self.analyze_query(&search);
+
+        let mut seen = HashSet::new();
         let mut words = Vec::new();
-        for seq in self.db().dict_search_seqs(query, 30)? {
-            let Some(json) = self.db().dict_entry_json(seq)? else {
-                continue;
-            };
-            let Ok(entry) = serde_json::from_str::<DictEntry>(&json) else {
-                continue;
-            };
-            let word = self
-                .db()
-                .words_by_lemma(entry.headword())?
-                .into_iter()
-                .next();
-            words.push(DictSearchHit { entry, word });
+
+        // Root-form entries first, so a conjugated query leads with the
+        // word it is a form of.
+        if let Some(a) = &analysis {
+            for seq in self.db().dict_lookup_seqs(&a.lemma)? {
+                if seen.insert(seq) {
+                    if let Some(hit) = self.build_hit(seq)? {
+                        words.push(hit);
+                    }
+                }
+            }
+        }
+        // Literal exact/prefix matches on the typed (kana-normalized) form.
+        for seq in self.db().dict_search_seqs(&search, 30)? {
+            if seen.insert(seq) {
+                if let Some(hit) = self.build_hit(seq)? {
+                    words.push(hit);
+                }
+            }
         }
 
         // Kanji cards: from the query itself, then from top headwords.
-        let mut seen = std::collections::HashSet::new();
+        let mut seen_kanji = HashSet::new();
         let mut kanji = Vec::new();
         let mut add_from = |text: &str, kanji: &mut Vec<KanjiRow>| -> Result<()> {
             for c in text.chars() {
@@ -56,7 +101,7 @@ impl App {
                     break;
                 }
                 let s = c.to_string();
-                if shiori_nlp::kana::contains_kanji(&s) && seen.insert(c) {
+                if shiori_nlp::kana::contains_kanji(&s) && seen_kanji.insert(c) {
                     if let Some(row) = self.db().kanji(&s)? {
                         kanji.push(row);
                     }
@@ -64,14 +109,78 @@ impl App {
             }
             Ok(())
         };
-        add_from(query, &mut kanji)?;
+        add_from(&search, &mut kanji)?;
         if kanji.is_empty() {
             for hit in words.iter().take(3) {
                 add_from(hit.entry.headword(), &mut kanji)?;
             }
         }
 
-        Ok(DictSearchResults { words, kanji })
+        Ok(DictSearchResults {
+            words,
+            kanji,
+            analysis,
+        })
+    }
+
+    /// Example sentences from the user's library that use a tracked word —
+    /// the contexts it appears in across imported books, i.e. the material
+    /// feeding the SRS. Empty until the word turns up in something read.
+    pub fn word_examples(&self, word_id: WordId, limit: u32) -> Result<Vec<(Sentence, String)>> {
+        Ok(self
+            .db()
+            .word_example_sentences(word_id, None, None, limit)?)
+    }
+
+    /// Build a search hit from a dictionary sequence id, resolving its
+    /// tracked word and JLPT level. Returns `None` for a missing or
+    /// corrupt entry.
+    fn build_hit(&self, seq: i64) -> Result<Option<DictSearchHit>> {
+        let Some(json) = self.db().dict_entry_json(seq)? else {
+            return Ok(None);
+        };
+        let Ok(entry) = serde_json::from_str::<DictEntry>(&json) else {
+            return Ok(None);
+        };
+        let word = self
+            .db()
+            .words_by_lemma(entry.headword())?
+            .into_iter()
+            .next();
+        let kanji = entry.kanji.first().map(|f| f.text.as_str()).unwrap_or("");
+        let jlpt = self.db().jlpt_level(kanji, entry.reading())?;
+        Ok(Some(DictSearchHit { entry, word, jlpt }))
+    }
+
+    /// If the query is a conjugated or compounded Japanese form, describe
+    /// it: its dictionary root and the grammar of its tail. Plain
+    /// dictionary forms (a bare noun, an unconjugated verb) return `None`.
+    fn analyze_query(&self, text: &str) -> Option<QueryAnalysis> {
+        if !shiori_nlp::kana::is_japanese(text) {
+            return None;
+        }
+        let tokens = self.analyzer().tokenize_sentence(text).ok()?;
+        let groups = shiori_nlp::phrase_groups(&tokens);
+        let &(start, end) = groups.first()?;
+        let group = &tokens[start..end];
+        let head = group.first()?;
+        if !head.pos.is_lexical() {
+            return None;
+        }
+        let surface: String = group.iter().map(|t| t.surface.as_str()).collect();
+        let inflection = shiori_nlp::analyze_inflection(group);
+        // Only worth surfacing when the typed form is not already the plain
+        // dictionary form (i.e. it is conjugated or compounded).
+        if inflection.is_plain() && surface == head.lemma {
+            return None;
+        }
+        Some(QueryAnalysis {
+            surface,
+            lemma: head.lemma.clone(),
+            reading: head.reading.clone(),
+            pos: head.pos,
+            inflection,
+        })
     }
 }
 
@@ -86,7 +195,7 @@ mod tests {
             std::env::temp_dir(),
         )
         .unwrap();
-        let entry_json = serde_json::json!({
+        let neko_json = serde_json::json!({
             "id": "1467640",
             "kanji": [{"common": true, "text": "猫", "tags": []}],
             "kana": [{"common": true, "text": "ねこ", "tags": [], "appliesToKanji": ["*"]}],
@@ -98,23 +207,53 @@ mod tests {
             }]
         })
         .to_string();
+        let taberu_json = serde_json::json!({
+            "id": "1358280",
+            "kanji": [{"common": true, "text": "食べる", "tags": []}],
+            "kana": [{"common": true, "text": "たべる", "tags": [], "appliesToKanji": ["*"]}],
+            "sense": [{
+                "partOfSpeech": ["v1", "vt"], "appliesToKanji": ["*"], "appliesToKana": ["*"],
+                "related": [], "antonym": [], "field": [], "dialect": [],
+                "misc": [], "info": [], "languageSource": [],
+                "gloss": [{"lang": "eng", "gender": null, "type": null, "text": "to eat"}]
+            }]
+        })
+        .to_string();
         app.db()
-            .import_dictionary(vec![(
-                1467640,
-                entry_json,
-                vec![
-                    DictFormRow {
-                        text: "猫".into(),
-                        is_kana: false,
-                        is_common: true,
-                    },
-                    DictFormRow {
-                        text: "ねこ".into(),
-                        is_kana: true,
-                        is_common: true,
-                    },
-                ],
-            )])
+            .import_dictionary(vec![
+                (
+                    1467640,
+                    neko_json,
+                    vec![
+                        DictFormRow {
+                            text: "猫".into(),
+                            is_kana: false,
+                            is_common: true,
+                        },
+                        DictFormRow {
+                            text: "ねこ".into(),
+                            is_kana: true,
+                            is_common: true,
+                        },
+                    ],
+                ),
+                (
+                    1358280,
+                    taberu_json,
+                    vec![
+                        DictFormRow {
+                            text: "食べる".into(),
+                            is_kana: false,
+                            is_common: true,
+                        },
+                        DictFormRow {
+                            text: "たべる".into(),
+                            is_kana: true,
+                            is_common: true,
+                        },
+                    ],
+                ),
+            ])
             .unwrap();
         app.db()
             .import_kanji(vec![shiori_db::KanjiRow {
@@ -131,6 +270,9 @@ mod tests {
                 strokes: vec![],
             }])
             .unwrap();
+        app.db()
+            .import_jlpt(vec![(5, "猫".into(), "ねこ".into())])
+            .unwrap();
         app
     }
 
@@ -140,6 +282,8 @@ mod tests {
         let results = app.search_dictionary("猫").unwrap();
         assert_eq!(results.words.len(), 1);
         assert_eq!(results.words[0].entry.headword(), "猫");
+        assert_eq!(results.words[0].jlpt, Some(5));
+        assert!(results.analysis.is_none(), "a bare noun is not conjugated");
         assert_eq!(results.kanji.len(), 1);
         assert_eq!(results.kanji[0].stroke_count, 11);
     }
@@ -152,6 +296,47 @@ mod tests {
         // The query has no kanji, so cards come from the hit's headword.
         assert_eq!(results.kanji.len(), 1);
         assert_eq!(results.kanji[0].literal, "猫");
+    }
+
+    #[test]
+    fn romaji_query_is_transliterated() {
+        let app = app_with_dict();
+        // Lower-case rōmaji → hiragana → finds the kana headword.
+        let results = app.search_dictionary("neko").unwrap();
+        assert_eq!(results.words.len(), 1);
+        assert_eq!(results.words[0].entry.headword(), "猫");
+    }
+
+    #[test]
+    fn conjugated_query_finds_root_and_is_analyzed() {
+        let app = app_with_dict();
+        // 食べました is not a dictionary form, but it must surface 食べる.
+        let results = app.search_dictionary("食べました").unwrap();
+        assert!(
+            results.words.iter().any(|h| h.entry.headword() == "食べる"),
+            "the dictionary root must be found"
+        );
+        let analysis = results.analysis.expect("conjugation should be analyzed");
+        assert_eq!(analysis.lemma, "食べる");
+        let summary = analysis.inflection.summary.expect("polite past summary");
+        assert!(summary.contains("ました"), "{summary}");
+    }
+
+    #[test]
+    fn conjugated_romaji_query_finds_root() {
+        let app = app_with_dict();
+        // rōmaji + conjugation together: tabemashita → たべました → 食べる.
+        // The all-kana form lemmatizes to the kana root たべる, which still
+        // resolves to the 食べる entry through its kana spelling.
+        let results = app.search_dictionary("tabemashita").unwrap();
+        assert!(results.words.iter().any(|h| h.entry.headword() == "食べる"));
+        let analysis = results.analysis.expect("conjugation should be analyzed");
+        assert_eq!(analysis.lemma, "たべる");
+        assert!(analysis
+            .inflection
+            .summary
+            .as_deref()
+            .is_some_and(|s| s.contains("ました")));
     }
 
     #[test]
