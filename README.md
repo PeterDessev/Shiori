@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/icon/shiori-128.png" alt="Shiori" width="96">
+<img src="assets/icon/display/rounded-256-light.png" alt="Shiori" width="96">
 
 # Shiori（栞）
 

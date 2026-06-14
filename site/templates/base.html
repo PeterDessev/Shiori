@@ -5,7 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{% block title %}{{ config.title }}{% endblock title %}</title>
   <meta name="description" content="{% block description %}{{ config.description }}{% endblock description %}" />
-  <link rel="icon" href="{{ get_url(path='favicon.ico') }}" />
+  <link rel="icon" href="{{ get_url(path='favicon.ico') }}" sizes="any" />
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ get_url(path='favicon-32.png') }}" />
+  <link rel="icon" type="image/png" sizes="16x16" href="{{ get_url(path='favicon-16.png') }}" />
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ get_url(path='apple-touch-icon-180.png') }}" />
+  <link rel="manifest" href="{{ get_url(path='site.webmanifest') }}" />
+  <meta name="theme-color" content="#c0392b" />
   <link rel="stylesheet" href="{{ get_url(path='style.css') }}" />
   <meta property="og:title" content="{{ config.title }}" />
   <meta property="og:description" content="{{ config.description }}" />

@@ -1,12 +1,12 @@
 //! Embeds the 栞 icon and version metadata into the Windows executable.
 
 fn main() {
-    println!("cargo:rerun-if-changed=../../assets/icon/shiori.ico");
+    println!("cargo:rerun-if-changed=../../assets/icon/desktop/shiori.ico");
     if !cfg!(target_os = "windows") {
         return;
     }
     let mut res = winresource::WindowsResource::new();
-    res.set_icon("../../assets/icon/shiori.ico");
+    res.set_icon("../../assets/icon/desktop/shiori.ico");
     res.set("ProductName", "Shiori");
     res.set("FileDescription", "Shiori — Japanese reading companion");
     if let Err(e) = res.compile() {

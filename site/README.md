@@ -3,7 +3,7 @@
 The marketing landing page + user-guide docs for Shiori, built with
 [Zola](https://www.getzola.org/) and deployed to GitHub Pages.
 
-Live at **https://PeterDessev.github.io/Shiori/** once Pages is enabled.
+Live at **https://PeterDessev.github.io/Shiori/**.
 
 ## Layout
 
@@ -23,7 +23,9 @@ site/
   static/
     style.css            # all styling (no build step, no SASS)
     img/                 # screenshots + icons (copied from ../assets)
-    favicon.ico
+    favicon.ico          # favicon + PWA set (favicon-16/32, apple-touch-icon-180,
+    *.png                #   android-chrome-192/512, maskable-512) from ../assets/icon/web
+    site.webmanifest     # PWA manifest (icons + theme); wired into base.html <head>
 ```
 
 The docs pages are derived from the project wiki (`docs/wiki/*`). If you edit a
