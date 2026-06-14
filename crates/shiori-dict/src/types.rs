@@ -120,6 +120,23 @@ impl DictEntry {
             .unwrap_or_default()
     }
 
+    /// Distinct part-of-speech labels across all senses, in first-seen
+    /// order — the word class, verb paradigm, and transitivity, rendered
+    /// for display (e.g. `["Godan verb (-ru)", "transitive verb"]`).
+    /// Codes this crate does not name are kept verbatim.
+    pub fn pos_labels(&self) -> Vec<String> {
+        let mut out: Vec<String> = Vec::new();
+        for sense in &self.senses {
+            for code in &sense.part_of_speech {
+                let label = crate::pos::pos_label(code).unwrap_or(code).to_string();
+                if !out.contains(&label) {
+                    out.push(label);
+                }
+            }
+        }
+        out
+    }
+
     /// All distinct misc (register/usage) codes across senses.
     pub fn misc_codes(&self) -> Vec<&str> {
         let mut out: Vec<&str> = Vec::new();
@@ -234,6 +251,8 @@ mod tests {
         assert_eq!(taberu.short_gloss(), "to eat");
         assert_eq!(taberu.misc_codes(), vec!["col"]);
         assert_eq!(taberu.related_words(), vec!["食う・くう"]);
+        assert_eq!(taberu.pos_labels(), vec!["Ichidan verb"]);
+        assert_eq!(file.words[1].pos_labels(), vec!["Godan verb (-ru)"]);
     }
 
     #[test]

@@ -11,6 +11,7 @@ pub mod frequency;
 pub mod jlpt;
 pub mod kanji;
 mod lookup;
+pub mod pos;
 pub mod register;
 mod types;
 
