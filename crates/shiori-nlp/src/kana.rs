@@ -18,6 +18,22 @@ pub fn katakana_to_hiragana(s: &str) -> String {
         .collect()
 }
 
+/// Convert hiragana characters to katakana, leaving everything else as-is.
+/// The inverse of [`katakana_to_hiragana`]; ー and non-kana pass through.
+pub fn hiragana_to_katakana(s: &str) -> String {
+    s.chars()
+        .map(|c| {
+            let u = c as u32;
+            // ぁ (3041) ..= ゖ (3096) maps directly onto ァ (30A1) ..= ヶ (30F6).
+            if (0x3041..=0x3096).contains(&u) {
+                char::from_u32(u + 0x60).unwrap_or(c)
+            } else {
+                c
+            }
+        })
+        .collect()
+}
+
 /// Whether the string consists entirely of kana (and the prolonged-sound mark).
 pub fn is_kana_only(s: &str) -> bool {
     !s.is_empty()
@@ -51,6 +67,18 @@ mod tests {
         assert_eq!(katakana_to_hiragana("タベル"), "たべる");
         assert_eq!(katakana_to_hiragana("ガッコウ"), "がっこう");
         assert_eq!(katakana_to_hiragana("キャベツ"), "きゃべつ");
+    }
+
+    #[test]
+    fn converts_hiragana_to_katakana() {
+        assert_eq!(hiragana_to_katakana("たべる"), "タベル");
+        assert_eq!(hiragana_to_katakana("がっこう"), "ガッコウ");
+        assert_eq!(hiragana_to_katakana("きゃべつ"), "キャベツ");
+        // Round-trips with its inverse.
+        assert_eq!(
+            katakana_to_hiragana(&hiragana_to_katakana("しんぶん")),
+            "しんぶん"
+        );
     }
 
     #[test]

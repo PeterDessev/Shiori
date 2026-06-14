@@ -9,12 +9,14 @@ mod analyzer;
 pub mod inflection;
 pub mod kana;
 mod pos;
+pub mod romaji;
 pub mod ruby;
 mod segment;
 
 pub use analyzer::{AnalyzedParagraph, AnalyzedSentence, AnalyzedText, Analyzer};
 pub use inflection::{analyze_inflection, phrase_groups, Inflection};
-pub use kana::{is_kana_only, katakana_to_hiragana};
+pub use kana::{hiragana_to_katakana, is_kana_only, katakana_to_hiragana};
+pub use romaji::romaji_to_kana;
 pub use ruby::{ruby_segments, RubySegment};
 pub use segment::{split_paragraphs, split_sentences};
 
