@@ -59,6 +59,19 @@ impl Db {
             })? as u64)
     }
 
+    /// JLPT level of a word (5 = easiest N5 … 1 = hardest N1), matched by
+    /// kanji form or, for kana-only list entries, by reading. Returns the
+    /// easiest (highest) level when a word spans more than one list.
+    pub fn jlpt_level(&self, kanji: &str, kana: &str) -> Result<Option<u8>> {
+        let level: Option<i64> = self.conn().query_row(
+            "SELECT MAX(level) FROM jlpt_words
+             WHERE (?1 <> '' AND word = ?1) OR (word = '' AND kana = ?2)",
+            rusqlite::params![kanji, kana],
+            |r| r.get(0),
+        )?;
+        Ok(level.map(|l| l as u8))
+    }
+
     /// Per level: how much of that level's vocabulary the user knows.
     /// Kanji-form words match on lemma; kana-only words match on a
     /// kana lemma.
@@ -222,6 +235,12 @@ mod tests {
         ])
         .unwrap();
         assert_eq!(db.jlpt_count().unwrap(), 3);
+
+        // Level lookup by kanji form, and by reading for kana-only words.
+        assert_eq!(db.jlpt_level("猫", "ねこ").unwrap(), Some(5));
+        assert_eq!(db.jlpt_level("", "する").unwrap(), Some(5));
+        assert_eq!(db.jlpt_level("薔薇", "ばら").unwrap(), Some(1));
+        assert_eq!(db.jlpt_level("存在しない", "").unwrap(), None);
 
         // Nothing known yet.
         let shares = db.jlpt_known_shares().unwrap();
