@@ -1,6 +1,6 @@
 //! Application shell: state, background tasks, frame loop.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex};
@@ -196,6 +196,10 @@ pub struct DictionaryState {
     /// Query the current results belong to.
     pub searched_for: String,
     pub results: shiori_app::DictSearchResults,
+    /// Word ids whose example-sentence panel is expanded.
+    pub examples_open: HashSet<i64>,
+    /// Lazily fetched library example sentences, keyed by word id.
+    pub examples: HashMap<i64, Vec<(shiori_core::Sentence, String)>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

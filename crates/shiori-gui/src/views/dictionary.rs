@@ -1,9 +1,15 @@
 //! Dictionary view: one search box answering with word entries and kanji
 //! cards (readings, meanings, grade, and stroke-order diagrams drawn
 //! from KanjiVG path data).
+//!
+//! The box accepts kanji, kana, and rōmaji, and understands conjugated
+//! input: a query like 食べました or `tabemashita` leads with its root
+//! 食べる and a banner explaining the form. Each word entry shows its part
+//! of speech and transitivity, its JLPT level, and a toggle for example
+//! sentences drawn from the user's library (the SRS material).
 
 use eframe::egui;
-use shiori_core::KnowledgeStatus;
+use shiori_core::{KnowledgeStatus, PartOfSpeech, WordId};
 
 use crate::app::ShioriGui;
 
@@ -15,10 +21,13 @@ impl ShioriGui {
             if let Some(results) = self.with_app(|app| app.search_dictionary(&query)) {
                 self.dictionary.results = results;
                 self.dictionary.searched_for = query;
+                // Collapse example panels carried over from the last query.
+                self.dictionary.examples_open.clear();
             }
         }
 
         let mut learn_headword: Option<String> = None;
+        let mut toggle_examples: Option<i64> = None;
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.add_space(6.0);
             ui.horizontal(|ui| {
@@ -27,7 +36,7 @@ impl ShioriGui {
                 let response = ui.add_sized(
                     [(ui.available_width() - 80.0).clamp(220.0, 420.0), 24.0],
                     egui::TextEdit::singleline(&mut self.dictionary.query)
-                        .hint_text("Japanese text — 猫, ねこ, 食べる…"),
+                        .hint_text("猫, ねこ, neko, 食べました, tabemashita…"),
                 );
                 if ui.button("✕").clicked() {
                     self.dictionary.query.clear();
@@ -44,7 +53,10 @@ impl ShioriGui {
                 return;
             }
             if self.dictionary.query.trim().is_empty() {
-                ui.weak("Search by kanji, kana, or any word form. Prefix matches included.");
+                ui.weak(
+                    "Search by kanji, kana, or rōmaji (Neko → ネコ). Conjugated forms \
+                     find their dictionary root. Prefix matches included.",
+                );
                 return;
             }
 
@@ -52,6 +64,12 @@ impl ShioriGui {
             if results.words.is_empty() && results.kanji.is_empty() {
                 ui.weak("No matches.");
                 return;
+            }
+
+            // Banner explaining a conjugated/compounded query.
+            if let Some(analysis) = &results.analysis {
+                form_banner(ui, analysis, &results.words);
+                ui.add_space(8.0);
             }
 
             ui.columns(2, |columns| {
@@ -78,10 +96,24 @@ impl ShioriGui {
                                     if !kana.is_empty() && kana != hit.entry.headword() {
                                         ui.label(format!("（{kana}）"));
                                     }
+                                    if let Some(level) = hit.jlpt {
+                                        jlpt_chip(ui, level);
+                                    }
                                     if let Some(word) = &hit.word {
                                         ui.weak(format!("· {}", word.status.as_str()));
                                     }
                                 });
+
+                                // Part of speech / transitivity chips.
+                                let pos = hit.entry.pos_labels();
+                                if !pos.is_empty() {
+                                    ui.horizontal_wrapped(|ui| {
+                                        for label in &pos {
+                                            pos_chip(ui, label);
+                                        }
+                                    });
+                                }
+
                                 for (i, sense) in hit.entry.senses.iter().take(3).enumerate() {
                                     let glosses: Vec<&str> =
                                         sense.gloss.iter().map(|g| g.text.as_str()).collect();
@@ -89,12 +121,34 @@ impl ShioriGui {
                                         ui.label(format!("{}. {}", i + 1, glosses.join("; ")));
                                     }
                                 }
-                                let learnable = match &hit.word {
-                                    Some(w) => w.status != KnowledgeStatus::Learning,
-                                    None => true,
-                                };
-                                if learnable && ui.small_button("➕ Learn (SRS)").clicked() {
-                                    learn_headword = Some(hit.entry.headword().to_string());
+
+                                ui.horizontal_wrapped(|ui| {
+                                    let learnable = match &hit.word {
+                                        Some(w) => w.status != KnowledgeStatus::Learning,
+                                        None => true,
+                                    };
+                                    if learnable && ui.small_button("➕ Learn (SRS)").clicked() {
+                                        learn_headword = Some(hit.entry.headword().to_string());
+                                    }
+                                    if let Some(word) = &hit.word {
+                                        let open =
+                                            self.dictionary.examples_open.contains(&word.id.0);
+                                        let label = if open {
+                                            "▼ Example sentences"
+                                        } else {
+                                            "▶ Example sentences"
+                                        };
+                                        if ui.small_button(label).clicked() {
+                                            toggle_examples = Some(word.id.0);
+                                        }
+                                    }
+                                });
+
+                                // Expanded example sentences from the library.
+                                if let Some(word) = &hit.word {
+                                    if self.dictionary.examples_open.contains(&word.id.0) {
+                                        example_panel(ui, self.dictionary.examples.get(&word.id.0));
+                                    }
                                 }
                             });
                             ui.add_space(6.0);
@@ -114,8 +168,25 @@ impl ShioriGui {
             });
         });
 
+        if let Some(word_id) = toggle_examples {
+            self.toggle_dictionary_examples(word_id);
+        }
         if let Some(headword) = learn_headword {
             self.learn_from_dictionary(&headword);
+        }
+    }
+
+    /// Expand or collapse the example-sentence panel for a word, fetching
+    /// its library sentences from the database the first time.
+    fn toggle_dictionary_examples(&mut self, word_id: i64) {
+        if self.dictionary.examples_open.remove(&word_id) {
+            return; // was open — collapse
+        }
+        self.dictionary.examples_open.insert(word_id);
+        if !self.dictionary.examples.contains_key(&word_id) {
+            if let Some(list) = self.with_app(|app| app.word_examples(WordId(word_id), 5)) {
+                self.dictionary.examples.insert(word_id, list);
+            }
         }
     }
 
@@ -153,6 +224,127 @@ impl ShioriGui {
             self.refresh_caches();
         }
     }
+}
+
+/// Banner above the results explaining a conjugated/compounded query:
+/// the typed form, its dictionary root, what kind of word it is, and the
+/// grammar of its tail.
+fn form_banner(
+    ui: &mut egui::Ui,
+    analysis: &shiori_app::QueryAnalysis,
+    words: &[shiori_app::DictSearchHit],
+) {
+    let accent = egui::Color32::from_rgb(80, 140, 240);
+    egui::Frame::group(ui.style())
+        .fill(egui::Color32::from_rgba_unmultiplied(80, 140, 240, 18))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal_wrapped(|ui| {
+                ui.label(egui::RichText::new(&analysis.surface).size(20.0).strong());
+                ui.label(egui::RichText::new("→").size(18.0).color(accent));
+                ui.label(
+                    egui::RichText::new(&analysis.lemma)
+                        .size(20.0)
+                        .strong()
+                        .color(accent),
+                );
+                if !analysis.reading.is_empty() && analysis.reading != analysis.lemma {
+                    ui.weak(format!("（{}）", analysis.reading));
+                }
+            });
+
+            // Part of speech of the root: prefer the resolved entry's
+            // detailed labels (with transitivity), else the coarse class.
+            // An all-kana lemma (たべる) matches the entry by reading even
+            // though its headword is the kanji spelling (食べる).
+            let root_pos = words
+                .iter()
+                .find(|h| {
+                    h.entry.headword() == analysis.lemma || h.entry.reading() == analysis.lemma
+                })
+                .map(|h| h.entry.pos_labels())
+                .filter(|p| !p.is_empty());
+            ui.horizontal_wrapped(|ui| match root_pos {
+                Some(labels) => {
+                    for label in &labels {
+                        pos_chip(ui, label);
+                    }
+                }
+                None => pos_chip(ui, coarse_pos_label(analysis.pos)),
+            });
+
+            // The grammar of the conjugation.
+            if let Some(summary) = &analysis.inflection.summary {
+                ui.label(summary);
+            }
+            for part in &analysis.inflection.parts {
+                ui.weak(part);
+            }
+        });
+}
+
+/// Expanded list of library sentences using the word, or a hint when the
+/// word has not turned up in anything imported yet.
+fn example_panel(ui: &mut egui::Ui, examples: Option<&Vec<(shiori_core::Sentence, String)>>) {
+    ui.add_space(4.0);
+    match examples {
+        Some(list) if !list.is_empty() => {
+            for (sentence, title) in list {
+                ui.label(egui::RichText::new(&sentence.text).size(16.0));
+                ui.weak(format!("— {title}"));
+                ui.add_space(2.0);
+            }
+        }
+        Some(_) => {
+            ui.weak("Not in your library yet — examples appear once the word turns up in a book you've imported.");
+        }
+        None => {
+            ui.weak("Loading…");
+        }
+    }
+}
+
+/// Coarse part-of-speech name for a form's analyzed head, used when no
+/// dictionary entry refines it.
+fn coarse_pos_label(pos: PartOfSpeech) -> &'static str {
+    match pos {
+        PartOfSpeech::Noun => "noun",
+        PartOfSpeech::ProperNoun => "proper noun",
+        PartOfSpeech::Pronoun => "pronoun",
+        PartOfSpeech::DependentNoun => "dependent noun",
+        PartOfSpeech::Verb => "verb",
+        PartOfSpeech::Adjective => "i-adjective",
+        PartOfSpeech::AdjectivalNoun => "na-adjective",
+        PartOfSpeech::Adverb => "adverb",
+        PartOfSpeech::Particle => "particle",
+        PartOfSpeech::AuxiliaryVerb => "auxiliary verb",
+        PartOfSpeech::Conjunction => "conjunction",
+        PartOfSpeech::Prenominal => "pre-noun adjectival",
+        PartOfSpeech::Interjection => "interjection",
+        PartOfSpeech::Number => "numeric",
+        PartOfSpeech::Prefix => "prefix",
+        PartOfSpeech::Suffix => "suffix",
+        PartOfSpeech::Symbol => "symbol",
+        PartOfSpeech::Unknown => "unknown",
+    }
+}
+
+/// A small blue chip naming a part of speech / transitivity.
+fn pos_chip(ui: &mut egui::Ui, label: &str) {
+    ui.label(
+        egui::RichText::new(label)
+            .small()
+            .background_color(egui::Color32::from_rgba_unmultiplied(80, 140, 240, 45)),
+    );
+}
+
+/// A green chip for the word's JLPT level (5 = N5 … 1 = N1).
+fn jlpt_chip(ui: &mut egui::Ui, level: u8) {
+    ui.label(
+        egui::RichText::new(format!("JLPT N{level}"))
+            .small()
+            .background_color(egui::Color32::from_rgba_unmultiplied(110, 180, 110, 70)),
+    );
 }
 
 /// One kanji card: stroke diagram, readings, meanings, classifications.
