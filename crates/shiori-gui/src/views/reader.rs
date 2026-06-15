@@ -164,12 +164,14 @@ impl ShioriGui {
         }
 
         let mut open_kanji: Option<String> = None;
-        egui::SidePanel::right("dict-panel")
+        let panel_rect = egui::SidePanel::right("dict-panel")
             .resizable(true)
             .default_width(340.0)
             .show(ctx, |ui| {
                 action = self.dictionary_panel(ui, &mut explain_requested, &mut open_kanji);
-            });
+            })
+            .response
+            .rect;
         if let Some(kanji) = open_kanji {
             self.end_page_visit(crate::session::VisitEnd::Pause);
             self.open_dictionary(kanji);
@@ -259,8 +261,17 @@ impl ShioriGui {
         }
 
         // Scroll wheel and PageUp/PageDown flip pages, e-reader style.
+        // Scrolling over the dictionary panel scrolls that panel instead:
+        // it still resets the away timer above, but must not flip the page.
         if !input_blocked {
-            let scroll_y = ctx.input(|i| i.raw_scroll_delta.y);
+            let pointer_over_panel = ctx
+                .input(|i| i.pointer.hover_pos())
+                .is_some_and(|p| panel_rect.contains(p));
+            let scroll_y = if pointer_over_panel {
+                0.0
+            } else {
+                ctx.input(|i| i.raw_scroll_delta.y)
+            };
             if scroll_y < -8.0 || ctx.input(|i| i.key_pressed(egui::Key::PageDown)) {
                 flip = 1;
             } else if scroll_y > 8.0 || ctx.input(|i| i.key_pressed(egui::Key::PageUp)) {
