@@ -199,7 +199,34 @@ pub struct DictionaryState {
     /// Word ids whose example-sentence panel is expanded.
     pub examples_open: HashSet<i64>,
     /// Lazily fetched library example sentences, keyed by word id.
-    pub examples: HashMap<i64, Vec<(shiori_core::Sentence, String)>>,
+    pub examples: HashMap<i64, Vec<shiori_app::DictExample>>,
+    /// The "more info" modal for a word card, when open.
+    pub info: Option<DictInfoModal>,
+    /// Set the frame the modal opens, so the opening click is not mistaken
+    /// for a click-away that would immediately close it.
+    pub info_just_opened: bool,
+}
+
+/// Snapshot powering a word card's "more info" modal: the card's own
+/// content plus the kanji cards for every kanji in the word, captured when
+/// the modal is opened. Example sentences are read live from the
+/// [`DictionaryState::examples`] cache via `word_id`.
+#[derive(Default)]
+pub struct DictInfoModal {
+    /// Tracked word id, for reading cached examples; `None` when the word
+    /// has never been met in the library.
+    pub word_id: Option<i64>,
+    pub headword: String,
+    /// Kana reading to show in parentheses; empty when same as headword.
+    pub reading: String,
+    pub jlpt: Option<u8>,
+    /// Knowledge status of the tracked word, if any.
+    pub status: Option<String>,
+    pub pos: Vec<String>,
+    /// Numbered gloss lines, mirroring the card.
+    pub senses: Vec<String>,
+    /// Kanji cards for each distinct kanji in the headword.
+    pub kanji: Vec<shiori_db::KanjiRow>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -1529,6 +1556,13 @@ impl ShioriGui {
                 // refresh, so returning to the library re-reads it.
                 View::Library => {
                     self.refresh_caches();
+                    self.view = view;
+                }
+                // Re-running the search on return surfaces words and example
+                // sentences added to the SRS since leaving, while keeping the
+                // query and any open word-detail modal.
+                View::Dictionary => {
+                    self.reenter_dictionary();
                     self.view = view;
                 }
                 _ => self.view = view,

@@ -42,6 +42,18 @@ pub struct QueryAnalysis {
     pub inflection: Inflection,
 }
 
+/// One example sentence for a dictionary word: the sentence itself, the
+/// title of the document it came from, and the byte ranges within the text
+/// where the looked-up word's tokens occur (for highlighting).
+#[derive(Debug, Clone)]
+pub struct DictExample {
+    pub sentence: Sentence,
+    pub title: String,
+    /// Byte ranges of the word's occurrences in `sentence.text`; empty when
+    /// no token could be located (e.g. stored offsets and text disagree).
+    pub highlights: Vec<(usize, usize)>,
+}
+
 /// Everything one search query returns.
 #[derive(Debug, Default)]
 pub struct DictSearchResults {
@@ -125,11 +137,29 @@ impl App {
 
     /// Example sentences from the user's library that use a tracked word —
     /// the contexts it appears in across imported books, i.e. the material
-    /// feeding the SRS. Empty until the word turns up in something read.
-    pub fn word_examples(&self, word_id: WordId, limit: u32) -> Result<Vec<(Sentence, String)>> {
-        Ok(self
+    /// feeding the SRS. Each carries the byte ranges where the word appears,
+    /// so callers can highlight it. Empty until the word turns up in
+    /// something read.
+    pub fn word_examples(&self, word_id: WordId, limit: u32) -> Result<Vec<DictExample>> {
+        let mut out = Vec::new();
+        for (sentence, title) in self
             .db()
-            .word_example_sentences(word_id, None, None, limit)?)
+            .word_example_sentences(word_id, None, None, limit)?
+        {
+            let highlights = self
+                .db()
+                .sentence_tokens(sentence.id)?
+                .into_iter()
+                .filter(|t| t.word_id == word_id)
+                .map(|t| (t.token.start, t.token.end))
+                .collect();
+            out.push(DictExample {
+                sentence,
+                title,
+                highlights,
+            });
+        }
+        Ok(out)
     }
 
     /// Build a search hit from a dictionary sequence id, resolving its
@@ -344,5 +374,69 @@ mod tests {
         let app = app_with_dict();
         let results = app.search_dictionary("  ").unwrap();
         assert!(results.words.is_empty() && results.kanji.is_empty());
+    }
+
+    #[test]
+    fn word_examples_carry_highlight_ranges() {
+        use shiori_db::{NewSentence, NewToken};
+        let app = app_with_dict();
+        // 猫 sits after その (two 3-byte kana) in this sentence.
+        let text = "その猫が好き。";
+        let neko_start = "その".len(); // 6
+        let neko_end = neko_start + "猫".len(); // 9
+        let sentences = vec![NewSentence {
+            paragraph: 0,
+            text: text.into(),
+            tokens: vec![
+                NewToken {
+                    surface: "その".into(),
+                    lemma: "その".into(),
+                    reading: "その".into(),
+                    pos: PartOfSpeech::Prenominal,
+                    start: 0,
+                    end: neko_start,
+                },
+                NewToken {
+                    surface: "猫".into(),
+                    lemma: "猫".into(),
+                    reading: "ねこ".into(),
+                    pos: PartOfSpeech::Noun,
+                    start: neko_start,
+                    end: neko_end,
+                },
+                NewToken {
+                    surface: "が".into(),
+                    lemma: "が".into(),
+                    reading: "が".into(),
+                    pos: PartOfSpeech::Particle,
+                    start: neko_end,
+                    end: neko_end + "が".len(),
+                },
+            ],
+        }];
+        app.db()
+            .import_document(
+                &shiori_core::DocumentMeta {
+                    title: "fixture".into(),
+                    ..Default::default()
+                },
+                "hash-examples",
+                chrono::Utc::now(),
+                &sentences,
+            )
+            .unwrap();
+
+        let word = app
+            .db()
+            .words_by_lemma("猫")
+            .unwrap()
+            .into_iter()
+            .next()
+            .unwrap();
+        let examples = app.word_examples(word.id, 10).unwrap();
+        assert_eq!(examples.len(), 1);
+        assert_eq!(examples[0].sentence.text, text);
+        // The looked-up word's byte range is reported for highlighting.
+        assert_eq!(examples[0].highlights, vec![(neko_start, neko_end)]);
     }
 }

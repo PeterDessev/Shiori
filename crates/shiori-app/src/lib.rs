@@ -20,7 +20,7 @@ mod transfer;
 
 pub use chat::{ChatSentence, ChatTokenRow};
 pub use data::DataStatus;
-pub use dictionary::{DictSearchHit, DictSearchResults, QueryAnalysis};
+pub use dictionary::{DictExample, DictSearchHit, DictSearchResults, QueryAnalysis};
 pub use finish::{SweepCandidate, SweepPlan};
 pub use mining::MiningCandidate;
 pub use review::ReviewItem;
