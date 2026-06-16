@@ -7,8 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Everything below is the work leading up to the first `0.1.0` release. Nothing
-has been tagged yet.
+## [0.1.0] - 2026-06-16
+
+The first release of Shiori — a desktop Japanese reading companion built
+around comprehensible input.
 
 ### Added
 
@@ -27,17 +29,26 @@ has been tagged yet.
 - Resume-where-you-left-off, accurate page counts, and reading position
   persisted across exit.
 - Ruby-markup segmentation for per-character furigana.
+- Tutor sentence explanations render as **Markdown**, wrapping to the side
+  panel with a magnifier button that opens the write-up in a centered modal
+  spanning the content area without disturbing the page beneath.
 
 #### Dictionary & kanji
 - A dictionary view: search JMdict by kanji, kana, or any word form, with a
-  stroke-order card (readings, meanings, school grade, numbered KanjiVG
-  diagram) for every kanji in the query.
+  kanji card (readings, meanings, school grade, KanjiVG stroke order) for
+  every kanji in the query.
 - Search resolves **conjugations and rōmaji** — type a verb in any inflected
   form, or type in Latin letters, and it transliterates to kana and looks up
   the dictionary form.
 - Dictionary entries enriched with **part-of-speech labels, JLPT level, and
   example sentences**; JMdict part-of-speech codes are expanded to readable
   labels.
+- **Animated stroke order**: each stroke traces in order and loops, and
+  scrolling over a character scrubs it stroke-by-stroke (snapping to whole
+  strokes, one per wheel notch) and briefly pauses auto-play.
+- Word cards highlight the looked-up word inside its example sentences, and a
+  🔎 button opens a **word-detail modal** — the full entry, every example, and
+  a kanji card per character — dismissed by click-away, Escape, or ✕.
 - Add any search hit straight to spaced repetition.
 
 #### Reviews & spaced repetition
@@ -115,4 +126,5 @@ has been tagged yet.
   exit.
 - Japanese font baseline alignment and a crisp Latin font fallback.
 
-[Unreleased]: https://github.com/PeterDessev/Shiori/commits/master
+[Unreleased]: https://github.com/PeterDessev/Shiori/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/PeterDessev/Shiori/releases/tag/v0.1.0
