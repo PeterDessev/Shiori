@@ -13,6 +13,10 @@ use shiori_core::{KnowledgeStatus, PartOfSpeech, WordId};
 
 use crate::app::ShioriGui;
 
+/// How many library sentences to pull per word. The card shows the four
+/// shortest of these; the "more info" modal shows them all.
+const EXAMPLE_POOL: u32 = 50;
+
 impl ShioriGui {
     pub fn show_dictionary(&mut self, ctx: &egui::Context) {
         // Re-search whenever the query no longer matches the results.
@@ -28,7 +32,8 @@ impl ShioriGui {
 
         let mut learn_headword: Option<String> = None;
         let mut toggle_examples: Option<i64> = None;
-        egui::CentralPanel::default().show(ctx, |ui| {
+        let mut open_info: Option<usize> = None;
+        let central = egui::CentralPanel::default().show(ctx, |ui| {
             ui.add_space(6.0);
             ui.horizontal(|ui| {
                 ui.heading("Dictionary");
@@ -78,30 +83,54 @@ impl ShioriGui {
                     .id_salt("dict-words")
                     .auto_shrink([false; 2])
                     .show(&mut columns[0], |ui| {
-                        for hit in &results.words {
+                        for (i, hit) in results.words.iter().enumerate() {
                             egui::Frame::group(ui.style()).show(ui, |ui| {
                                 ui.set_width(ui.available_width());
-                                ui.horizontal_wrapped(|ui| {
-                                    ui.label(
-                                        egui::RichText::new(hit.entry.headword())
-                                            .size(22.0)
-                                            .strong(),
+                                // Title row: headword and chips on the left, a
+                                // "more info" button pinned to the top-right.
+                                ui.horizontal(|ui| {
+                                    ui.with_layout(
+                                        egui::Layout::right_to_left(egui::Align::Center),
+                                        |ui| {
+                                            if ui
+                                                .small_button("🔎")
+                                                .on_hover_text("More info")
+                                                .clicked()
+                                            {
+                                                open_info = Some(i);
+                                            }
+                                            ui.with_layout(
+                                                egui::Layout::left_to_right(egui::Align::Center),
+                                                |ui| {
+                                                    ui.label(
+                                                        egui::RichText::new(hit.entry.headword())
+                                                            .size(22.0)
+                                                            .strong(),
+                                                    );
+                                                    let kana = hit
+                                                        .entry
+                                                        .kana
+                                                        .first()
+                                                        .map(|k| k.text.as_str())
+                                                        .unwrap_or("");
+                                                    if !kana.is_empty()
+                                                        && kana != hit.entry.headword()
+                                                    {
+                                                        ui.label(format!("（{kana}）"));
+                                                    }
+                                                    if let Some(level) = hit.jlpt {
+                                                        jlpt_chip(ui, level);
+                                                    }
+                                                    if let Some(word) = &hit.word {
+                                                        ui.weak(format!(
+                                                            "· {}",
+                                                            word.status.as_str()
+                                                        ));
+                                                    }
+                                                },
+                                            );
+                                        },
                                     );
-                                    let kana = hit
-                                        .entry
-                                        .kana
-                                        .first()
-                                        .map(|k| k.text.as_str())
-                                        .unwrap_or("");
-                                    if !kana.is_empty() && kana != hit.entry.headword() {
-                                        ui.label(format!("（{kana}）"));
-                                    }
-                                    if let Some(level) = hit.jlpt {
-                                        jlpt_chip(ui, level);
-                                    }
-                                    if let Some(word) = &hit.word {
-                                        ui.weak(format!("· {}", word.status.as_str()));
-                                    }
                                 });
 
                                 // Part of speech / transitivity chips.
@@ -161,7 +190,7 @@ impl ShioriGui {
                     .auto_shrink([false; 2])
                     .show(&mut columns[1], |ui| {
                         for kanji in &results.kanji {
-                            kanji_card(ui, kanji);
+                            kanji_card(ui, kanji, "");
                             ui.add_space(8.0);
                         }
                     });
@@ -174,6 +203,12 @@ impl ShioriGui {
         if let Some(headword) = learn_headword {
             self.learn_from_dictionary(&headword);
         }
+        if let Some(index) = open_info {
+            self.open_info_modal(index);
+        }
+        // The central panel's rect is exactly the dictionary area (right of
+        // the nav rail, below any banners) — center the modal within it.
+        self.show_info_modal(ctx, central.response.rect);
     }
 
     /// Expand or collapse the example-sentence panel for a word, fetching
@@ -183,9 +218,155 @@ impl ShioriGui {
             return; // was open — collapse
         }
         self.dictionary.examples_open.insert(word_id);
-        if !self.dictionary.examples.contains_key(&word_id) {
-            if let Some(list) = self.with_app(|app| app.word_examples(WordId(word_id), 5)) {
-                self.dictionary.examples.insert(word_id, list);
+        self.ensure_examples(word_id);
+    }
+
+    /// Fetch and cache a word's library example sentences (with highlight
+    /// ranges) if not already loaded. One fetch feeds both the card's
+    /// shortest-four list and the modal's full list.
+    fn ensure_examples(&mut self, word_id: i64) {
+        if self.dictionary.examples.contains_key(&word_id) {
+            return;
+        }
+        if let Some(list) = self.with_app(|app| app.word_examples(WordId(word_id), EXAMPLE_POOL)) {
+            self.dictionary.examples.insert(word_id, list);
+        }
+    }
+
+    /// Capture the card at `index` into the "more info" modal: snapshot its
+    /// textual content, ensure its example sentences are cached, and resolve
+    /// a kanji card for each distinct kanji in the headword.
+    fn open_info_modal(&mut self, index: usize) {
+        let (word_id, headword, reading, jlpt, status, pos, senses, kanji_chars) = {
+            let Some(hit) = self.dictionary.results.words.get(index) else {
+                return;
+            };
+            let headword = hit.entry.headword().to_string();
+            let kana = hit
+                .entry
+                .kana
+                .first()
+                .map(|k| k.text.clone())
+                .unwrap_or_default();
+            let reading = if !kana.is_empty() && kana != headword {
+                kana
+            } else {
+                String::new()
+            };
+            let senses: Vec<String> = hit
+                .entry
+                .senses
+                .iter()
+                .take(3)
+                .enumerate()
+                .filter_map(|(i, sense)| {
+                    let glosses: Vec<&str> = sense.gloss.iter().map(|g| g.text.as_str()).collect();
+                    (!glosses.is_empty()).then(|| format!("{}. {}", i + 1, glosses.join("; ")))
+                })
+                .collect();
+            // Distinct kanji of the headword, in order.
+            let mut kanji_chars: Vec<char> = Vec::new();
+            for c in headword.chars() {
+                if is_kanji(c) && !kanji_chars.contains(&c) {
+                    kanji_chars.push(c);
+                }
+            }
+            (
+                hit.word.as_ref().map(|w| w.id.0),
+                headword,
+                reading,
+                hit.jlpt,
+                hit.word.as_ref().map(|w| w.status.as_str().to_string()),
+                hit.entry.pos_labels(),
+                senses,
+                kanji_chars,
+            )
+        };
+
+        if let Some(id) = word_id {
+            self.ensure_examples(id);
+        }
+        let kanji = self
+            .with_app(|app| {
+                let mut rows = Vec::new();
+                for c in &kanji_chars {
+                    if let Some(row) = app.db().kanji(&c.to_string())? {
+                        rows.push(row);
+                    }
+                }
+                Ok(rows)
+            })
+            .unwrap_or_default();
+
+        self.dictionary.info = Some(crate::app::DictInfoModal {
+            word_id,
+            headword,
+            reading,
+            jlpt,
+            status,
+            pos,
+            senses,
+            kanji,
+        });
+        self.dictionary.info_just_opened = true;
+    }
+
+    /// Render the "more info" modal, if open, via the shared
+    /// [`super::modal::centered_modal`] shell: a compact header with the
+    /// headword, the card content and every example sentence on the left, and
+    /// the word's kanji cards on the right.
+    fn show_info_modal(&mut self, ctx: &egui::Context, area: egui::Rect) {
+        if self.dictionary.info.is_none() {
+            return;
+        }
+        // The click that opened the modal must not count as a click-away.
+        let just_opened = std::mem::take(&mut self.dictionary.info_just_opened);
+
+        let info = self.dictionary.info.as_ref().expect("checked above");
+        let examples = info
+            .word_id
+            .and_then(|id| self.dictionary.examples.get(&id));
+        let close = super::modal::centered_modal(
+            ctx,
+            area,
+            "dict-word-details",
+            just_opened,
+            |ui| {
+                ui.label(egui::RichText::new(&info.headword).size(20.0).strong());
+                if !info.reading.is_empty() {
+                    ui.label(format!("（{}）", info.reading));
+                }
+                if let Some(level) = info.jlpt {
+                    jlpt_chip(ui, level);
+                }
+                if let Some(status) = &info.status {
+                    ui.weak(format!("· {status}"));
+                }
+            },
+            |ui| info_modal_body(ui, info, examples),
+        );
+
+        if close {
+            self.dictionary.info = None;
+        }
+    }
+
+    /// Re-run the current dictionary search and reload cached example
+    /// sentences. Called when the Dictionary tab is re-entered so words
+    /// freshly added to the SRS (and new sentences) appear, while keeping
+    /// the query, expanded panels, and any open "more info" modal intact.
+    pub(crate) fn reenter_dictionary(&mut self) {
+        let query = self.dictionary.query.clone();
+        if !query.trim().is_empty() {
+            if let Some(results) = self.with_app(|app| app.search_dictionary(&query)) {
+                self.dictionary.results = results;
+                self.dictionary.searched_for = query;
+            }
+        }
+        let ids: Vec<i64> = self.dictionary.examples.keys().copied().collect();
+        for id in ids {
+            if let Some(list) = self.with_app(|app| app.word_examples(WordId(id), EXAMPLE_POOL)) {
+                self.dictionary.examples.insert(id, list);
             }
         }
     }
@@ -283,15 +464,18 @@ fn form_banner(
         });
 }
 
-/// Expanded list of library sentences using the word, or a hint when the
-/// word has not turned up in anything imported yet.
-fn example_panel(ui: &mut egui::Ui, examples: Option<&Vec<(shiori_core::Sentence, String)>>) {
+/// Expanded list of library sentences using the word — only the four
+/// shortest, the word highlighted in each — or a hint when the word has not
+/// turned up in anything imported yet.
+fn example_panel(ui: &mut egui::Ui, examples: Option<&Vec<shiori_app::DictExample>>) {
     ui.add_space(4.0);
     match examples {
         Some(list) if !list.is_empty() => {
-            for (sentence, title) in list {
-                ui.label(egui::RichText::new(&sentence.text).size(16.0));
-                ui.weak(format!("— {title}"));
+            // The shortest four are the easiest to read.
+            let mut order: Vec<&shiori_app::DictExample> = list.iter().collect();
+            order.sort_by_key(|ex| ex.sentence.text.chars().count());
+            for ex in order.into_iter().take(4) {
+                example_line(ui, ex, 16.0);
                 ui.add_space(2.0);
             }
         }
@@ -302,6 +486,123 @@ fn example_panel(ui: &mut egui::Ui, examples: Option<&Vec<(shiori_core::Sentence
             ui.weak("Loading…");
         }
     }
+}
+
+/// One example sentence with its source title, the looked-up word coloured.
+fn example_line(ui: &mut egui::Ui, ex: &shiori_app::DictExample, size: f32) {
+    highlighted_sentence(ui, &ex.sentence.text, &ex.highlights, size);
+    ui.weak(format!("— {}", ex.title));
+}
+
+/// Render a sentence as a single wrapping label, painting the byte ranges
+/// in `highlights` in the accent colour and the rest in the normal text
+/// colour. Out-of-bounds, mis-aligned, or overlapping ranges are skipped.
+fn highlighted_sentence(ui: &mut egui::Ui, text: &str, highlights: &[(usize, usize)], size: f32) {
+    let accent = egui::Color32::from_rgb(80, 140, 240);
+    let base = ui.visuals().text_color();
+    let mut job = egui::text::LayoutJob::default();
+    job.wrap.max_width = ui.available_width();
+
+    let mut spans: Vec<(usize, usize)> = highlights
+        .iter()
+        .copied()
+        .filter(|&(s, e)| {
+            s < e && e <= text.len() && text.is_char_boundary(s) && text.is_char_boundary(e)
+        })
+        .collect();
+    spans.sort_by_key(|&(s, _)| s);
+
+    let mut pos = 0usize;
+    for (s, e) in spans {
+        if s < pos {
+            continue; // overlaps the previous span
+        }
+        if s > pos {
+            append_run(&mut job, &text[pos..s], base, size);
+        }
+        append_run(&mut job, &text[s..e], accent, size);
+        pos = e;
+    }
+    if pos < text.len() {
+        append_run(&mut job, &text[pos..], base, size);
+    }
+    ui.label(job);
+}
+
+/// Append one coloured run to a layout job.
+fn append_run(job: &mut egui::text::LayoutJob, text: &str, color: egui::Color32, size: f32) {
+    job.append(
+        text,
+        0.0,
+        egui::TextFormat {
+            font_id: egui::FontId::proportional(size),
+            color,
+            ..Default::default()
+        },
+    );
+}
+
+/// Body of the "more info" modal: a split view — part of speech, senses,
+/// and every example sentence on the left, the word's kanji cards on the
+/// right. The headword itself sits in the modal's compact header.
+fn info_modal_body(
+    ui: &mut egui::Ui,
+    info: &crate::app::DictInfoModal,
+    examples: Option<&Vec<shiori_app::DictExample>>,
+) {
+    ui.columns(2, |columns| {
+        // Left: the card's text content, plus every example sentence.
+        egui::ScrollArea::vertical()
+            .id_salt("dict-info-left")
+            .auto_shrink([false; 2])
+            .show(&mut columns[0], |ui| {
+                // Keep the text off the divider down the middle of the modal.
+                ui.set_width((ui.available_width() - 14.0).max(80.0));
+                if !info.pos.is_empty() {
+                    ui.horizontal_wrapped(|ui| {
+                        for label in &info.pos {
+                            pos_chip(ui, label);
+                        }
+                    });
+                }
+                for sense in &info.senses {
+                    ui.label(sense);
+                }
+
+                ui.add_space(8.0);
+                ui.label(egui::RichText::new("Example sentences").small().strong());
+                ui.add_space(2.0);
+                match examples {
+                    Some(list) if !list.is_empty() => {
+                        for ex in list {
+                            example_line(ui, ex, 15.0);
+                            ui.add_space(4.0);
+                        }
+                    }
+                    Some(_) => {
+                        ui.weak("Not in your library yet — examples appear once the word turns up in a book you've imported.");
+                    }
+                    None => {
+                        ui.weak("No example sentences — this word isn't being tracked yet.");
+                    }
+                }
+            });
+
+        // Right: a kanji card for each kanji in the word.
+        egui::ScrollArea::vertical()
+            .id_salt("dict-info-kanji")
+            .auto_shrink([false; 2])
+            .show(&mut columns[1], |ui| {
+                if info.kanji.is_empty() {
+                    ui.weak("No kanji in this word.");
+                } else {
+                    for kanji in &info.kanji {
+                        kanji_card(ui, kanji, "modal-");
+                        ui.add_space(8.0);
+                    }
+                }
+            });
+    });
 }
 
 /// Coarse part-of-speech name for a form's analyzed head, used when no
@@ -338,6 +639,13 @@ fn pos_chip(ui: &mut egui::Ui, label: &str) {
     );
 }
 
+/// Whether a character is a CJK ideograph (kanji), matching the analyzer's
+/// `kana::contains_kanji` so a word's kanji cards line up with its tokens.
+fn is_kanji(c: char) -> bool {
+    let u = c as u32;
+    (0x4E00..=0x9FFF).contains(&u) || (0x3400..=0x4DBF).contains(&u) || u == 0x3005
+}
+
 /// A green chip for the word's JLPT level (5 = N5 … 1 = N1).
 fn jlpt_chip(ui: &mut egui::Ui, level: u8) {
     ui.label(
@@ -348,14 +656,21 @@ fn jlpt_chip(ui: &mut egui::Ui, level: u8) {
 }
 
 /// One kanji card: stroke diagram, readings, meanings, classifications.
-fn kanji_card(ui: &mut egui::Ui, kanji: &shiori_db::KanjiRow) {
+fn kanji_card(ui: &mut egui::Ui, kanji: &shiori_db::KanjiRow, id_prefix: &str) {
     egui::Frame::group(ui.style()).show(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.horizontal(|ui| {
             if kanji.strokes.is_empty() {
                 ui.label(egui::RichText::new(&kanji.literal).size(72.0));
             } else {
-                draw_kanji_strokes(ui, &kanji.strokes, 96.0, &kanji.literal);
+                // The prefix keeps the modal's stroke animation independent of
+                // the same kanji's card in the panel behind it.
+                draw_kanji_strokes(
+                    ui,
+                    &kanji.strokes,
+                    96.0,
+                    &format!("{id_prefix}{}", kanji.literal),
+                );
             }
             ui.vertical(|ui| {
                 ui.label(egui::RichText::new(&kanji.literal).size(26.0).strong());
