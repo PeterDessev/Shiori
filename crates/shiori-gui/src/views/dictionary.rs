@@ -1,6 +1,6 @@
 //! Dictionary view: one search box answering with word entries and kanji
-//! cards (readings, meanings, grade, and stroke-order diagrams drawn
-//! from KanjiVG path data).
+//! cards (readings, meanings, grade, and animated stroke-order diagrams
+//! drawn from KanjiVG path data).
 //!
 //! The box accepts kanji, kana, and rōmaji, and understands conjugated
 //! input: a query like 食べました or `tabemashita` leads with its root
@@ -190,7 +190,7 @@ impl ShioriGui {
                     .auto_shrink([false; 2])
                     .show(&mut columns[1], |ui| {
                         for kanji in &results.kanji {
-                            kanji_card(ui, kanji);
+                            kanji_card(ui, kanji, "");
                             ui.add_space(8.0);
                         }
                     });
@@ -597,7 +597,7 @@ fn info_modal_body(
                     ui.weak("No kanji in this word.");
                 } else {
                     for kanji in &info.kanji {
-                        kanji_card(ui, kanji);
+                        kanji_card(ui, kanji, "modal-");
                         ui.add_space(8.0);
                     }
                 }
@@ -656,14 +656,21 @@ fn jlpt_chip(ui: &mut egui::Ui, level: u8) {
 }
 
 /// One kanji card: stroke diagram, readings, meanings, classifications.
-fn kanji_card(ui: &mut egui::Ui, kanji: &shiori_db::KanjiRow) {
+fn kanji_card(ui: &mut egui::Ui, kanji: &shiori_db::KanjiRow, id_prefix: &str) {
     egui::Frame::group(ui.style()).show(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.horizontal(|ui| {
             if kanji.strokes.is_empty() {
                 ui.label(egui::RichText::new(&kanji.literal).size(72.0));
             } else {
-                draw_kanji_strokes(ui, &kanji.strokes, 96.0);
+                // The prefix keeps the modal's stroke animation independent of
+                // the same kanji's card in the panel behind it.
+                draw_kanji_strokes(
+                    ui,
+                    &kanji.strokes,
+                    96.0,
+                    &format!("{id_prefix}{}", kanji.literal),
+                );
             }
             ui.vertical(|ui| {
                 ui.label(egui::RichText::new(&kanji.literal).size(26.0).strong());
@@ -707,11 +714,105 @@ fn kanji_card(ui: &mut egui::Ui, kanji: &shiori_db::KanjiRow) {
     });
 }
 
-/// Paint KanjiVG strokes into a square. Path data lives in a 0–109
-/// coordinate space; strokes shade from accent (first) to gray (last)
-/// and carry their stroke number at the starting point.
-fn draw_kanji_strokes(ui: &mut egui::Ui, strokes: &[String], size: f32) {
-    let (rect, _) = ui.allocate_exact_size(egui::vec2(size, size), egui::Sense::hover());
+/// Per-card stroke-order animation state, kept in egui temp memory keyed
+/// by the kanji. `progress` is measured in strokes: its integer part is
+/// how many strokes are fully drawn, its fraction how far the current
+/// stroke has been traced along its path. Auto-play advances it; a scroll
+/// scrubs it directly and parks auto-play until `resume_at`.
+#[derive(Clone, Copy)]
+struct StrokeAnim {
+    progress: f32,
+    /// Input time (seconds) at the previous frame, for delta timing.
+    last_time: f64,
+    /// Auto-play stays parked until input time passes this.
+    resume_at: f64,
+    /// Input time of the last scroll-driven stroke step, for debouncing.
+    last_step: f64,
+    /// True while the user is scrubbing (parked after a scroll): the last
+    /// revealed stroke stays highlighted and the pen tip is hidden.
+    scrubbing: bool,
+}
+
+/// Seconds auto-play takes to trace one stroke.
+const STROKE_SECS: f64 = 0.6;
+/// Seconds the finished character is held before the loop restarts.
+const END_HOLD_SECS: f64 = 1.2;
+/// Seconds auto-play stays parked after the user scrolls.
+const SCROLL_PAUSE_SECS: f64 = 0.5;
+/// Minimum seconds between scroll-driven stroke steps, so one wheel notch
+/// moves exactly one stroke regardless of the platform's scroll magnitude.
+const SCROLL_STEP_COOLDOWN: f64 = 0.08;
+
+/// Animate KanjiVG strokes inside a square: the character draws itself one
+/// stroke at a time and loops. Scrolling over it scrubs the strokes
+/// forward/backward (down advances, matching the reader's page direction)
+/// and pauses auto-play for [`SCROLL_PAUSE_SECS`] before it resumes. Path
+/// data lives in a 0–109 coordinate space.
+fn draw_kanji_strokes(ui: &mut egui::Ui, strokes: &[String], size: f32, id_source: &str) {
+    let (rect, response) = ui.allocate_exact_size(egui::vec2(size, size), egui::Sense::hover());
+    let now = ui.input(|i| i.time);
+    let n = strokes.len() as f32;
+    let id = egui::Id::new(("kanji-stroke-anim", id_source));
+
+    let mut anim = ui
+        .data(|d| d.get_temp::<StrokeAnim>(id))
+        .unwrap_or(StrokeAnim {
+            progress: 0.0,
+            last_time: now,
+            resume_at: 0.0,
+            last_step: 0.0,
+            scrubbing: false,
+        });
+
+    // Scrolling over the character steps between stroke starts (down reveals
+    // the next stroke, up hides one) and parks auto-play. Snapping to whole
+    // strokes keeps scrubbing from landing mid-stroke, and a cooldown makes
+    // one wheel notch move one stroke whatever its raw magnitude. The wheel
+    // delta is consumed so the surrounding scroll area stays put.
+    if response.hovered() {
+        let scroll_y = ui.input(|i| i.raw_scroll_delta.y);
+        if scroll_y != 0.0 {
+            ui.input_mut(|i| {
+                i.raw_scroll_delta = egui::Vec2::ZERO;
+                i.smooth_scroll_delta = egui::Vec2::ZERO;
+            });
+            anim.resume_at = now + SCROLL_PAUSE_SECS;
+            anim.scrubbing = true;
+            if now - anim.last_step >= SCROLL_STEP_COOLDOWN {
+                // Nudge off an exact boundary before rounding so a snapped
+                // position still steps to the neighbouring stroke.
+                anim.progress = if scroll_y < 0.0 {
+                    ((anim.progress + 1e-3).floor() + 1.0).min(n)
+                } else {
+                    ((anim.progress - 1e-3).ceil() - 1.0).max(0.0)
+                };
+                anim.last_step = now;
+            }
+        }
+    }
+
+    // Auto-play once the scroll pause (and any end-of-loop hold) is over.
+    if now >= anim.resume_at {
+        if anim.scrubbing {
+            // Resuming from a scrub: rewind to the start of the stroke the
+            // user parked on so auto-play redraws it before moving on.
+            anim.scrubbing = false;
+            anim.progress = (anim.progress - 1.0).max(0.0);
+        }
+        if anim.progress >= n {
+            anim.progress = 0.0; // finished holding — restart the loop
+        } else {
+            let dt = (now - anim.last_time).clamp(0.0, 0.05);
+            anim.progress = (anim.progress + (dt / STROKE_SECS) as f32).min(n);
+            if anim.progress >= n {
+                anim.resume_at = now + END_HOLD_SECS; // hold the finished glyph
+            }
+        }
+    }
+    anim.last_time = now;
+    ui.data_mut(|d| d.insert_temp(id, anim));
+    ui.ctx().request_repaint(); // keep the animation running
+
     let painter = ui.painter();
     painter.rect_stroke(
         rect,
@@ -726,49 +827,86 @@ fn draw_kanji_strokes(ui: &mut egui::Ui, strokes: &[String], size: f32) {
             rect.top() + p.y as f32 * scale,
         )
     };
+    let ink = ui.visuals().text_color();
     let accent = egui::Color32::from_rgb(80, 140, 240);
-    let done = ui.visuals().weak_text_color();
-    let n = strokes.len().max(1) as f32;
+    let guide = ink.gamma_multiply(0.14);
+    let width = (2.8 * scale).max(1.5);
+    // While scrubbing, the most recently revealed stroke is the highlighted
+    // one (there is no stroke mid-trace, since scrolling snaps to whole
+    // strokes).
+    let scrub_stroke = anim.progress.round() as i32 - 1;
 
     for (i, d) in strokes.iter().enumerate() {
-        let Ok(path) = kurbo::BezPath::from_svg(d) else {
+        let pts: Vec<egui::Pos2> = flatten_stroke(d).into_iter().map(to_screen).collect();
+        if pts.len() < 2 {
             continue;
-        };
-        let t = i as f32 / n;
-        let color = egui::Color32::from_rgb(
-            (accent.r() as f32 * (1.0 - t) + done.r() as f32 * t) as u8,
-            (accent.g() as f32 * (1.0 - t) + done.g() as f32 * t) as u8,
-            (accent.b() as f32 * (1.0 - t) + done.b() as f32 * t) as u8,
-        );
-        let stroke = egui::Stroke::new((2.6 * scale).max(1.4), color);
-
-        let mut points: Vec<egui::Pos2> = Vec::new();
-        let mut start: Option<kurbo::Point> = None;
-        kurbo::flatten(path.iter(), 0.2, |el| match el {
-            kurbo::PathEl::MoveTo(p) => {
-                if points.len() > 1 {
-                    painter.add(egui::Shape::line(points.clone(), stroke));
-                }
-                points = vec![to_screen(p)];
-                start.get_or_insert(p);
-            }
-            kurbo::PathEl::LineTo(p) => points.push(to_screen(p)),
-            _ => {}
-        });
-        if points.len() > 1 {
-            painter.add(egui::Shape::line(points, stroke));
         }
-        // Stroke number near the start of the stroke.
-        if size >= 64.0 {
-            if let Some(p) = start {
-                painter.text(
-                    to_screen(p) + egui::vec2(-2.0, -2.0),
-                    egui::Align2::RIGHT_BOTTOM,
-                    (i + 1).to_string(),
-                    egui::FontId::proportional(9.0),
-                    color,
-                );
-            }
+        let frac = (anim.progress - i as f32).clamp(0.0, 1.0);
+        // Ghost the not-yet-finished strokes so the glyph keeps its shape.
+        if frac < 1.0 {
+            painter.add(egui::Shape::line(
+                pts.clone(),
+                egui::Stroke::new(width, guide),
+            ));
+        }
+        if frac <= 0.0 {
+            continue;
+        }
+        // The stroke mid-trace is the "active" one: highlighted, with a pen
+        // tip. While scrubbing, the last revealed stroke is highlighted too
+        // but without the tip. Everything else settles to ink.
+        let active = frac < 1.0;
+        let highlight = active || (anim.scrubbing && i as i32 == scrub_stroke);
+        let color = if highlight { accent } else { ink };
+        let (drawn, tip) = partial_polyline(&pts, frac);
+        if drawn.len() > 1 {
+            painter.add(egui::Shape::line(drawn, egui::Stroke::new(width, color)));
+        }
+        if active && !anim.scrubbing {
+            painter.circle_filled(tip, (width * 0.9).max(2.0), accent);
         }
     }
+}
+
+/// Flatten one KanjiVG stroke path into a polyline in its 0–109 space.
+/// Subpath breaks are joined into one run so a fractional trace is
+/// continuous (strokes are almost always a single subpath anyway).
+fn flatten_stroke(d: &str) -> Vec<kurbo::Point> {
+    let mut pts = Vec::new();
+    if let Ok(path) = kurbo::BezPath::from_svg(d) {
+        kurbo::flatten(path.iter(), 0.2, |el| match el {
+            kurbo::PathEl::MoveTo(p) | kurbo::PathEl::LineTo(p) => pts.push(p),
+            _ => {}
+        });
+    }
+    pts
+}
+
+/// The leading `frac` (0–1) of a polyline by arc length, plus the point at
+/// its tip (the pen position). `frac >= 1.0` returns the whole line.
+fn partial_polyline(pts: &[egui::Pos2], frac: f32) -> (Vec<egui::Pos2>, egui::Pos2) {
+    if frac >= 1.0 {
+        return (pts.to_vec(), *pts.last().unwrap());
+    }
+    let total: f32 = pts.windows(2).map(|w| w[0].distance(w[1])).sum();
+    let target = total * frac;
+    let mut acc = 0.0;
+    let mut out = vec![pts[0]];
+    let mut tip = pts[0];
+    for w in pts.windows(2) {
+        let seg = w[0].distance(w[1]);
+        if seg <= 0.0 {
+            continue;
+        }
+        if acc + seg >= target {
+            let t = ((target - acc) / seg).clamp(0.0, 1.0);
+            tip = w[0] + (w[1] - w[0]) * t;
+            out.push(tip);
+            break;
+        }
+        acc += seg;
+        out.push(w[1]);
+        tip = w[1];
+    }
+    (out, tip)
 }

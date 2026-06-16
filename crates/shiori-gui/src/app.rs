@@ -14,6 +14,10 @@ use shiori_llm::Explainer;
 
 use crate::settings::{Settings, Theme};
 
+/// Default UI zoom factor: two Ctrl+Plus steps (0.1 each) above egui's
+/// 1.0 baseline. Applied at startup and used as the Ctrl+0 reset target.
+const DEFAULT_ZOOM_FACTOR: f32 = 1.2;
+
 /// Messages posted back from background threads.
 pub enum Msg {
     AppOpened(Result<Box<App>, String>),
@@ -409,6 +413,11 @@ impl ShioriGui {
         let (tx, rx) = channel();
         let data_dir = default_data_dir();
         let settings = Settings::load(&data_dir);
+
+        // Start larger than egui's 1.0 baseline. The user can still zoom
+        // up or down from here with Ctrl+Plus/Minus; we don't persist egui
+        // memory, so each launch returns to this default.
+        cc.egui_ctx.set_zoom_factor(DEFAULT_ZOOM_FACTOR);
 
         // Install whichever Japanese font is usable right now; if the
         // chosen Noto font isn't cached yet, the first frame's
@@ -1283,6 +1292,16 @@ impl eframe::App for ShioriGui {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Redirect the built-in zoom-reset shortcut (Ctrl/Cmd+0) to our
+        // larger default instead of egui's hard-coded 1.0. Consuming it
+        // here, before egui's end-of-pass zoom handler runs, stops that
+        // handler from also firing and overriding us. Ctrl+Plus/Minus keep
+        // egui's default behavior.
+        let zoom_reset = egui::KeyboardShortcut::new(egui::Modifiers::COMMAND, egui::Key::Num0);
+        if ctx.input_mut(|i| i.consume_shortcut(&zoom_reset)) {
+            ctx.set_zoom_factor(DEFAULT_ZOOM_FACTOR);
+        }
+
         self.apply_theme(ctx);
         self.apply_fonts(ctx);
         self.handle_messages(ctx);
