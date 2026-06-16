@@ -42,6 +42,20 @@ impl ShioriGui {
         let mut action: Option<WordAction> = None;
         let mut clicked: Option<(usize, usize)> = None; // (sentence, token)
         let mut explain_requested = false;
+        let mut open_explanation_modal = false;
+        // While the explanation modal floats over the reading view, reader
+        // input (word clicks, page flips, shortcuts) is suppressed so it can't
+        // disturb the page underneath. The away clock still ticks below —
+        // interacting with the modal counts as activity, just like the page.
+        let modal_open = self
+            .reader
+            .as_ref()
+            .is_some_and(|r| r.explanation_modal);
+        // The whole reader content area (everything right of the nav rail,
+        // below any banner), captured before this view's own panels carve it
+        // up — the explanation modal centres in this so it spans the reading
+        // text and the dictionary panel alike, but never the nav rail.
+        let content_rect = ctx.available_rect();
 
         let font_size = self.settings.reader_font_size.clamp(14.0, 40.0);
         let spacing_mult = self.settings.reader_line_spacing.clamp(0.6, 2.0);
@@ -121,7 +135,7 @@ impl ShioriGui {
 
         // Keyboard shortcuts (ignored while a text field has focus).
         let shortcuts = self.settings.shortcuts.clone();
-        if !input_blocked {
+        if !input_blocked && !modal_open {
             if shortcut_pressed(ctx, &shortcuts.reader_away) {
                 manual_away = true;
             }
@@ -164,11 +178,29 @@ impl ShioriGui {
         }
 
         let mut open_kanji: Option<String> = None;
+        // Trim the panel's right padding so its vertical scroll bar sits at
+        // the window edge instead of floating ~8px inside it.
+        let dict_frame = egui::Frame::side_top_panel(&ctx.style()).inner_margin(egui::Margin {
+            left: 8,
+            right: 2,
+            top: 2,
+            bottom: 2,
+        });
         let panel_rect = egui::SidePanel::right("dict-panel")
             .resizable(true)
             .default_width(340.0)
+            // Cap the width so a stray wide element (e.g. a Markdown table the
+            // tutor slipped in) can't balloon the panel over the whole page;
+            // it clips instead, and the 🔎 modal shows it in full.
+            .width_range(220.0..=700.0)
+            .frame(dict_frame)
             .show(ctx, |ui| {
-                action = self.dictionary_panel(ui, &mut explain_requested, &mut open_kanji);
+                action = self.dictionary_panel(
+                    ui,
+                    &mut explain_requested,
+                    &mut open_kanji,
+                    &mut open_explanation_modal,
+                );
             })
             .response
             .rect;
@@ -176,6 +208,12 @@ impl ShioriGui {
             self.end_page_visit(crate::session::VisitEnd::Pause);
             self.open_dictionary(kanji);
             return;
+        }
+        if open_explanation_modal {
+            if let Some(reader) = self.reader.as_mut() {
+                reader.explanation_modal = true;
+                reader.explanation_modal_just_opened = true;
+            }
         }
 
         // Progress strip + page controls at the bottom. The control
@@ -263,7 +301,7 @@ impl ShioriGui {
         // Scroll wheel and PageUp/PageDown flip pages, e-reader style.
         // Scrolling over the dictionary panel scrolls that panel instead:
         // it still resets the away timer above, but must not flip the page.
-        if !input_blocked {
+        if !input_blocked && !modal_open {
             let pointer_over_panel = ctx
                 .input(|i| i.pointer.hover_pos())
                 .is_some_and(|p| panel_rect.contains(p));
@@ -543,7 +581,7 @@ impl ShioriGui {
         }
 
         if let Some((s_idx, t_idx)) = clicked {
-            if !input_blocked {
+            if !input_blocked && !modal_open {
                 self.select_token(s_idx, t_idx);
             }
         }
@@ -553,6 +591,7 @@ impl ShioriGui {
         if let Some(action) = action {
             self.apply_word_action(action);
         }
+        self.show_explanation_modal(ctx, content_rect);
     }
 
     /// Move the selection to the next/previous selectable phrase group.
@@ -644,6 +683,7 @@ impl ShioriGui {
             reader.selected = Some((s_idx, g_idx));
             reader.panel = panel;
             reader.explanation = None;
+            reader.explanation_modal = false;
         }
     }
 
@@ -687,6 +727,7 @@ impl ShioriGui {
         ui: &mut egui::Ui,
         explain_requested: &mut bool,
         open_kanji: &mut Option<String>,
+        open_explanation_modal: &mut bool,
     ) -> Option<WordAction> {
         let mut action = None;
         let reader = self.reader.as_ref()?;
@@ -885,17 +926,38 @@ impl ShioriGui {
                 ui.separator();
                 ui.label(egui::RichText::new("Sentence explanation").strong());
                 if self.explainer.is_available() {
-                    if reader.explaining {
-                        ui.horizontal(|ui| {
+                    ui.horizontal(|ui| {
+                        if reader.explaining {
                             ui.spinner();
                             ui.label("asking the tutor…");
-                        });
-                    } else if ui.button("Explain this sentence").clicked() {
-                        *explain_requested = true;
-                    }
+                        } else if ui.button("Explain this sentence").clicked() {
+                            *explain_requested = true;
+                        }
+                        // Expand-to-modal, pinned to the right at the same
+                        // level — the magnifier matches the dictionary card.
+                        if reader.explanation.is_some() {
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    if ui
+                                        .small_button("🔎")
+                                        .on_hover_text("Read the explanation in a larger window")
+                                        .clicked()
+                                    {
+                                        *open_explanation_modal = true;
+                                    }
+                                },
+                            );
+                        }
+                    });
                     if let Some(explanation) = &reader.explanation {
                         ui.add_space(4.0);
-                        ui.label(explanation);
+                        // The tutor answers in Markdown; render it formatted
+                        // rather than dumping the raw source. Wide content
+                        // (tables) scrolls sideways instead of stretching the
+                        // panel — see render_markdown — and the 🔎 opens the
+                        // same Markdown in a roomy modal.
+                        render_markdown(ui, "reader-explanation-inline", explanation, false);
                     }
                 } else {
                     ui.weak("Add an API key in Settings to enable LLM explanations.");
@@ -903,6 +965,97 @@ impl ShioriGui {
             });
 
         action
+    }
+
+    /// Render the sentence-explanation modal, if open, via the shared
+    /// [`super::modal::centered_modal`] shell. It is centred in the reading
+    /// area (not the whole screen), so the nav rail and dictionary panel stay
+    /// put; clicks inside the modal stay in the modal, and a click on the
+    /// reading area behind it (or Escape) dismisses it. The away clock is
+    /// driven from raw input above, so reading the explanation still counts
+    /// as activity.
+    fn show_explanation_modal(&mut self, ctx: &egui::Context, area: egui::Rect) {
+        let (explanation, just_opened) = {
+            let Some(reader) = self.reader.as_mut() else {
+                return;
+            };
+            if !reader.explanation_modal {
+                return;
+            }
+            let Some(explanation) = reader.explanation.clone() else {
+                return;
+            };
+            (
+                explanation,
+                std::mem::take(&mut reader.explanation_modal_just_opened),
+            )
+        };
+
+        let close = super::modal::centered_modal(
+            ctx,
+            area,
+            "reader-explanation-modal",
+            just_opened,
+            |ui| {
+                ui.label(egui::RichText::new("Sentence explanation").strong());
+            },
+            |ui| {
+                render_markdown(ui, "reader-explanation-modal-body", &explanation, true);
+            },
+        );
+
+        if close {
+            if let Some(reader) = self.reader.as_mut() {
+                reader.explanation_modal = false;
+            }
+        }
+    }
+}
+
+/// Render the tutor's Markdown with a real heading hierarchy. When
+/// `scrollable` it gets its own vertical scroll area (the modal, which owns
+/// its scrolling); otherwise it renders inline and the caller's scroll area
+/// handles height (the side panel, which wraps everything to its width).
+///
+/// Tables are discouraged upstream (the prompt asks for lists) because
+/// egui_commonmark lays each table cell out in a non-wrapping row, so cells
+/// cannot wrap; the panel's width cap keeps a stray one from ballooning it.
+fn render_markdown(ui: &mut egui::Ui, id: &str, markdown: &str, scrollable: bool) {
+    let draw = |ui: &mut egui::Ui| {
+        // egui_commonmark scales headings between the Body and Heading text
+        // styles, and egui's default Heading sits barely above Body — bump it
+        // (this scope only) so #/##/### gain a real size hierarchy.
+        let body = ui
+            .style()
+            .text_styles
+            .get(&egui::TextStyle::Body)
+            .map_or(14.0, |f| f.size);
+        if let Some(heading) = ui
+            .style_mut()
+            .text_styles
+            .get_mut(&egui::TextStyle::Heading)
+        {
+            heading.size = body * 2.0;
+        }
+        // A fresh cache each frame is fine — explanations are short and
+        // image-free, so there is nothing worth persisting.
+        let mut cache = egui_commonmark::CommonMarkCache::default();
+        egui_commonmark::CommonMarkViewer::new().show(ui, &mut cache, markdown);
+    };
+
+    if scrollable {
+        // Reserve the (solid) scroll bar's gutter so text wraps clear of it
+        // rather than tripping a spurious horizontal bar.
+        let wrap = (ui.available_width() - ui.spacing().scroll.allocated_width()).max(0.0);
+        egui::ScrollArea::vertical()
+            .id_salt(id)
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                ui.set_max_width(wrap);
+                draw(ui);
+            });
+    } else {
+        ui.scope(draw);
     }
 }
 

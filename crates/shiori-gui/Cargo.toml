@@ -21,6 +21,7 @@ serde.workspace = true
 serde_json.workspace = true
 shiori-nlp = { version = "0.1.0", path = "../shiori-nlp" }
 egui_extras = "0.31"
+egui_commonmark = { version = "0.20", default-features = false, features = ["pulldown_cmark"] }
 ureq = "2"
 kurbo = "0.13"
 

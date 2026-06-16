@@ -90,6 +90,11 @@ pub struct ReaderState {
     pub panel: Option<WordPanel>,
     pub explanation: Option<String>,
     pub explaining: bool,
+    /// The explanation is open in the centered modal for full-width reading.
+    pub explanation_modal: bool,
+    /// Set the frame the modal opens, so the opening click is not read as a
+    /// click-away that immediately closes it.
+    pub explanation_modal_just_opened: bool,
     /// Sentence-index ranges forming each paragraph, in order.
     pub para_ranges: Vec<(usize, usize)>,
     /// Paragraph index of each sentence.
@@ -504,6 +509,11 @@ impl ShioriGui {
                 Theme::Light => egui::Visuals::light(),
                 Theme::Sepia => sepia_visuals(),
             });
+            // Solid scroll bars reserve a gutter at the edge, so content wraps
+            // clear of them instead of sliding under a floating overlay bar.
+            ctx.style_mut(|style| {
+                style.spacing.scroll = egui::style::ScrollStyle::solid();
+            });
             self.applied_theme = Some(self.settings.theme);
         }
     }
@@ -803,6 +813,8 @@ impl ShioriGui {
                 panel: None,
                 explanation: None,
                 explaining: false,
+                explanation_modal: false,
+                explanation_modal_just_opened: false,
                 para_ranges,
                 para_of_sentence,
                 page_starts: Vec::new(),

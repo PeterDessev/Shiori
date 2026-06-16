@@ -33,7 +33,15 @@ impl ShioriGui {
         let mut learn_headword: Option<String> = None;
         let mut toggle_examples: Option<i64> = None;
         let mut open_info: Option<usize> = None;
-        let central = egui::CentralPanel::default().show(ctx, |ui| {
+        // Trim the right padding so the results' vertical scroll bar sits at
+        // the window edge instead of floating ~8px inside it.
+        let dict_frame = egui::Frame::central_panel(&ctx.style()).inner_margin(egui::Margin {
+            left: 8,
+            right: 2,
+            top: 8,
+            bottom: 8,
+        });
+        let central = egui::CentralPanel::default().frame(dict_frame).show(ctx, |ui| {
             ui.add_space(6.0);
             ui.horizontal(|ui| {
                 ui.heading("Dictionary");

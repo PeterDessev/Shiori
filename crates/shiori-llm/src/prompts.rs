@@ -28,8 +28,8 @@ impl SentenceContext {
 /// System prompt shared by both features.
 pub const SYSTEM_PROMPT: &str = "You are a Japanese language tutor inside a reading application. \
 The user is reading real Japanese text. Answer in English, concisely, for an adult learner. \
-Use plain text (no markdown tables). When you cite Japanese, give it in Japanese script \
-followed by a reading in parentheses where helpful.";
+Do not use emoji — the reader cannot display them. When you cite Japanese, give it in Japanese \
+script followed by a reading in parentheses where helpful.";
 
 /// Build the user prompt for a sentence explanation.
 pub fn build_explain_prompt(context: &SentenceContext) -> String {
@@ -45,6 +45,14 @@ pub fn build_explain_prompt(context: &SentenceContext) -> String {
     if let Some(level) = &context.learner_level {
         prompt.push_str(&format!("\nPitch the explanation at a {level} learner."));
     }
+    // The reader renders Markdown, so light structure reads better than a wall
+    // of text. Tables render poorly (their cells do not wrap), so ask for lists
+    // instead.
+    prompt.push_str(
+        "\n\nFormat the answer with light Markdown — short headings, **bold** for key terms, \
+and bullet or numbered lists. Do not use tables; their cells will not wrap here, so use lists \
+to lay out comparisons instead.",
+    );
     prompt
 }
 
@@ -55,7 +63,7 @@ pub fn build_feedback_prompt(writing_prompt: &str, user_text: &str) -> String {
 They wrote:\n\n{user_text}\n\n\
 Give feedback on naturalness. Point out anything ungrammatical, then anything grammatical \
 but unnatural (word choice, register, phrasing a native speaker would not use), and suggest \
-a natural rewrite. Encourage what they got right. Keep it under 250 words."
+a natural rewrite. Encourage what they got right. Keep it under 250 words. Use plain text."
     )
 }
 
