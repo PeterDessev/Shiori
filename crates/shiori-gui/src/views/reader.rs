@@ -47,10 +47,7 @@ impl ShioriGui {
         // input (word clicks, page flips, shortcuts) is suppressed so it can't
         // disturb the page underneath. The away clock still ticks below —
         // interacting with the modal counts as activity, just like the page.
-        let modal_open = self
-            .reader
-            .as_ref()
-            .is_some_and(|r| r.explanation_modal);
+        let modal_open = self.reader.as_ref().is_some_and(|r| r.explanation_modal);
         // The whole reader content area (everything right of the nav rail,
         // below any banner), captured before this view's own panels carve it
         // up — the explanation modal centres in this so it spans the reading

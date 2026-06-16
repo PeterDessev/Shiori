@@ -41,169 +41,179 @@ impl ShioriGui {
             top: 8,
             bottom: 8,
         });
-        let central = egui::CentralPanel::default().frame(dict_frame).show(ctx, |ui| {
-            ui.add_space(6.0);
-            ui.horizontal(|ui| {
-                ui.heading("Dictionary");
+        let central = egui::CentralPanel::default()
+            .frame(dict_frame)
+            .show(ctx, |ui| {
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    ui.heading("Dictionary");
+                    ui.add_space(8.0);
+                    let response = ui.add_sized(
+                        [(ui.available_width() - 80.0).clamp(220.0, 420.0), 24.0],
+                        egui::TextEdit::singleline(&mut self.dictionary.query)
+                            .hint_text("猫, ねこ, neko, 食べました, tabemashita…"),
+                    );
+                    if ui.button("✕").clicked() {
+                        self.dictionary.query.clear();
+                        response.request_focus();
+                    }
+                });
                 ui.add_space(8.0);
-                let response = ui.add_sized(
-                    [(ui.available_width() - 80.0).clamp(220.0, 420.0), 24.0],
-                    egui::TextEdit::singleline(&mut self.dictionary.query)
-                        .hint_text("猫, ねこ, neko, 食べました, tabemashita…"),
-                );
-                if ui.button("✕").clicked() {
-                    self.dictionary.query.clear();
-                    response.request_focus();
+
+                if !self.dict_ready() {
+                    ui.colored_label(
+                        egui::Color32::from_rgb(230, 160, 60),
+                        "No dictionary installed — retry the download from the banner.",
+                    );
+                    return;
                 }
-            });
-            ui.add_space(8.0);
-
-            if !self.dict_ready() {
-                ui.colored_label(
-                    egui::Color32::from_rgb(230, 160, 60),
-                    "No dictionary installed — retry the download from the banner.",
-                );
-                return;
-            }
-            if self.dictionary.query.trim().is_empty() {
-                ui.weak(
-                    "Search by kanji, kana, or rōmaji (Neko → ネコ). Conjugated forms \
+                if self.dictionary.query.trim().is_empty() {
+                    ui.weak(
+                        "Search by kanji, kana, or rōmaji (Neko → ネコ). Conjugated forms \
                      find their dictionary root. Prefix matches included.",
-                );
-                return;
-            }
+                    );
+                    return;
+                }
 
-            let results = &self.dictionary.results;
-            if results.words.is_empty() && results.kanji.is_empty() {
-                ui.weak("No matches.");
-                return;
-            }
+                let results = &self.dictionary.results;
+                if results.words.is_empty() && results.kanji.is_empty() {
+                    ui.weak("No matches.");
+                    return;
+                }
 
-            // Banner explaining a conjugated/compounded query.
-            if let Some(analysis) = &results.analysis {
-                form_banner(ui, analysis, &results.words);
-                ui.add_space(8.0);
-            }
+                // Banner explaining a conjugated/compounded query.
+                if let Some(analysis) = &results.analysis {
+                    form_banner(ui, analysis, &results.words);
+                    ui.add_space(8.0);
+                }
 
-            ui.columns(2, |columns| {
-                // Left: word entries.
-                egui::ScrollArea::vertical()
-                    .id_salt("dict-words")
-                    .auto_shrink([false; 2])
-                    .show(&mut columns[0], |ui| {
-                        for (i, hit) in results.words.iter().enumerate() {
-                            egui::Frame::group(ui.style()).show(ui, |ui| {
-                                ui.set_width(ui.available_width());
-                                // Title row: headword and chips on the left, a
-                                // "more info" button pinned to the top-right.
-                                ui.horizontal(|ui| {
-                                    ui.with_layout(
-                                        egui::Layout::right_to_left(egui::Align::Center),
-                                        |ui| {
-                                            if ui
-                                                .small_button("🔎")
-                                                .on_hover_text("More info")
-                                                .clicked()
-                                            {
-                                                open_info = Some(i);
-                                            }
-                                            ui.with_layout(
-                                                egui::Layout::left_to_right(egui::Align::Center),
-                                                |ui| {
-                                                    ui.label(
-                                                        egui::RichText::new(hit.entry.headword())
+                ui.columns(2, |columns| {
+                    // Left: word entries.
+                    egui::ScrollArea::vertical()
+                        .id_salt("dict-words")
+                        .auto_shrink([false; 2])
+                        .show(&mut columns[0], |ui| {
+                            for (i, hit) in results.words.iter().enumerate() {
+                                egui::Frame::group(ui.style()).show(ui, |ui| {
+                                    ui.set_width(ui.available_width());
+                                    // Title row: headword and chips on the left, a
+                                    // "more info" button pinned to the top-right.
+                                    ui.horizontal(|ui| {
+                                        ui.with_layout(
+                                            egui::Layout::right_to_left(egui::Align::Center),
+                                            |ui| {
+                                                if ui
+                                                    .small_button("🔎")
+                                                    .on_hover_text("More info")
+                                                    .clicked()
+                                                {
+                                                    open_info = Some(i);
+                                                }
+                                                ui.with_layout(
+                                                    egui::Layout::left_to_right(
+                                                        egui::Align::Center,
+                                                    ),
+                                                    |ui| {
+                                                        ui.label(
+                                                            egui::RichText::new(
+                                                                hit.entry.headword(),
+                                                            )
                                                             .size(22.0)
                                                             .strong(),
-                                                    );
-                                                    let kana = hit
-                                                        .entry
-                                                        .kana
-                                                        .first()
-                                                        .map(|k| k.text.as_str())
-                                                        .unwrap_or("");
-                                                    if !kana.is_empty()
-                                                        && kana != hit.entry.headword()
-                                                    {
-                                                        ui.label(format!("（{kana}）"));
-                                                    }
-                                                    if let Some(level) = hit.jlpt {
-                                                        jlpt_chip(ui, level);
-                                                    }
-                                                    if let Some(word) = &hit.word {
-                                                        ui.weak(format!(
-                                                            "· {}",
-                                                            word.status.as_str()
-                                                        ));
-                                                    }
-                                                },
-                                            );
-                                        },
-                                    );
-                                });
+                                                        );
+                                                        let kana = hit
+                                                            .entry
+                                                            .kana
+                                                            .first()
+                                                            .map(|k| k.text.as_str())
+                                                            .unwrap_or("");
+                                                        if !kana.is_empty()
+                                                            && kana != hit.entry.headword()
+                                                        {
+                                                            ui.label(format!("（{kana}）"));
+                                                        }
+                                                        if let Some(level) = hit.jlpt {
+                                                            jlpt_chip(ui, level);
+                                                        }
+                                                        if let Some(word) = &hit.word {
+                                                            ui.weak(format!(
+                                                                "· {}",
+                                                                word.status.as_str()
+                                                            ));
+                                                        }
+                                                    },
+                                                );
+                                            },
+                                        );
+                                    });
 
-                                // Part of speech / transitivity chips.
-                                let pos = hit.entry.pos_labels();
-                                if !pos.is_empty() {
+                                    // Part of speech / transitivity chips.
+                                    let pos = hit.entry.pos_labels();
+                                    if !pos.is_empty() {
+                                        ui.horizontal_wrapped(|ui| {
+                                            for label in &pos {
+                                                pos_chip(ui, label);
+                                            }
+                                        });
+                                    }
+
+                                    for (i, sense) in hit.entry.senses.iter().take(3).enumerate() {
+                                        let glosses: Vec<&str> =
+                                            sense.gloss.iter().map(|g| g.text.as_str()).collect();
+                                        if !glosses.is_empty() {
+                                            ui.label(format!("{}. {}", i + 1, glosses.join("; ")));
+                                        }
+                                    }
+
                                     ui.horizontal_wrapped(|ui| {
-                                        for label in &pos {
-                                            pos_chip(ui, label);
+                                        let learnable = match &hit.word {
+                                            Some(w) => w.status != KnowledgeStatus::Learning,
+                                            None => true,
+                                        };
+                                        if learnable && ui.small_button("➕ Learn (SRS)").clicked()
+                                        {
+                                            learn_headword = Some(hit.entry.headword().to_string());
+                                        }
+                                        if let Some(word) = &hit.word {
+                                            let open =
+                                                self.dictionary.examples_open.contains(&word.id.0);
+                                            let label = if open {
+                                                "▼ Example sentences"
+                                            } else {
+                                                "▶ Example sentences"
+                                            };
+                                            if ui.small_button(label).clicked() {
+                                                toggle_examples = Some(word.id.0);
+                                            }
                                         }
                                     });
-                                }
 
-                                for (i, sense) in hit.entry.senses.iter().take(3).enumerate() {
-                                    let glosses: Vec<&str> =
-                                        sense.gloss.iter().map(|g| g.text.as_str()).collect();
-                                    if !glosses.is_empty() {
-                                        ui.label(format!("{}. {}", i + 1, glosses.join("; ")));
-                                    }
-                                }
-
-                                ui.horizontal_wrapped(|ui| {
-                                    let learnable = match &hit.word {
-                                        Some(w) => w.status != KnowledgeStatus::Learning,
-                                        None => true,
-                                    };
-                                    if learnable && ui.small_button("➕ Learn (SRS)").clicked() {
-                                        learn_headword = Some(hit.entry.headword().to_string());
-                                    }
+                                    // Expanded example sentences from the library.
                                     if let Some(word) = &hit.word {
-                                        let open =
-                                            self.dictionary.examples_open.contains(&word.id.0);
-                                        let label = if open {
-                                            "▼ Example sentences"
-                                        } else {
-                                            "▶ Example sentences"
-                                        };
-                                        if ui.small_button(label).clicked() {
-                                            toggle_examples = Some(word.id.0);
+                                        if self.dictionary.examples_open.contains(&word.id.0) {
+                                            example_panel(
+                                                ui,
+                                                self.dictionary.examples.get(&word.id.0),
+                                            );
                                         }
                                     }
                                 });
+                                ui.add_space(6.0);
+                            }
+                        });
 
-                                // Expanded example sentences from the library.
-                                if let Some(word) = &hit.word {
-                                    if self.dictionary.examples_open.contains(&word.id.0) {
-                                        example_panel(ui, self.dictionary.examples.get(&word.id.0));
-                                    }
-                                }
-                            });
-                            ui.add_space(6.0);
-                        }
-                    });
-
-                // Right: kanji cards.
-                egui::ScrollArea::vertical()
-                    .id_salt("dict-kanji")
-                    .auto_shrink([false; 2])
-                    .show(&mut columns[1], |ui| {
-                        for kanji in &results.kanji {
-                            kanji_card(ui, kanji, "");
-                            ui.add_space(8.0);
-                        }
-                    });
+                    // Right: kanji cards.
+                    egui::ScrollArea::vertical()
+                        .id_salt("dict-kanji")
+                        .auto_shrink([false; 2])
+                        .show(&mut columns[1], |ui| {
+                            for kanji in &results.kanji {
+                                kanji_card(ui, kanji, "");
+                                ui.add_space(8.0);
+                            }
+                        });
+                });
             });
-        });
 
         if let Some(word_id) = toggle_examples {
             self.toggle_dictionary_examples(word_id);
