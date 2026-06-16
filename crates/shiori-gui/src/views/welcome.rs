@@ -143,7 +143,8 @@ impl ShioriGui {
                                      form, prefix included. Words can go straight into \
                                      the SRS from here, and every kanji in the query \
                                      gets a card with on/kun readings, meanings, \
-                                     school grade, and a numbered stroke-order diagram.",
+                                     school grade, and an animated stroke-order \
+                                     diagram you can scroll to scrub.",
                                 );
                             },
                         );
