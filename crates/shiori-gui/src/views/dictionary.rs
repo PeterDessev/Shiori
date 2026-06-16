@@ -311,11 +311,10 @@ impl ShioriGui {
         self.dictionary.info_just_opened = true;
     }
 
-    /// Render the "more info" modal, if open: a borderless window filling
-    /// most of `area` (the dictionary panel, minus the nav rail) with a
-    /// compact header, the card content and every example sentence on the
-    /// left, and the word's kanji cards on the right. Clicking outside it
-    /// (but not on the nav rail) or pressing Escape closes it.
+    /// Render the "more info" modal, if open, via the shared
+    /// [`super::modal::centered_modal`] shell: a compact header with the
+    /// headword, the card content and every example sentence on the left, and
+    /// the word's kanji cards on the right.
     fn show_info_modal(&mut self, ctx: &egui::Context, area: egui::Rect) {
         if self.dictionary.info.is_none() {
             return;
@@ -323,80 +322,30 @@ impl ShioriGui {
         // The click that opened the modal must not count as a click-away.
         let just_opened = std::mem::take(&mut self.dictionary.info_just_opened);
 
-        // Center the modal in the dictionary area with an even margin on
-        // every side (measured from the nav rail, not the screen edge).
-        let margin = 44.0;
-        let size = egui::vec2(
-            (area.width() - 2.0 * margin).max(240.0),
-            (area.height() - 2.0 * margin).max(240.0),
+        let info = self.dictionary.info.as_ref().expect("checked above");
+        let examples = info
+            .word_id
+            .and_then(|id| self.dictionary.examples.get(&id));
+        let close = super::modal::centered_modal(
+            ctx,
+            area,
+            "dict-word-details",
+            just_opened,
+            |ui| {
+                ui.label(egui::RichText::new(&info.headword).size(20.0).strong());
+                if !info.reading.is_empty() {
+                    ui.label(format!("（{}）", info.reading));
+                }
+                if let Some(level) = info.jlpt {
+                    jlpt_chip(ui, level);
+                }
+                if let Some(status) = &info.status {
+                    ui.weak(format!("· {status}"));
+                }
+            },
+            |ui| info_modal_body(ui, info, examples),
         );
-        // Anchor the window's centre to the centre of `area` — the screen
-        // centre shifted by whatever offset the nav rail (and banners)
-        // introduce — so it stays centred whatever its size.
-        let anchor_offset = area.center() - ctx.screen_rect().center();
 
-        let mut close = false;
-        let win = {
-            let info = self.dictionary.info.as_ref().expect("checked above");
-            let examples = info
-                .word_id
-                .and_then(|id| self.dictionary.examples.get(&id));
-            egui::Window::new("Word details")
-                .title_bar(false)
-                .resizable(false)
-                .collapsible(false)
-                .movable(false)
-                .anchor(egui::Align2::CENTER_CENTER, anchor_offset)
-                .fixed_size(size)
-                .show(ctx, |ui| {
-                    // Compact header standing in for a title bar.
-                    ui.horizontal(|ui| {
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.button("✕").on_hover_text("Close (Esc)").clicked() {
-                                close = true;
-                            }
-                            ui.with_layout(
-                                egui::Layout::left_to_right(egui::Align::Center),
-                                |ui| {
-                                    ui.label(
-                                        egui::RichText::new(&info.headword).size(20.0).strong(),
-                                    );
-                                    if !info.reading.is_empty() {
-                                        ui.label(format!("（{}）", info.reading));
-                                    }
-                                    if let Some(level) = info.jlpt {
-                                        jlpt_chip(ui, level);
-                                    }
-                                    if let Some(status) = &info.status {
-                                        ui.weak(format!("· {status}"));
-                                    }
-                                },
-                            );
-                        });
-                    });
-                    ui.separator();
-                    info_modal_body(ui, info, examples);
-                })
-        };
-
-        // Close on a click outside the window that lands in the dictionary
-        // area (never the nav rail, so the user can switch tabs and come
-        // back to a still-open modal), or on Escape.
-        if let (false, Some(win)) = (just_opened, &win) {
-            let rect = win.response.rect;
-            let clicked_away = ctx.input(|i| {
-                i.pointer.any_pressed()
-                    && i.pointer
-                        .press_origin()
-                        .is_some_and(|p| area.contains(p) && !rect.contains(p))
-            });
-            if clicked_away {
-                close = true;
-            }
-        }
-        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-            close = true;
-        }
         if close {
             self.dictionary.info = None;
         }

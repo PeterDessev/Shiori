@@ -2,6 +2,7 @@
 
 mod dictionary;
 mod library;
+mod modal;
 mod production;
 mod reader;
 mod review;
