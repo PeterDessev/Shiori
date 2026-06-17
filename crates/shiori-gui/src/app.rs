@@ -80,6 +80,18 @@ pub struct WordPanel {
     pub compound: Option<DictEntry>,
 }
 
+/// One wrapped display line of the reader: the (sentence, token) cells laid
+/// out on it and whether it opens a paragraph. Lines — not whole paragraphs —
+/// are the unit of pagination, so a paragraph taller than a page flows onto
+/// the next instead of spilling over the page edge.
+pub struct ReaderLine {
+    /// First wrapped line of a paragraph: gets a paragraph gap above it
+    /// rather than a row gap (the page's first line gets neither).
+    pub para_start: bool,
+    /// (sentence, token) cells on this line, in reading order.
+    pub cells: Vec<(usize, usize)>,
+}
+
 pub struct ReaderState {
     pub doc: Document,
     pub sentences: Vec<SentenceView>,
@@ -97,18 +109,25 @@ pub struct ReaderState {
     pub explanation_modal_just_opened: bool,
     /// Sentence-index ranges forming each paragraph, in order.
     pub para_ranges: Vec<(usize, usize)>,
-    /// Paragraph index of each sentence.
-    pub para_of_sentence: Vec<usize>,
-    /// Page boundaries as indices into `para_ranges`; page `i` covers
-    /// `para_ranges[page_starts[i]..page_starts[i+1]]`. Rebuilt lazily
-    /// whenever the layout size changes.
-    pub page_starts: Vec<usize>,
+    /// Wrapped display lines for the whole document at the current layout
+    /// width. Rebuilt lazily whenever the layout size, font, or zoom changes.
+    pub lines: Vec<ReaderLine>,
+    /// First `lines` index containing each sentence (drives position restore
+    /// and selection-follow across pages).
+    pub line_of_sentence: Vec<usize>,
+    /// Page boundaries as indices into `lines`; page `i` covers
+    /// `lines[page_line_starts[i]..page_line_starts[i+1]]`.
+    pub page_line_starts: Vec<usize>,
     pub current_page: usize,
     /// (width, height) the pages were computed for.
     pub page_layout: (f32, f32),
-    /// Rendered width of every token (lazy; pagination simulates the real
+    /// Rendered width of every token (lazy; the line breaker measures the
     /// whole-token wrap with these).
     pub token_widths: Vec<Vec<f32>>,
+    /// `pixels_per_point` the token widths were measured at. egui's global
+    /// zoom changes it, shifting every token's pixel-rounded width, so the
+    /// cache is re-measured and the pages re-flowed when it moves.
+    pub layout_ppp: f32,
     /// Sentence index to jump to once pages are computed (restores the
     /// saved reading position).
     pub pending_restore: Option<usize>,
@@ -131,15 +150,21 @@ impl ReaderState {
     }
 
     pub fn page_count(&self) -> usize {
-        self.page_starts.len().max(1)
+        self.page_line_starts.len().max(1)
     }
 
-    /// Page containing the given paragraph.
-    pub fn page_of_paragraph(&self, para: usize) -> usize {
-        self.page_starts
+    /// Page containing the given display line.
+    pub fn page_of_line(&self, line: usize) -> usize {
+        self.page_line_starts
             .iter()
-            .rposition(|&p| p <= para)
+            .rposition(|&l| l <= line)
             .unwrap_or_default()
+    }
+
+    /// Page that first shows the given sentence.
+    pub fn page_of_sentence(&self, sentence: usize) -> usize {
+        let line = self.line_of_sentence.get(sentence).copied().unwrap_or(0);
+        self.page_of_line(line)
     }
 }
 
@@ -563,14 +588,17 @@ impl ShioriGui {
     /// font, size, or spacing change), keeping the current position.
     pub fn invalidate_reader_layout(&mut self) {
         if let Some(reader) = self.reader.as_mut() {
-            let para = reader
-                .page_starts
+            let sentence = reader
+                .page_line_starts
                 .get(reader.current_page)
-                .copied()
+                .and_then(|&l| reader.lines.get(l))
+                .and_then(|line| line.cells.first())
+                .map(|&(s, _)| s)
                 .unwrap_or(0);
-            let sentence = reader.para_ranges.get(para).map(|&(s0, _)| s0).unwrap_or(0);
             reader.token_widths.clear();
-            reader.page_starts.clear();
+            reader.lines.clear();
+            reader.line_of_sentence.clear();
+            reader.page_line_starts.clear();
             reader.pending_restore = Some(sentence);
         }
     }
@@ -801,7 +829,7 @@ impl ShioriGui {
                 sentences.push(SentenceView { sentence, tokens });
             }
             let groups = compute_groups(&sentences);
-            let (para_ranges, para_of_sentence) = paragraph_structure(&sentences);
+            let (para_ranges, _) = paragraph_structure(&sentences);
             let word_occurrence = word_occurrences(&sentences);
             let pending_restore = (doc.last_sentence > 0).then_some(doc.last_sentence as usize);
             let velocity = app.reading_velocity_cps()?;
@@ -816,11 +844,13 @@ impl ShioriGui {
                 explanation_modal: false,
                 explanation_modal_just_opened: false,
                 para_ranges,
-                para_of_sentence,
-                page_starts: Vec::new(),
+                lines: Vec::new(),
+                line_of_sentence: Vec::new(),
+                page_line_starts: Vec::new(),
                 current_page: 0,
                 page_layout: (0.0, 0.0),
                 token_widths: Vec::new(),
+                layout_ppp: 1.0,
                 pending_restore,
                 session: crate::session::SessionTracker::new(velocity),
                 word_occurrence,
@@ -889,7 +919,7 @@ impl ShioriGui {
         let Some(reader) = self.reader.as_ref() else {
             return;
         };
-        if reader.page_starts.is_empty() {
+        if reader.page_line_starts.is_empty() {
             // Not laid out yet; nothing meaningful to save.
             return;
         }
@@ -897,8 +927,8 @@ impl ShioriGui {
         let s0 = if page + 1 == reader.page_count() {
             reader.sentences.len() as u32
         } else {
-            let para = reader.page_starts.get(page).copied().unwrap_or(0);
-            let Some(&(s0, _)) = reader.para_ranges.get(para) else {
+            let line = reader.page_line_starts.get(page).copied().unwrap_or(0);
+            let Some(&(s0, _)) = reader.lines.get(line).and_then(|l| l.cells.first()) else {
                 return;
             };
             s0 as u32

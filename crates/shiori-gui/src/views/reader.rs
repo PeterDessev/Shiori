@@ -10,7 +10,7 @@ use eframe::egui;
 use shiori_core::{KnowledgeStatus, WordId};
 use shiori_dict::register::UsageProfile;
 
-use crate::app::ShioriGui;
+use crate::app::{ReaderLine, ShioriGui};
 use crate::settings::shortcut_pressed;
 use crate::views::{tight_highlight_rect, unknown_fill};
 
@@ -223,17 +223,20 @@ impl ShioriGui {
                 .as_ref()
                 .map(|r| {
                     let page = r.current_page.min(r.page_count() - 1);
-                    // Fraction of sentences before the *end* of this page.
-                    let end_para = r
-                        .page_starts
+                    // Fraction of sentences reached by the *end* of this page:
+                    // the first sentence shown on the next page (all of them
+                    // once the last page is reached).
+                    let next_line = r
+                        .page_line_starts
                         .get(page + 1)
                         .copied()
-                        .unwrap_or(r.para_ranges.len());
-                    let end_sentence = if end_para >= r.para_ranges.len() {
-                        r.sentences.len()
-                    } else {
-                        r.para_ranges[end_para].0
-                    };
+                        .unwrap_or(r.lines.len());
+                    let end_sentence = r
+                        .lines
+                        .get(next_line)
+                        .and_then(|l| l.cells.first())
+                        .map(|&(s, _)| s)
+                        .unwrap_or(r.sentences.len());
                     let frac = end_sentence as f32 / r.sentences.len().max(1) as f32;
                     (page, r.page_count(), frac)
                 })
@@ -327,6 +330,23 @@ impl ShioriGui {
                 let font = egui::FontId::proportional(font_size);
                 let row_height = ui.fonts(|f| f.row_height(&font));
 
+                // egui's global zoom (Ctrl +/-, Ctrl-scroll) changes
+                // pixels_per_point, which shifts the pixel-rounded width of
+                // every token. The cached widths — and the pagination
+                // greedy-wrapped from them — were measured at the previous
+                // zoom; kept as-is they under-count rows, so a page overfills
+                // and its last lines spill under the bottom progress bar.
+                // Drop the cache and re-flow on a zoom change, holding the
+                // reading position.
+                let ppp = ui.ctx().pixels_per_point();
+                let zoom_changed = {
+                    let reader = self.reader.as_ref().unwrap();
+                    !reader.token_widths.is_empty() && (reader.layout_ppp - ppp).abs() > 1e-3
+                };
+                if zoom_changed {
+                    self.invalidate_reader_layout();
+                }
+
                 // One-time per-token width measurement.
                 if self.reader.as_ref().unwrap().token_widths.is_empty() {
                     let widths: Vec<Vec<f32>> = {
@@ -352,52 +372,92 @@ impl ShioriGui {
                             })
                             .collect()
                     };
-                    self.reader.as_mut().unwrap().token_widths = widths;
+                    let reader = self.reader.as_mut().unwrap();
+                    reader.token_widths = widths;
+                    reader.layout_ppp = ppp;
                 }
 
                 let avail = ui.available_size();
                 let reader = self.reader.as_mut().unwrap();
-                let stale = reader.page_starts.is_empty()
+                let stale = reader.page_line_starts.is_empty()
                     || (reader.page_layout.0 - avail.x).abs() > 1.0
                     || (reader.page_layout.1 - avail.y).abs() > 1.0;
                 if stale {
-                    let current_para = reader
-                        .page_starts
+                    // Sentence at the top of the current page, to land back on
+                    // after re-flowing.
+                    let anchor = reader
+                        .page_line_starts
                         .get(reader.current_page)
-                        .copied()
+                        .and_then(|&l| reader.lines.get(l))
+                        .and_then(|line| line.cells.first())
+                        .map(|&(s, _)| s)
                         .unwrap_or(0);
+
+                    // Wrap whole tokens into display lines, greedily, exactly
+                    // as the renderer lays them out — but break across
+                    // paragraphs, recording where each sentence begins.
                     let wrap = (avail.x - 4.0).max(120.0);
-                    // The first row of a page needs ruby headroom that no
-                    // preceding paragraph gap provides.
+                    let mut lines: Vec<ReaderLine> = Vec::new();
+                    let mut line_of_sentence = vec![0usize; reader.sentences.len()];
+                    for &(s0, s1) in &reader.para_ranges {
+                        let mut cells: Vec<(usize, usize)> = Vec::new();
+                        let mut line_w = 0.0f32;
+                        let mut para_start = true;
+                        for si in s0..s1 {
+                            for (ti, w) in reader.token_widths[si].iter().enumerate() {
+                                if !cells.is_empty() && line_w + w > wrap {
+                                    lines.push(ReaderLine {
+                                        para_start,
+                                        cells: std::mem::take(&mut cells),
+                                    });
+                                    para_start = false;
+                                    line_w = 0.0;
+                                }
+                                if ti == 0 {
+                                    line_of_sentence[si] = lines.len();
+                                }
+                                cells.push((si, ti));
+                                line_w += w;
+                            }
+                            if reader.token_widths[si].is_empty() {
+                                line_of_sentence[si] = lines.len();
+                            }
+                        }
+                        if !cells.is_empty() {
+                            lines.push(ReaderLine { para_start, cells });
+                        }
+                    }
+
+                    // Pack lines into pages up to the height budget. The page's
+                    // first line carries the ruby headroom (counted once in the
+                    // budget); later lines take a row or paragraph gap. A line
+                    // can never exceed the budget, so no page overflows.
                     let budget = (avail.y - 8.0 - furi_gap).max(140.0);
                     let mut starts = vec![0usize];
                     let mut acc = 0.0f32;
-                    for (pi, (s0, s1)) in reader.para_ranges.iter().enumerate() {
-                        // Greedy wrap, exactly like horizontal_wrapped
-                        // places non-wrapping labels.
-                        let mut rows = 1u32;
-                        let mut line = 0.0f32;
-                        for si in *s0..*s1 {
-                            for w in &reader.token_widths[si] {
-                                if line > 0.0 && line + w > wrap {
-                                    rows += 1;
-                                    line = *w;
-                                } else {
-                                    line += w;
-                                }
-                            }
+                    for (li, line) in lines.iter().enumerate() {
+                        let page_top = li == *starts.last().unwrap();
+                        let gap = if page_top {
+                            0.0
+                        } else if line.para_start {
+                            para_gap
+                        } else {
+                            row_gap
+                        };
+                        let h = gap + row_height;
+                        if !page_top && acc + h > budget {
+                            starts.push(li);
+                            acc = row_height;
+                        } else {
+                            acc += h;
                         }
-                        let rows = rows as f32;
-                        let h = rows * row_height + (rows - 1.0) * row_gap + para_gap;
-                        if acc + h > budget && pi > *starts.last().unwrap() {
-                            starts.push(pi);
-                            acc = 0.0;
-                        }
-                        acc += h;
                     }
-                    reader.page_starts = starts;
+
+                    reader.lines = lines;
+                    reader.line_of_sentence = line_of_sentence;
+                    reader.page_line_starts = starts;
                     reader.page_layout = (avail.x, avail.y);
-                    reader.current_page = reader.page_of_paragraph(current_para);
+                    reader.current_page = reader.page_of_sentence(anchor);
                 }
 
                 // Jump to the saved reading position once pages exist. A
@@ -405,115 +465,112 @@ impl ShioriGui {
                 // last page.
                 if let Some(sentence) = reader.pending_restore.take() {
                     let idx = sentence.min(reader.sentences.len().saturating_sub(1));
-                    if let Some(&para) = reader.para_of_sentence.get(idx) {
-                        reader.current_page = reader.page_of_paragraph(para);
-                    }
+                    reader.current_page = reader.page_of_sentence(idx);
                 }
             }
 
             let reader = self.reader.as_ref().unwrap();
             let page = reader.current_page.min(reader.page_count() - 1);
-            let para_begin = reader.page_starts.get(page).copied().unwrap_or(0);
-            let para_end = reader
-                .page_starts
+            let line_begin = reader.page_line_starts.get(page).copied().unwrap_or(0);
+            let line_end = reader
+                .page_line_starts
                 .get(page + 1)
                 .copied()
-                .unwrap_or(reader.para_ranges.len());
+                .unwrap_or(reader.lines.len());
 
+            // Drive every vertical gap explicitly so the rendered page height
+            // matches what pagination budgeted; egui would otherwise insert
+            // its own item spacing between the rows.
+            ui.spacing_mut().item_spacing.y = 0.0;
             ui.add_space(furi_gap);
-            for (s0, s1) in &reader.para_ranges[para_begin..para_end] {
-                ui.horizontal_wrapped(|ui| {
+            for li in line_begin..line_end {
+                let line = &reader.lines[li];
+                if li != line_begin {
+                    ui.add_space(if line.para_start { para_gap } else { row_gap });
+                }
+                ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 0.0;
-                    ui.spacing_mut().item_spacing.y = row_gap;
                     let selection_fill = ui.visuals().selection.bg_fill;
                     let unknown_fill = unknown_fill(ui.visuals());
-                    for si in *s0..*s1 {
+                    for &(si, ti) in &line.cells {
                         let view = &reader.sentences[si];
-                        for (ti, row) in view.tokens.iter().enumerate() {
-                            let group = reader.group_of(si, ti);
-                            let selected = match (reader.selected, group) {
-                                (Some((ss, sg)), Some(g)) => ss == si && sg == g,
-                                _ => false,
-                            };
-                            let japanese = shiori_nlp::kana::is_japanese(&row.token.surface);
-                            let fill = if selected {
-                                Some(selection_fill)
-                            } else if show_unknown
-                                && japanese
-                                && row.status == KnowledgeStatus::Unknown
-                                && row.token.pos.is_lexical()
-                            {
-                                Some(unknown_fill)
+                        let row = &view.tokens[ti];
+                        let group = reader.group_of(si, ti);
+                        let selected = match (reader.selected, group) {
+                            (Some((ss, sg)), Some(g)) => ss == si && sg == g,
+                            _ => false,
+                        };
+                        let japanese = shiori_nlp::kana::is_japanese(&row.token.surface);
+                        let fill = if selected {
+                            Some(selection_fill)
+                        } else if show_unknown
+                            && japanese
+                            && row.status == KnowledgeStatus::Unknown
+                            && row.token.pos.is_lexical()
+                        {
+                            Some(unknown_fill)
+                        } else {
+                            None
+                        };
+                        let text = egui::RichText::new(&row.token.surface).size(font_size);
+                        // Tokens never wrap internally: a label that breaks
+                        // across lines reports a full-width union rect, which
+                        // painted highlights as page-wide bars.
+                        let label = egui::Label::new(text)
+                            .wrap_mode(egui::TextWrapMode::Extend)
+                            .sense(if japanese {
+                                egui::Sense::click()
                             } else {
-                                None
-                            };
-                            let text = egui::RichText::new(&row.token.surface).size(font_size);
-                            // Tokens never wrap internally: a label that
-                            // breaks across lines reports a full-width
-                            // union rect, which painted highlights as
-                            // page-wide bars.
-                            let label = egui::Label::new(text)
-                                .wrap_mode(egui::TextWrapMode::Extend)
-                                .sense(if japanese {
-                                    egui::Sense::click()
-                                } else {
-                                    egui::Sense::hover()
-                                });
-                            // Reserve a paint slot *under* the text, fill
-                            // it once the rect is known — tight around the
-                            // glyphs, opaque so adjacent tokens in one
-                            // phrase never double up.
-                            let bg_slot = ui.painter().add(egui::Shape::Noop);
-                            let response = ui.add(label);
-                            if let Some(fill) = fill {
-                                let rect = tight_highlight_rect(response.rect, font_size);
-                                ui.painter()
-                                    .set(bg_slot, egui::Shape::rect_filled(rect, 0.0, fill));
+                                egui::Sense::hover()
+                            });
+                        // Reserve a paint slot *under* the text, fill it once
+                        // the rect is known — tight around the glyphs, opaque
+                        // so adjacent tokens in one phrase never double up.
+                        let bg_slot = ui.painter().add(egui::Shape::Noop);
+                        let response = ui.add(label);
+                        if let Some(fill) = fill {
+                            let rect = tight_highlight_rect(response.rect, font_size);
+                            ui.painter()
+                                .set(bg_slot, egui::Shape::rect_filled(rect, 0.0, fill));
+                        }
+                        let show_ruby = match furigana_mode {
+                            crate::settings::FuriganaMode::None => false,
+                            crate::settings::FuriganaMode::All => true,
+                            crate::settings::FuriganaMode::Unknown => {
+                                row.status == KnowledgeStatus::Unknown
                             }
-                            let show_ruby = match furigana_mode {
-                                crate::settings::FuriganaMode::None => false,
-                                crate::settings::FuriganaMode::All => true,
-                                crate::settings::FuriganaMode::Unknown => {
-                                    row.status == KnowledgeStatus::Unknown
-                                }
-                                crate::settings::FuriganaMode::UnknownFirstX => {
-                                    row.status == KnowledgeStatus::Unknown
-                                        && reader
-                                            .word_occurrence
-                                            .get(si)
-                                            .and_then(|s| s.get(ti))
-                                            .is_some_and(|&n| n <= furigana_x)
-                                }
-                            };
-                            if show_ruby {
-                                if let Some(ruby) = token_furigana(
-                                    &row.token.surface,
-                                    &row.token.lemma,
-                                    &row.token.reading,
-                                ) {
-                                    ui.painter().text(
-                                        egui::pos2(
-                                            response.rect.center().x,
-                                            response.rect.top() - 1.0,
-                                        ),
-                                        egui::Align2::CENTER_BOTTOM,
-                                        ruby,
-                                        egui::FontId::proportional(furi_size),
-                                        ui.visuals().weak_text_color(),
-                                    );
-                                }
+                            crate::settings::FuriganaMode::UnknownFirstX => {
+                                row.status == KnowledgeStatus::Unknown
+                                    && reader
+                                        .word_occurrence
+                                        .get(si)
+                                        .and_then(|s| s.get(ti))
+                                        .is_some_and(|&n| n <= furigana_x)
                             }
-                            if japanese {
-                                let response =
-                                    response.on_hover_cursor(egui::CursorIcon::PointingHand);
-                                if response.clicked() {
-                                    clicked = Some((si, ti));
-                                }
+                        };
+                        if show_ruby {
+                            if let Some(ruby) = token_furigana(
+                                &row.token.surface,
+                                &row.token.lemma,
+                                &row.token.reading,
+                            ) {
+                                ui.painter().text(
+                                    egui::pos2(response.rect.center().x, response.rect.top() - 1.0),
+                                    egui::Align2::CENTER_BOTTOM,
+                                    ruby,
+                                    egui::FontId::proportional(furi_size),
+                                    ui.visuals().weak_text_color(),
+                                );
+                            }
+                        }
+                        if japanese {
+                            let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
+                            if response.clicked() {
+                                clicked = Some((si, ti));
                             }
                         }
                     }
                 });
-                ui.add_space(para_gap);
             }
         });
 
@@ -629,11 +686,8 @@ impl ShioriGui {
         self.select_token(s, t);
         // Follow the selection across page boundaries.
         let target = self.reader.as_ref().and_then(|reader| {
-            reader
-                .para_of_sentence
-                .get(s)
-                .map(|&para| reader.page_of_paragraph(para))
-                .filter(|&page| page != reader.current_page)
+            let page = reader.page_of_sentence(s);
+            (page != reader.current_page).then_some(page)
         });
         if let Some(page) = target {
             self.end_page_visit(crate::session::VisitEnd::Flip);

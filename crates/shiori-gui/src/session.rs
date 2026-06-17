@@ -114,24 +114,30 @@ impl SessionTracker {
 
 /// Characters on the reader's current page (0 before pagination).
 pub fn current_page_chars(reader: &ReaderState) -> u32 {
-    if reader.page_starts.is_empty() {
+    if reader.page_line_starts.is_empty() {
         return 0;
     }
     let page = reader.current_page.min(reader.page_count() - 1);
-    let begin = reader.page_starts.get(page).copied().unwrap_or(0);
+    let begin = reader.page_line_starts.get(page).copied().unwrap_or(0);
     let end = reader
-        .page_starts
+        .page_line_starts
         .get(page + 1)
         .copied()
-        .unwrap_or(reader.para_ranges.len())
-        .min(reader.para_ranges.len());
+        .unwrap_or(reader.lines.len())
+        .min(reader.lines.len());
     if begin >= end {
         return 0;
     }
-    reader.para_ranges[begin..end]
+    reader.lines[begin..end]
         .iter()
-        .flat_map(|&(s0, s1)| reader.sentences[s0..s1].iter())
-        .map(|v| v.sentence.text.chars().count() as u32)
+        .flat_map(|line| line.cells.iter())
+        .map(|&(si, ti)| {
+            reader.sentences[si].tokens[ti]
+                .token
+                .surface
+                .chars()
+                .count() as u32
+        })
         .sum()
 }
 
