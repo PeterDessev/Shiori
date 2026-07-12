@@ -19,8 +19,29 @@ jobs:
         run: cargo build --release -p shiori-gui
       - name: Package
         run: Compress-Archive -Path target/release/shiori.exe -DestinationPath shiori-${{ github.ref_name }}-windows-x86_64.zip
+      - name: Extract release notes from CHANGELOG
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}" -replace '^v', ''
+          $capture = $false
+          $notes = foreach ($line in Get-Content CHANGELOG.md) {
+            if ($line -match '^##\s+\[') {
+              if ($capture) { break }
+              if ($line -match "^##\s+\[$([regex]::Escape($version))\]") { $capture = $true }
+              continue
+            }
+            if ($capture) { $line }
+          }
+          # Drop link-reference definitions ([x]: http…); they render to nothing.
+          $notes = $notes | Where-Object { $_ -notmatch '^\[[^\]]+\]:\s' }
+          $body = ($notes -join "`n").Trim()
+          if ([string]::IsNullOrWhiteSpace($body)) {
+            throw "No CHANGELOG.md section found for version $version"
+          }
+          Set-Content -Path RELEASE_NOTES.md -Value $body -Encoding utf8
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           files: shiori-${{ github.ref_name }}-windows-x86_64.zip
+          body_path: RELEASE_NOTES.md
           generate_release_notes: true
