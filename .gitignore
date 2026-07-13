@@ -9,3 +9,6 @@
 
 # Zola build output for the website
 /site/public
+
+# README Gif Fabrication (lots of large files)
+/assets/Fabrication
