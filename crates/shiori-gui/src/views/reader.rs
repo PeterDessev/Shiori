@@ -403,8 +403,9 @@ impl ShioriGui {
                         let mut cells: Vec<(usize, usize)> = Vec::new();
                         let mut line_w = 0.0f32;
                         let mut para_start = true;
-                        for si in s0..s1 {
-                            for (ti, w) in reader.token_widths[si].iter().enumerate() {
+                        for (si, widths) in reader.token_widths.iter().enumerate().take(s1).skip(s0)
+                        {
+                            for (ti, w) in widths.iter().enumerate() {
                                 if !cells.is_empty() && line_w + w > wrap {
                                     lines.push(ReaderLine {
                                         para_start,
@@ -419,7 +420,7 @@ impl ShioriGui {
                                 cells.push((si, ti));
                                 line_w += w;
                             }
-                            if reader.token_widths[si].is_empty() {
+                            if widths.is_empty() {
                                 line_of_sentence[si] = lines.len();
                             }
                         }
