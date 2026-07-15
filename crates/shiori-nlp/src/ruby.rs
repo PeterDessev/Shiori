@@ -5,15 +5,9 @@
 //! the surface act as anchors: they must reappear in the reading, and the
 //! reading text between anchors belongs to the kanji run before them.
 
-use crate::kana::katakana_to_hiragana;
+use shiori_lang::RubySegment;
 
-/// One display segment of a word: the surface text and the furigana to
-/// show above it (`None` for kana segments, which read as themselves).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RubySegment {
-    pub text: String,
-    pub furigana: Option<String>,
-}
+use crate::kana::katakana_to_hiragana;
 
 fn is_kana_char(c: char) -> bool {
     matches!(c as u32, 0x3041..=0x30FF)

@@ -4282,6 +4282,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "shiori-lang"
+version = "0.1.0"
+dependencies = [
+ "shiori-core",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "shiori-llm"
 version = "0.1.0"
 dependencies = [
@@ -4299,6 +4307,7 @@ dependencies = [
  "lindera",
  "serde_json",
  "shiori-core",
+ "shiori-lang",
  "thiserror 2.0.18",
 ]
 

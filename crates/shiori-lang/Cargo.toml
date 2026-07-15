@@ -1,0 +1,11 @@
+[package]
+name = "shiori-lang"
+description = "The LanguageService abstraction: everything Shiori asks of a language"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+shiori-core.workspace = true
+thiserror.workspace = true

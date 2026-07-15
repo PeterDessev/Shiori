@@ -6,6 +6,7 @@
 //! tokens into such phrases and names the grammar of the tail.
 
 use shiori_core::{PartOfSpeech, Token};
+use shiori_lang::Inflection;
 
 /// Verbal suffix lemmas IPADIC tags as 動詞,接尾 (mapped to `Suffix`).
 /// Only these continue a verb chain; noun suffixes like 版 do not.
@@ -81,22 +82,6 @@ fn continues_verb_chain(token: &Token) -> bool {
         PartOfSpeech::Suffix => VERBAL_SUFFIXES.contains(&token.lemma.as_str()),
         PartOfSpeech::Particle => CONNECTIVE_PARTICLES.contains(&token.surface.as_str()),
         _ => false,
-    }
-}
-
-/// What a conjugated phrase is doing grammatically.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Inflection {
-    /// Headline for well-known constructions, e.g.
-    /// "〜ている — ongoing action or resulting state (te-iru form)".
-    pub summary: Option<String>,
-    /// One line per grammatical component after the stem, in order.
-    pub parts: Vec<String>,
-}
-
-impl Inflection {
-    pub fn is_plain(&self) -> bool {
-        self.summary.is_none() && self.parts.is_empty()
     }
 }
 

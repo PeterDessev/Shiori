@@ -6,10 +6,18 @@ edition.workspace = true
 license.workspace = true
 authors.workspace = true
 
+[features]
+# The embedded IPADIC dictionary (and Lindera) sit behind a feature so a
+# lindera build break can never block a pack-only release; the kana,
+# romaji, ruby, and inflection utilities build without it.
+default = ["embed-ipadic"]
+embed-ipadic = ["dep:lindera"]
+
 [dependencies]
 shiori-core.workspace = true
+shiori-lang.workspace = true
 thiserror.workspace = true
-lindera = { version = "3.0.7", features = ["embed-ipadic"] }
+lindera = { version = "3.0.7", features = ["embed-ipadic"], optional = true }
 
 [dev-dependencies]
 serde_json.workspace = true

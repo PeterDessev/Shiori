@@ -8,6 +8,7 @@ use lindera::mode::Mode;
 use lindera::segmenter::Segmenter;
 use lindera::tokenizer::Tokenizer;
 use shiori_core::{PartOfSpeech, Token};
+use shiori_lang::{AnalyzedParagraph, AnalyzedSentence, AnalyzedText};
 
 use crate::kana::{is_kana_only, katakana_to_hiragana};
 use crate::pos::map_pos;
@@ -19,35 +20,6 @@ const D_POS_MAJOR: usize = 0;
 const D_POS_SUB: usize = 1;
 const D_BASE_FORM: usize = 6;
 const D_READING: usize = 7;
-
-/// A fully analyzed text: paragraphs of sentences of tokens.
-#[derive(Debug, Clone, Default)]
-pub struct AnalyzedText {
-    pub paragraphs: Vec<AnalyzedParagraph>,
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct AnalyzedParagraph {
-    pub sentences: Vec<AnalyzedSentence>,
-}
-
-#[derive(Debug, Clone)]
-pub struct AnalyzedSentence {
-    pub text: String,
-    pub tokens: Vec<Token>,
-}
-
-impl AnalyzedText {
-    /// Iterate over all sentences in document order.
-    pub fn sentences(&self) -> impl Iterator<Item = &AnalyzedSentence> {
-        self.paragraphs.iter().flat_map(|p| p.sentences.iter())
-    }
-
-    /// Total number of tokens.
-    pub fn token_count(&self) -> usize {
-        self.sentences().map(|s| s.tokens.len()).sum()
-    }
-}
 
 /// Morphological analyzer with the embedded IPADIC dictionary.
 ///
