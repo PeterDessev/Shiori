@@ -4297,6 +4297,7 @@ name = "shiori-nlp"
 version = "0.1.0"
 dependencies = [
  "lindera",
+ "serde_json",
  "shiori-core",
  "thiserror 2.0.18",
 ]

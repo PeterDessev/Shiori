@@ -1,0 +1,797 @@
+[
+  {
+    "input": "猫が好きだ。犬も好きだ。",
+    "paragraphs": [
+      {
+        "sentences": [
+          {
+            "phrase_groups": [
+              [
+                0,
+                1
+              ],
+              [
+                1,
+                2
+              ],
+              [
+                2,
+                3
+              ],
+              [
+                3,
+                4
+              ],
+              [
+                4,
+                5
+              ]
+            ],
+            "text": "猫が好きだ。",
+            "tokens": [
+              {
+                "end": 3,
+                "lemma": "猫",
+                "pos": "noun",
+                "reading": "ねこ",
+                "start": 0,
+                "surface": "猫"
+              },
+              {
+                "end": 6,
+                "lemma": "が",
+                "pos": "particle",
+                "reading": "が",
+                "start": 3,
+                "surface": "が"
+              },
+              {
+                "end": 12,
+                "lemma": "好き",
+                "pos": "adjectival_noun",
+                "reading": "すき",
+                "start": 6,
+                "surface": "好き"
+              },
+              {
+                "end": 15,
+                "lemma": "だ",
+                "pos": "auxiliary_verb",
+                "reading": "だ",
+                "start": 12,
+                "surface": "だ"
+              },
+              {
+                "end": 18,
+                "lemma": "。",
+                "pos": "symbol",
+                "reading": "。",
+                "start": 15,
+                "surface": "。"
+              }
+            ]
+          },
+          {
+            "phrase_groups": [
+              [
+                0,
+                1
+              ],
+              [
+                1,
+                2
+              ],
+              [
+                2,
+                3
+              ],
+              [
+                3,
+                4
+              ],
+              [
+                4,
+                5
+              ]
+            ],
+            "text": "犬も好きだ。",
+            "tokens": [
+              {
+                "end": 3,
+                "lemma": "犬",
+                "pos": "noun",
+                "reading": "いぬ",
+                "start": 0,
+                "surface": "犬"
+              },
+              {
+                "end": 6,
+                "lemma": "も",
+                "pos": "particle",
+                "reading": "も",
+                "start": 3,
+                "surface": "も"
+              },
+              {
+                "end": 12,
+                "lemma": "好き",
+                "pos": "adjectival_noun",
+                "reading": "すき",
+                "start": 6,
+                "surface": "好き"
+              },
+              {
+                "end": 15,
+                "lemma": "だ",
+                "pos": "auxiliary_verb",
+                "reading": "だ",
+                "start": 12,
+                "surface": "だ"
+              },
+              {
+                "end": 18,
+                "lemma": "。",
+                "pos": "symbol",
+                "reading": "。",
+                "start": 15,
+                "surface": "。"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "input": "彼は本を読んでいるところだった。「面白い！」と言った。",
+    "paragraphs": [
+      {
+        "sentences": [
+          {
+            "phrase_groups": [
+              [
+                0,
+                1
+              ],
+              [
+                1,
+                2
+              ],
+              [
+                2,
+                3
+              ],
+              [
+                3,
+                4
+              ],
+              [
+                4,
+                7
+              ],
+              [
+                7,
+                8
+              ],
+              [
+                8,
+                10
+              ],
+              [
+                10,
+                11
+              ]
+            ],
+            "text": "彼は本を読んでいるところだった。",
+            "tokens": [
+              {
+                "end": 3,
+                "lemma": "彼",
+                "pos": "pronoun",
+                "reading": "かれ",
+                "start": 0,
+                "surface": "彼"
+              },
+              {
+                "end": 6,
+                "lemma": "は",
+                "pos": "particle",
+                "reading": "は",
+                "start": 3,
+                "surface": "は"
+              },
+              {
+                "end": 9,
+                "lemma": "本",
+                "pos": "noun",
+                "reading": "ほん",
+                "start": 6,
+                "surface": "本"
+              },
+              {
+                "end": 12,
+                "lemma": "を",
+                "pos": "particle",
+                "reading": "を",
+                "start": 9,
+                "surface": "を"
+              },
+              {
+                "end": 18,
+                "lemma": "読む",
+                "pos": "verb",
+                "reading": "よむ",
+                "start": 12,
+                "surface": "読ん"
+              },
+              {
+                "end": 21,
+                "lemma": "で",
+                "pos": "particle",
+                "reading": "で",
+                "start": 18,
+                "surface": "で"
+              },
+              {
+                "end": 27,
+                "lemma": "いる",
+                "pos": "auxiliary_verb",
+                "reading": "いる",
+                "start": 21,
+                "surface": "いる"
+              },
+              {
+                "end": 36,
+                "lemma": "ところ",
+                "pos": "dependent_noun",
+                "reading": "ところ",
+                "start": 27,
+                "surface": "ところ"
+              },
+              {
+                "end": 42,
+                "lemma": "だ",
+                "pos": "auxiliary_verb",
+                "reading": "だ",
+                "start": 36,
+                "surface": "だっ"
+              },
+              {
+                "end": 45,
+                "lemma": "た",
+                "pos": "auxiliary_verb",
+                "reading": "た",
+                "start": 42,
+                "surface": "た"
+              },
+              {
+                "end": 48,
+                "lemma": "。",
+                "pos": "symbol",
+                "reading": "。",
+                "start": 45,
+                "surface": "。"
+              }
+            ]
+          },
+          {
+            "phrase_groups": [
+              [
+                0,
+                1
+              ],
+              [
+                1,
+                2
+              ],
+              [
+                2,
+                3
+              ],
+              [
+                3,
+                4
+              ],
+              [
+                4,
+                5
+              ],
+              [
+                5,
+                7
+              ],
+              [
+                7,
+                8
+              ]
+            ],
+            "text": "「面白い！」と言った。",
+            "tokens": [
+              {
+                "end": 3,
+                "lemma": "「",
+                "pos": "symbol",
+                "reading": "「",
+                "start": 0,
+                "surface": "「"
+              },
+              {
+                "end": 12,
+                "lemma": "面白い",
+                "pos": "adjective",
+                "reading": "おもしろい",
+                "start": 3,
+                "surface": "面白い"
+              },
+              {
+                "end": 15,
+                "lemma": "！",
+                "pos": "symbol",
+                "reading": "！",
+                "start": 12,
+                "surface": "！"
+              },
+              {
+                "end": 18,
+                "lemma": "」",
+                "pos": "symbol",
+                "reading": "」",
+                "start": 15,
+                "surface": "」"
+              },
+              {
+                "end": 21,
+                "lemma": "と",
+                "pos": "particle",
+                "reading": "と",
+                "start": 18,
+                "surface": "と"
+              },
+              {
+                "end": 27,
+                "lemma": "言う",
+                "pos": "verb",
+                "reading": "いう",
+                "start": 21,
+                "surface": "言っ"
+              },
+              {
+                "end": 30,
+                "lemma": "た",
+                "pos": "auxiliary_verb",
+                "reading": "た",
+                "start": 27,
+                "surface": "た"
+              },
+              {
+                "end": 33,
+                "lemma": "。",
+                "pos": "symbol",
+                "reading": "。",
+                "start": 30,
+                "surface": "。"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "input": "東京タワーへ行きました。パーティーが始まる？",
+    "paragraphs": [
+      {
+        "sentences": [
+          {
+            "phrase_groups": [
+              [
+                0,
+                1
+              ],
+              [
+                1,
+                2
+              ],
+              [
+                2,
+                3
+              ],
+              [
+                3,
+                6
+              ],
+              [
+                6,
+                7
+              ]
+            ],
+            "text": "東京タワーへ行きました。",
+            "tokens": [
+              {
+                "end": 6,
+                "lemma": "東京",
+                "pos": "proper_noun",
+                "reading": "とうきょう",
+                "start": 0,
+                "surface": "東京"
+              },
+              {
+                "end": 15,
+                "lemma": "タワー",
+                "pos": "noun",
+                "reading": "たわー",
+                "start": 6,
+                "surface": "タワー"
+              },
+              {
+                "end": 18,
+                "lemma": "へ",
+                "pos": "particle",
+                "reading": "へ",
+                "start": 15,
+                "surface": "へ"
+              },
+              {
+                "end": 24,
+                "lemma": "行く",
+                "pos": "verb",
+                "reading": "いく",
+                "start": 18,
+                "surface": "行き"
+              },
+              {
+                "end": 30,
+                "lemma": "ます",
+                "pos": "auxiliary_verb",
+                "reading": "ます",
+                "start": 24,
+                "surface": "まし"
+              },
+              {
+                "end": 33,
+                "lemma": "た",
+                "pos": "auxiliary_verb",
+                "reading": "た",
+                "start": 30,
+                "surface": "た"
+              },
+              {
+                "end": 36,
+                "lemma": "。",
+                "pos": "symbol",
+                "reading": "。",
+                "start": 33,
+                "surface": "。"
+              }
+            ]
+          },
+          {
+            "phrase_groups": [
+              [
+                0,
+                1
+              ],
+              [
+                1,
+                2
+              ],
+              [
+                2,
+                3
+              ],
+              [
+                3,
+                4
+              ]
+            ],
+            "text": "パーティーが始まる？",
+            "tokens": [
+              {
+                "end": 15,
+                "lemma": "パーティー",
+                "pos": "noun",
+                "reading": "ぱーてぃー",
+                "start": 0,
+                "surface": "パーティー"
+              },
+              {
+                "end": 18,
+                "lemma": "が",
+                "pos": "particle",
+                "reading": "が",
+                "start": 15,
+                "surface": "が"
+              },
+              {
+                "end": 27,
+                "lemma": "始まる",
+                "pos": "verb",
+                "reading": "はじまる",
+                "start": 18,
+                "surface": "始まる"
+              },
+              {
+                "end": 30,
+                "lemma": "？",
+                "pos": "symbol",
+                "reading": "？",
+                "start": 27,
+                "surface": "？"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "input": "食べさせられたくなかった。",
+    "paragraphs": [
+      {
+        "sentences": [
+          {
+            "phrase_groups": [
+              [
+                0,
+                6
+              ],
+              [
+                6,
+                7
+              ]
+            ],
+            "text": "食べさせられたくなかった。",
+            "tokens": [
+              {
+                "end": 6,
+                "lemma": "食べる",
+                "pos": "verb",
+                "reading": "たべる",
+                "start": 0,
+                "surface": "食べ"
+              },
+              {
+                "end": 12,
+                "lemma": "させる",
+                "pos": "suffix",
+                "reading": "させる",
+                "start": 6,
+                "surface": "させ"
+              },
+              {
+                "end": 18,
+                "lemma": "られる",
+                "pos": "suffix",
+                "reading": "られる",
+                "start": 12,
+                "surface": "られ"
+              },
+              {
+                "end": 24,
+                "lemma": "たい",
+                "pos": "auxiliary_verb",
+                "reading": "たい",
+                "start": 18,
+                "surface": "たく"
+              },
+              {
+                "end": 33,
+                "lemma": "ない",
+                "pos": "auxiliary_verb",
+                "reading": "ない",
+                "start": 24,
+                "surface": "なかっ"
+              },
+              {
+                "end": 36,
+                "lemma": "た",
+                "pos": "auxiliary_verb",
+                "reading": "た",
+                "start": 33,
+                "surface": "た"
+              },
+              {
+                "end": 39,
+                "lemma": "。",
+                "pos": "symbol",
+                "reading": "。",
+                "start": 36,
+                "surface": "。"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "input": "雨が降る。\n\n風も吹く。すごく強い風だ。",
+    "paragraphs": [
+      {
+        "sentences": [
+          {
+            "phrase_groups": [
+              [
+                0,
+                1
+              ],
+              [
+                1,
+                2
+              ],
+              [
+                2,
+                3
+              ],
+              [
+                3,
+                4
+              ]
+            ],
+            "text": "雨が降る。",
+            "tokens": [
+              {
+                "end": 3,
+                "lemma": "雨",
+                "pos": "noun",
+                "reading": "あめ",
+                "start": 0,
+                "surface": "雨"
+              },
+              {
+                "end": 6,
+                "lemma": "が",
+                "pos": "particle",
+                "reading": "が",
+                "start": 3,
+                "surface": "が"
+              },
+              {
+                "end": 12,
+                "lemma": "降る",
+                "pos": "verb",
+                "reading": "ふる",
+                "start": 6,
+                "surface": "降る"
+              },
+              {
+                "end": 15,
+                "lemma": "。",
+                "pos": "symbol",
+                "reading": "。",
+                "start": 12,
+                "surface": "。"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "sentences": [
+          {
+            "phrase_groups": [
+              [
+                0,
+                1
+              ],
+              [
+                1,
+                2
+              ],
+              [
+                2,
+                3
+              ],
+              [
+                3,
+                4
+              ]
+            ],
+            "text": "風も吹く。",
+            "tokens": [
+              {
+                "end": 3,
+                "lemma": "風",
+                "pos": "noun",
+                "reading": "かぜ",
+                "start": 0,
+                "surface": "風"
+              },
+              {
+                "end": 6,
+                "lemma": "も",
+                "pos": "particle",
+                "reading": "も",
+                "start": 3,
+                "surface": "も"
+              },
+              {
+                "end": 12,
+                "lemma": "吹く",
+                "pos": "verb",
+                "reading": "ふく",
+                "start": 6,
+                "surface": "吹く"
+              },
+              {
+                "end": 15,
+                "lemma": "。",
+                "pos": "symbol",
+                "reading": "。",
+                "start": 12,
+                "surface": "。"
+              }
+            ]
+          },
+          {
+            "phrase_groups": [
+              [
+                0,
+                1
+              ],
+              [
+                1,
+                2
+              ],
+              [
+                2,
+                3
+              ],
+              [
+                3,
+                4
+              ],
+              [
+                4,
+                5
+              ]
+            ],
+            "text": "すごく強い風だ。",
+            "tokens": [
+              {
+                "end": 9,
+                "lemma": "すごい",
+                "pos": "adjective",
+                "reading": "すごい",
+                "start": 0,
+                "surface": "すごく"
+              },
+              {
+                "end": 15,
+                "lemma": "強い",
+                "pos": "adjective",
+                "reading": "つよい",
+                "start": 9,
+                "surface": "強い"
+              },
+              {
+                "end": 18,
+                "lemma": "風",
+                "pos": "noun",
+                "reading": "かぜ",
+                "start": 15,
+                "surface": "風"
+              },
+              {
+                "end": 21,
+                "lemma": "だ",
+                "pos": "auxiliary_verb",
+                "reading": "だ",
+                "start": 18,
+                "surface": "だ"
+              },
+              {
+                "end": 24,
+                "lemma": "。",
+                "pos": "symbol",
+                "reading": "。",
+                "start": 21,
+                "surface": "。"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]
