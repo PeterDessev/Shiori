@@ -219,8 +219,7 @@ mod tests {
 
     #[test]
     fn builds_a_spanish_pack() {
-        let dir =
-            std::env::temp_dir().join(format!("shiori-kaikki-test-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("shiori-kaikki-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let input = dir.join("es.jsonl");
         std::fs::write(&input, KAIKKI_ES_SAMPLE).unwrap();
@@ -250,7 +249,9 @@ mod tests {
         assert!(forms.contains("gatos\tgato"), "{forms}");
         assert!(forms.contains("hablo\thablar"), "{forms}");
         assert!(
-            forms.lines().any(|l| l.starts_with("hablo\t") && l.contains("preterite"))
+            forms
+                .lines()
+                .any(|l| l.starts_with("hablo\t") && l.contains("preterite"))
                 || forms.contains("hablo\thablar\tthird-person-singular-preterite"),
             "folded habló joins hablo's rows: {forms}"
         );
