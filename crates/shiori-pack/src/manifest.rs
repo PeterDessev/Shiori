@@ -44,6 +44,10 @@ pub struct Manifest {
     /// Graded-vocabulary scheme this pack ships (matches graded.tsv).
     #[serde(default)]
     pub graded_scheme: Option<GradedScheme>,
+    /// Search-box transliteration for Latin keystrokes: "betacode"
+    /// (Greek) or absent for none.
+    #[serde(default)]
+    pub transliteration: Option<String>,
     /// Fonts to download for this language's script.
     #[serde(default)]
     pub fonts: Vec<FontSpec>,
@@ -172,6 +176,7 @@ joiner = " "
 sentence_enders = [".", ";", "·", "?", "!"]
 # Greek & Coptic, Greek Extended.
 script_ranges = [[880, 1023], [7936, 8191]]
+transliteration = "betacode"
 
 [graded_scheme]
 key = "gnt-frequency"
@@ -210,6 +215,7 @@ mod tests {
         assert!(m.sentence_enders.contains(&"·".to_string()));
         assert_eq!(m.script_ranges.len(), 2);
         assert_eq!(m.graded_scheme.as_ref().unwrap().key, "gnt-frequency");
+        assert_eq!(m.transliteration.as_deref(), Some("betacode"));
         let p = m.prompt_profile();
         assert_eq!(p.language_name, "Koine Greek");
         assert!(p.synthetic_disclaimer.is_some());

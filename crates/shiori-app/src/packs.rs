@@ -78,6 +78,21 @@ impl App {
             }
         }
 
+        if self.db.morph_form_count(lang)? == 0 {
+            let path = pack.dir.join("morph_forms.tsv");
+            if path.exists() {
+                let raw = std::fs::read_to_string(&path)?;
+                let rows = raw.lines().filter_map(|line| {
+                    let mut fields = line.split('\t');
+                    let form = fields.next()?.trim().to_string();
+                    let lemma = fields.next()?.trim().to_string();
+                    let morph = fields.next().unwrap_or("").trim().to_string();
+                    (!form.is_empty()).then_some((form, lemma, morph))
+                });
+                self.db.import_morph_forms(lang, rows)?;
+            }
+        }
+
         {
             let path = pack.tags_path();
             if path.exists() {
@@ -171,6 +186,31 @@ impl App {
         )?)
     }
 
+    /// Tier-1 lemma resolution for pack languages: look a surface form
+    /// up in the full-form table. Returns `(lemma, parse)` when the form
+    /// resolves to exactly one lemma (the parse only when it is also
+    /// unique); ambiguous or unknown forms return `None` and the surface
+    /// stands as its own lemma — safe, never wrong, refined by the
+    /// candidate picker later.
+    pub(crate) fn tier1_lemma(&self, surface: &str) -> Result<Option<(String, Option<String>)>> {
+        if !self.packs.contains_key(self.active_lang()) {
+            return Ok(None);
+        }
+        let folded = self.service().normalize_lookup(surface);
+        let hits = self.db.morph_lookup(self.active_lang(), &folded)?;
+        let mut lemmas: Vec<&str> = hits.iter().map(|(l, _)| l.as_str()).collect();
+        lemmas.sort_unstable();
+        lemmas.dedup();
+        match lemmas.as_slice() {
+            [single] => {
+                let lemma = single.to_string();
+                let morph = (hits.len() == 1).then(|| hits[0].1.clone());
+                Ok(Some((lemma, morph)))
+            }
+            _ => Ok(None),
+        }
+    }
+
     /// Decode a stored parse code ("V-PAI-3S") into prose using the
     /// active dictionary source's tag table; unknown segments stay
     /// verbatim so nothing is ever hidden.
@@ -233,6 +273,13 @@ mod tests {
         )
         .unwrap();
         std::fs::write(pack_dir.join("frequency.tsv"), "λογοσ\t5\nαρχη\t40\n").unwrap();
+        // Tier-1 full-form table: ἦν → εἰμί unambiguously; a fake
+        // ambiguous form to prove ambiguity stays untouched.
+        std::fs::write(
+            pack_dir.join("morph_forms.tsv"),
+            "ην\tεἰμί\tV-IAI-3S\nαμφι\tἀμφί-α\tP\nαμφι\tἀμφί-β\tX\n",
+        )
+        .unwrap();
         std::fs::write(
             pack_dir.join("tags.tsv"),
             "V\tverb\nN\tnoun\nP\tpreposition\nRA\tarticle\nPAI\tpresent active indicative\nIAI\timperfect active indicative\nDSF\tdative singular feminine\nNSM\tnominative singular masculine\n3S\t3rd person singular\n",
@@ -369,6 +416,36 @@ mod tests {
             .unwrap();
         assert_eq!(shares.len(), 2);
         assert_eq!(shares[0].label, "Core 50×+");
+    }
+
+    #[test]
+    fn plain_greek_text_resolves_through_the_full_form_table() {
+        let mut app = app_with_greek_pack();
+        app.set_active_lang("grc").unwrap();
+
+        // No annotations here: a pasted plain-text fragment.
+        let doc = app
+            .import_text("fragment", "ὁ λόγος ἦν καλός. ἀμφὶ δὲ ἦν.")
+            .unwrap();
+        let sentences = app.db().sentences(doc).unwrap();
+        let rows = app.db().sentence_tokens(sentences[0].id).unwrap();
+
+        // ἦν is unambiguous in the table: lemma εἰμί, parse V-IAI-3S,
+        // POS from the parse code.
+        let en = rows.iter().find(|r| r.token.surface == "ἦν").unwrap();
+        assert_eq!(en.token.lemma, "εἰμί");
+        assert_eq!(en.morph.as_deref(), Some("V-IAI-3S"));
+        assert_eq!(en.token.pos, PartOfSpeech::Verb);
+
+        // Unknown forms keep their surface as lemma (never wrong).
+        let kalos = rows.iter().find(|r| r.token.surface == "καλός").unwrap();
+        assert_eq!(kalos.token.lemma, "καλός");
+
+        // Ambiguous forms stay untouched too.
+        let rows2 = app.db().sentence_tokens(sentences[1].id).unwrap();
+        let amphi = rows2.iter().find(|r| r.token.surface == "ἀμφὶ").unwrap();
+        assert_eq!(amphi.token.lemma, "ἀμφὶ");
+        assert_eq!(amphi.morph, None);
     }
 
     #[test]

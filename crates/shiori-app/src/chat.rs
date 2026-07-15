@@ -45,6 +45,16 @@ impl App {
                         let mut token = t.clone();
                         token.start += base;
                         token.end += base;
+                        // Tier-1 lemma resolution for pack languages, so
+                        // chat clicks track the same word the reader does.
+                        if token.pos != shiori_core::PartOfSpeech::Symbol {
+                            if let Ok(Some((lemma, morph))) = self.tier1_lemma(&token.surface) {
+                                if let Some(code) = &morph {
+                                    token.pos = shiori_pack::siat::pos_from_morph(code);
+                                }
+                                token.lemma = lemma;
+                            }
+                        }
                         let word = self
                             .db()
                             .find_word(

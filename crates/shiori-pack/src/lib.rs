@@ -19,6 +19,7 @@
 //! runtime analyzer at all); plain-text imports fall back to a
 //! rule-based tokenizer driven by the manifest.
 
+pub mod betacode;
 mod language;
 pub mod manifest;
 pub mod siat;

@@ -30,23 +30,35 @@ impl App {
         let mut sentences = Vec::new();
         for (p_idx, paragraph) in analyzed.paragraphs.iter().enumerate() {
             for sentence in &paragraph.sentences {
+                let mut tokens = Vec::with_capacity(sentence.tokens.len());
+                for t in &sentence.tokens {
+                    let mut token = NewToken {
+                        surface: t.surface.clone(),
+                        lemma: t.lemma.clone(),
+                        reading: t.reading.clone(),
+                        pos: t.pos,
+                        start: t.start,
+                        end: t.end,
+                        morph: None,
+                        gloss: None,
+                    };
+                    // Tier-1: pack languages resolve plain-text tokens
+                    // through the full-form table when unambiguous.
+                    if token.pos != shiori_core::PartOfSpeech::Symbol {
+                        if let Some((lemma, morph)) = self.tier1_lemma(&token.surface)? {
+                            if let Some(code) = &morph {
+                                token.pos = shiori_pack::siat::pos_from_morph(code);
+                            }
+                            token.lemma = lemma;
+                            token.morph = morph;
+                        }
+                    }
+                    tokens.push(token);
+                }
                 sentences.push(NewSentence {
                     paragraph: p_idx as u32,
                     text: sentence.text.clone(),
-                    tokens: sentence
-                        .tokens
-                        .iter()
-                        .map(|t| NewToken {
-                            surface: t.surface.clone(),
-                            lemma: t.lemma.clone(),
-                            reading: t.reading.clone(),
-                            pos: t.pos,
-                            start: t.start,
-                            end: t.end,
-                            morph: None,
-                            gloss: None,
-                        })
-                        .collect(),
+                    tokens,
                 });
             }
         }

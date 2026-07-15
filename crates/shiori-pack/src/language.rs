@@ -22,6 +22,7 @@ pub struct PackLanguage {
     joiner: String,
     sentence_enders: Vec<char>,
     script_ranges: Vec<(u32, u32)>,
+    transliteration: Option<String>,
     graded_scheme: Option<(String, String)>,
     prompt: PromptProfile,
     extract: ExtractProfile,
@@ -39,6 +40,7 @@ impl PackLanguage {
                 .filter_map(|s| s.chars().next())
                 .collect(),
             script_ranges: manifest.script_ranges.clone(),
+            transliteration: manifest.transliteration.clone(),
             graded_scheme: manifest
                 .graded_scheme
                 .as_ref()
@@ -190,6 +192,13 @@ impl LanguageService for PackLanguage {
         &self.joiner
     }
 
+    fn search_transliterate(&self, query: &str) -> Option<String> {
+        match self.transliteration.as_deref() {
+            Some("betacode") => crate::betacode::betacode_to_greek(query),
+            _ => None,
+        }
+    }
+
     fn normalize_lookup(&self, text: &str) -> String {
         fold_lookup(text)
     }
@@ -272,6 +281,13 @@ mod tests {
             .flat_map(|c| c.to_string().chars().collect::<Vec<_>>())
             .collect();
         assert_eq!(fold_lookup(&nfd), fold_lookup("λόγος"));
+    }
+
+    #[test]
+    fn search_transliterates_betacode() {
+        let svc = grc();
+        assert_eq!(svc.search_transliterate("logos").as_deref(), Some("λογοσ"));
+        assert_eq!(svc.search_transliterate("λόγος"), None);
     }
 
     #[test]

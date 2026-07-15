@@ -208,6 +208,48 @@ impl Db {
         Ok(count)
     }
 
+    /// Replace one language's full-form morphology table (Tier-1
+    /// analysis: folded form → lemma + parse).
+    pub fn import_morph_forms<I>(&self, lang: &str, rows: I) -> Result<u64>
+    where
+        I: IntoIterator<Item = (String, String, String)>,
+    {
+        let tx = self.conn().unchecked_transaction()?;
+        tx.execute("DELETE FROM morph_forms WHERE lang = ?1", [lang])?;
+        let mut count = 0u64;
+        {
+            let mut insert = tx.prepare(
+                "INSERT OR IGNORE INTO morph_forms(lang, form_folded, lemma, morph)
+                 VALUES (?1, ?2, ?3, ?4)",
+            )?;
+            for (form, lemma, morph) in rows {
+                insert.execute(params![lang, form, lemma, morph])?;
+                count += 1;
+            }
+        }
+        tx.commit()?;
+        Ok(count)
+    }
+
+    /// All analyses of a folded form: (lemma, parse code) pairs.
+    pub fn morph_lookup(&self, lang: &str, form_folded: &str) -> Result<Vec<(String, String)>> {
+        let mut stmt = self.conn().prepare(
+            "SELECT lemma, morph FROM morph_forms
+             WHERE lang = ?1 AND form_folded = ?2 ORDER BY lemma, morph",
+        )?;
+        let rows = stmt.query_map([lang, form_folded], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        Ok(rows.collect::<std::result::Result<_, _>>()?)
+    }
+
+    pub fn morph_form_count(&self, lang: &str) -> Result<u64> {
+        let n: i64 = self.conn().query_row(
+            "SELECT COUNT(*) FROM morph_forms WHERE lang = ?1",
+            [lang],
+            |r| r.get(0),
+        )?;
+        Ok(n as u64)
+    }
+
     /// Human label for a source's tag code, if the pack declared one.
     pub fn dict_tag_label(&self, source: &str, code: &str) -> Result<Option<String>> {
         let result = self.conn().query_row(

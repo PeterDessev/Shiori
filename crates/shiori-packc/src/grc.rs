@@ -52,8 +52,23 @@ pub fn build_pack(
         .collect();
     files.sort();
 
+    let mut morph_forms: std::collections::BTreeSet<(String, String, String)> = Default::default();
+
     for path in files {
         let raw = std::fs::read_to_string(&path)?;
+        // Full-form table rows straight from the columns: the normalized
+        // word (col 6) folded, its lemma and Robinson code. This is what
+        // lets plain-text Greek imports lemmatize without an analyzer.
+        for line in raw.lines().filter(|l| !l.trim().is_empty()) {
+            let fields: Vec<&str> = line.split_whitespace().collect();
+            if fields.len() >= 7 {
+                morph_forms.insert((
+                    shiori_pack::fold_lookup(fields[5]),
+                    fields[6].to_string(),
+                    siat::robinson_code(fields[1].trim_end_matches('-'), fields[2]),
+                ));
+            }
+        }
         let stem = path
             .file_name()
             .unwrap()
@@ -103,6 +118,12 @@ pub fn build_pack(
         ));
     }
     std::fs::write(out.join("frequency.tsv"), frequency)?;
+
+    let mut forms_tsv = String::new();
+    for (form, lemma, morph) in &morph_forms {
+        forms_tsv.push_str(&format!("{form}\t{lemma}\t{morph}\n"));
+    }
+    std::fs::write(out.join("morph_forms.tsv"), forms_tsv)?;
 
     // Dictionary: one entry per lemma, glossed where the index has one,
     // in the jmdict-simplified shape the app renders.
@@ -375,6 +396,10 @@ mod tests {
         // The dictionary carries the gloss.
         let dict = std::fs::read_to_string(out.join("dictionary.jsonl")).unwrap();
         assert!(dict.contains("word, speech"));
+
+        // The full-form table maps every attested form to lemma + parse.
+        let forms = std::fs::read_to_string(out.join("morph_forms.tsv")).unwrap();
+        assert!(forms.contains("ην\tεἰμί\tV-IAI-3S"), "{forms}");
 
         std::fs::remove_dir_all(&dir).ok();
     }
