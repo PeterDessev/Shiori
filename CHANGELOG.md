@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+#### Languages beyond Japanese
+- **Data-driven language packs**: drop a pack directory into
+  `<data>/packs/<code>/`, pick the language under Settings → General, and the
+  whole app — library, reader, dictionary, mining, reviews, statistics,
+  chat — operates in it. Nothing mixes across languages, and installing a
+  second language can never wipe or collide with Japanese data (schema v8
+  adds language/source scoping everywhere, with an automatic pre-migration
+  backup and in-place cache migration — no re-download).
+- **Koine Greek as the first pack language**, corpus-first: pre-annotated
+  texts (SIAT format, converted from MorphGNT) carry a hand-verified lemma,
+  parse, and gloss on every token, so no runtime analyzer exists or is
+  needed. The reader's furigana slot doubles as an interlinear gloss layer;
+  the word panel decodes each occurrence's parse to prose; stats grade
+  against GNT frequency tiers; dictionary search is accent-insensitive and
+  accepts betacode/Greeklish.
+- **Tier-1 analysis** for plain-text imports and chat in pack languages:
+  tokens resolve through the pack's full-form table when unambiguous.
+- **`shiori-packc`**, the CI pack compiler: builds the Greek pack from
+  MorphGNT and modern-language packs from kaikki.org Wiktextract dumps
+  (+ hermitdave frequency lists), with a machine-enforced gate refusing
+  NonCommercial sources.
+- **Per-language production practice**: pack-defined personas (dead
+  languages disclose the synthetic persona and judge against attested
+  usage), composition exercises, translation drills over sentences from
+  your own reading, and per-language LLM model overrides.
+- The `LanguageService` abstraction (new `shiori-lang` crate) with Japanese
+  as the first implementation; the embedded IPADIC moved behind a default-on
+  cargo feature; a golden token fixture proves Japanese analysis is
+  bit-identical across the refactor.
+
 ## [0.1.0] - 2026-06-16
 
 The first release of Shiori — a desktop Japanese reading companion built

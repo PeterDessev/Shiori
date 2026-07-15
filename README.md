@@ -123,6 +123,11 @@ per-book difficulty — the numbers that actually tell you what to do next.
   to a single JSON.
 - **Import anything** — `.txt`, `.md`, `.html` (Aozora), `.epub`, `.pdf`,
   UTF-8 or Shift_JIS, by file dialog or drag-and-drop.
+- **Languages beyond Japanese** — data-driven
+  [language packs](docs/wiki/Language-Packs.md) add whole languages without
+  recompiling, dead languages first: Koine Greek reads pre-annotated texts
+  where every word carries a hand-verified parse, glossed inline, graded
+  against GNT frequency tiers.
 
 ## Getting started
 
@@ -154,6 +159,7 @@ needs network access once and takes a few minutes.
 [Dictionary & Kanji](docs/wiki/Dictionary-and-Kanji.md) ·
 [Online Sources](docs/wiki/Online-Sources.md) ·
 [AI & Chat](docs/wiki/AI-and-Chat.md) ·
+[Language Packs](docs/wiki/Language-Packs.md) ·
 [Statistics](docs/wiki/Statistics.md) ·
 [Data & Interop](docs/wiki/Data-and-Interop.md) ·
 [Architecture](docs/wiki/Architecture.md)
@@ -185,16 +191,19 @@ Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers
 development setup, the test suite, and the commit conventions (atomic
 conventional commits). The codebase is a Cargo workspace split by concern:
 
-| Crate         | Concern                                                  |
-|---------------|----------------------------------------------------------|
-| `shiori-core` | Shared domain types and errors                           |
-| `shiori-nlp`  | Morphological analysis and sentence segmentation         |
-| `shiori-srs`  | FSRS spaced-repetition scheduler                         |
-| `shiori-dict` | JMdict, KANJIDIC2/KanjiVG, JLPT, frequency data          |
-| `shiori-db`   | SQLite persistence, Anki .apkg read/write                |
-| `shiori-app`  | Application services: ingestion, reviews, stats, sources |
-| `shiori-llm`  | LLM backends: Anthropic, Ollama, OpenAI-compatible       |
-| `shiori-gui`  | egui desktop interface                                   |
+| Crate          | Concern                                                  |
+|----------------|----------------------------------------------------------|
+| `shiori-core`  | Shared domain types and errors                           |
+| `shiori-lang`  | The `LanguageService` abstraction every language implements |
+| `shiori-nlp`   | Japanese morphological analysis (Lindera/IPADIC)         |
+| `shiori-pack`  | Data-driven language packs: manifests, SIAT annotated texts |
+| `shiori-packc` | CI pack compiler (MorphGNT, kaikki/Wiktextract inputs)   |
+| `shiori-srs`   | FSRS spaced-repetition scheduler                         |
+| `shiori-dict`  | JMdict, KANJIDIC2/KanjiVG, JLPT, frequency data          |
+| `shiori-db`    | SQLite persistence, Anki .apkg read/write                |
+| `shiori-app`   | Application services: ingestion, reviews, stats, sources |
+| `shiori-llm`   | LLM backends: Anthropic, Ollama, OpenAI-compatible       |
+| `shiori-gui`   | egui desktop interface                                   |
 
 ## Data sources
 

@@ -20,15 +20,20 @@ use std::collections::HashMap;
 use std::path::Path;
 
 mod grc;
+mod kaikki;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let result = match args.first().map(String::as_str) {
         Some("build-grc") => build_grc(&args[1..]),
+        Some("build-kaikki") => build_kaikki(&args[1..]),
         _ => {
             eprintln!(
-                "usage: shiori-packc build-grc --morphgnt <dir> --glosses <tsv> \
-                 --out <dir> --license <spdx-ish>"
+                "usage:\n  shiori-packc build-grc --morphgnt <dir> --glosses <tsv> \
+                 --out <dir> --license <spdx-ish>\n  \
+                 shiori-packc build-kaikki --input <kaikki-jsonl> --lang <code> \
+                 --name <English name> --out <dir> --license <spdx-ish> \
+                 [--frequency <hermitdave-txt>]"
             );
             std::process::exit(2);
         }
@@ -37,6 +42,36 @@ fn main() {
         eprintln!("error: {e}");
         std::process::exit(1);
     }
+}
+
+fn build_kaikki(args: &[String]) -> Result<(), String> {
+    let opts = parse_flags(args)?;
+    let input = opts.required("input")?;
+    let lang = opts.required("lang")?;
+    let name = opts.required("name")?;
+    let out = opts.required("out")?;
+    let license = opts.required("license")?;
+    reject_non_commercial(&license)?;
+
+    let dict_source = format!("{lang}-pack");
+    let spec = kaikki::LangSpec {
+        lang: &lang,
+        name: &name,
+        dict_source: &dict_source,
+        license: &license,
+    };
+    let report = kaikki::build_pack(
+        Path::new(&input),
+        opts.get("frequency").map(Path::new),
+        &spec,
+        Path::new(&out),
+    )
+    .map_err(|e| e.to_string())?;
+    println!(
+        "pack written to {out}: {} entries, {} forms, {} frequency rows",
+        report.entries, report.forms, report.frequency
+    );
+    Ok(())
 }
 
 fn build_grc(args: &[String]) -> Result<(), String> {
