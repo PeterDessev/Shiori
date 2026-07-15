@@ -248,11 +248,56 @@ impl ShioriGui {
                 ui.add_space(6.0);
                 return;
             }
+            // Structured exercises ride the ordinary chat pipeline: the
+            // request goes out as a message, the partner sets the task,
+            // and the write-up grades the attempt as usual.
+            ui.horizontal(|ui| {
+                let idle = !self.production.waiting;
+                if ui
+                    .add_enabled(idle, egui::Button::new("✍ Composition exercise"))
+                    .on_hover_text("Ask the partner for a short writing topic")
+                    .clicked()
+                {
+                    if let Some(profile) = self.lang.as_ref().map(|l| l.prompt_profile().clone()) {
+                        self.production.input = shiori_llm::composition_request(&profile);
+                        send = true;
+                    }
+                }
+                let drill = self
+                    .with_app(|app| Ok(app.db().random_sentence_text(app.active_lang())?))
+                    .flatten();
+                if ui
+                    .add_enabled(
+                        idle && drill.is_some(),
+                        egui::Button::new("⇄ Translation drill"),
+                    )
+                    .on_hover_text("Round-trip a sentence from your own reading")
+                    .clicked()
+                {
+                    if let (Some(profile), Some(sentence)) = (
+                        self.lang.as_ref().map(|l| l.prompt_profile().clone()),
+                        drill,
+                    ) {
+                        self.production.input =
+                            shiori_llm::translation_drill_request(&profile, &sentence);
+                        send = true;
+                    }
+                }
+            });
+            ui.add_space(4.0);
+            let hint = match self
+                .lang
+                .as_ref()
+                .map(|l| l.prompt_profile().language_name.clone())
+            {
+                Some(name) if name != "Japanese" => format!("Write in {name}…"),
+                _ => "日本語で書いてみてください…".to_string(),
+            };
             ui.horizontal(|ui| {
                 let response = ui.add_sized(
                     [ui.available_width() - 170.0, 54.0],
                     egui::TextEdit::multiline(&mut self.production.input)
-                        .hint_text("日本語で書いてみてください…")
+                        .hint_text(hint)
                         .desired_rows(2),
                 );
                 // Enter sends; Shift+Enter inserts the newline.
@@ -316,10 +361,28 @@ impl ShioriGui {
                 ui.add_space(40.0);
                 ui.vertical_centered(|ui| {
                     ui.heading("Conversation practice");
-                    ui.label(
-                        "Chat in Japanese with a native-speaker persona. It talks \
-                         with you — it never corrects you mid-conversation.",
-                    );
+                    let (name, synthetic) = self
+                        .lang
+                        .as_ref()
+                        .map(|l| {
+                            let p = l.prompt_profile();
+                            (p.language_name.clone(), p.synthetic_disclaimer.is_some())
+                        })
+                        .unwrap_or_else(|| ("Japanese".to_string(), false));
+                    if synthetic {
+                        // Dead languages: honest about the persona.
+                        ui.label(format!(
+                            "Chat in {name} with a persona modeled on attested \
+                             usage (no native speakers exist to imitate). It \
+                             talks with you — it never corrects you \
+                             mid-conversation.",
+                        ));
+                    } else {
+                        ui.label(format!(
+                            "Chat in {name} with a native-speaker persona. It talks \
+                             with you — it never corrects you mid-conversation.",
+                        ));
+                    }
                     ui.label(
                         "Anything wrong or unnatural in your messages gets \
                          underlined afterwards, like a marked-up paper: red for \

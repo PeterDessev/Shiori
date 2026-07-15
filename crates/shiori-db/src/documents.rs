@@ -350,6 +350,24 @@ impl Db {
         Ok(rows.collect::<std::result::Result<_, _>>()?)
     }
 
+    /// A random sentence of one language's library with at least a few
+    /// words — drill material drawn from the user's own reading.
+    pub fn random_sentence_text(&self, lang: &str) -> Result<Option<String>> {
+        let result = self.conn().query_row(
+            "SELECT s.text FROM sentences s
+             JOIN documents d ON d.id = s.document_id
+             WHERE d.lang = ?1 AND LENGTH(s.text) >= 12
+             ORDER BY RANDOM() LIMIT 1",
+            [lang],
+            |r| r.get(0),
+        );
+        match result {
+            Ok(text) => Ok(Some(text)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
     /// Tokens of a sentence in order, joined with word status.
     pub fn sentence_tokens(&self, sentence: SentenceId) -> Result<Vec<TokenRow>> {
         let mut stmt = self.conn().prepare(

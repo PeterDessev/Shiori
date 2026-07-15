@@ -19,7 +19,8 @@ pub use chat::{
 pub use ollama::{OllamaClient, OllamaExplainer, OllamaModel, PullProgress, DEFAULT_OLLAMA_URL};
 pub use openai_compat::OpenAiCompatExplainer;
 pub use prompts::{
-    build_explain_prompt, build_feedback_prompt, system_prompt, writing_prompts, SentenceContext,
+    build_explain_prompt, build_feedback_prompt, composition_request, system_prompt,
+    translation_drill_request, writing_prompts, SentenceContext,
 };
 pub use shiori_lang::PromptProfile;
 

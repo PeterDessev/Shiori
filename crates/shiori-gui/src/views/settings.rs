@@ -289,6 +289,43 @@ impl ShioriGui {
         });
         ui.add_space(8.0);
 
+        // Per-language model override: a local model adequate for
+        // Japanese may write terrible Koine, so the active language can
+        // pin its own model.
+        let active = self.settings.active_language.clone();
+        if active != "ja" || !self.settings_draft.language_models.is_empty() {
+            let mut override_model = self
+                .settings_draft
+                .language_models
+                .get(&active)
+                .cloned()
+                .unwrap_or_default();
+            ui.horizontal(|ui| {
+                ui.label(format!("Model override for '{active}':"));
+                if ui
+                    .add(
+                        egui::TextEdit::singleline(&mut override_model)
+                            .hint_text("blank = provider default")
+                            .desired_width(220.0),
+                    )
+                    .changed()
+                {
+                    if override_model.trim().is_empty() {
+                        self.settings_draft.language_models.remove(&active);
+                    } else {
+                        self.settings_draft
+                            .language_models
+                            .insert(active.clone(), override_model.clone());
+                    }
+                }
+            });
+            ui.weak(
+                "Dead languages need stronger models: a cloud model is \
+                 recommended for Koine Greek.",
+            );
+            ui.add_space(8.0);
+        }
+
         let field_width = (ui.available_width() - 160.0).clamp(240.0, 520.0);
         match self.settings_draft.llm_provider {
             LlmProvider::Anthropic => {

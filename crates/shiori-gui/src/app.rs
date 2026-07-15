@@ -690,6 +690,9 @@ impl ShioriGui {
         self.settings_draft.active_language = code;
         let _ = self.settings.save(&self.data_dir);
         self.lang = self.with_app(|app| Ok(app.lang_service()));
+        // The new language may pin its own model (a local model fine for
+        // Japanese can be hopeless at Koine).
+        self.explainer = self.settings.build_explainer();
         // Language-scoped view state resets; the new language's data
         // loads through the usual caches.
         self.reader = None;

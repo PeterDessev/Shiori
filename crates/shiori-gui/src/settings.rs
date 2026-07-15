@@ -219,6 +219,10 @@ pub struct Settings {
     /// Language the app operates in ("ja", "grc", …); languages beyond
     /// Japanese come from packs in `<data>/packs/`.
     pub active_language: String,
+    /// Per-language LLM model overrides: a local model that handles
+    /// Japanese fine may write terrible Koine, so each language can pin
+    /// its own model. Empty = use the provider's configured model.
+    pub language_models: std::collections::HashMap<String, String>,
     pub shortcuts: Shortcuts,
 }
 
@@ -271,6 +275,7 @@ impl Default for Settings {
             review_examples: true,
             chat_challenge: ChatChallenge::Push,
             active_language: "ja".to_string(),
+            language_models: Default::default(),
             shortcuts: Shortcuts::default(),
         }
     }
@@ -302,7 +307,19 @@ impl Settings {
         serde_json::from_str(&json).ok()
     }
 
-    /// Build the LLM backend this configuration describes.
+    /// The model to use right now: the active language's override when
+    /// one is set, otherwise `base`.
+    fn model_for_active_language(&self, base: &str) -> String {
+        self.language_models
+            .get(&self.active_language)
+            .map(|m| m.trim())
+            .filter(|m| !m.is_empty())
+            .unwrap_or(base.trim())
+            .to_string()
+    }
+
+    /// Build the LLM backend this configuration describes, honoring the
+    /// active language's model override.
     pub fn build_explainer(&self) -> std::sync::Arc<dyn shiori_llm::Explainer> {
         match self.llm_provider {
             LlmProvider::Anthropic => {
@@ -310,22 +327,23 @@ impl Settings {
                 if key.is_empty() {
                     std::sync::Arc::from(shiori_llm::explainer_from_env())
                 } else {
-                    let model = if self.llm_model.trim().is_empty() {
+                    let base = if self.llm_model.trim().is_empty() {
                         Settings::default().llm_model
                     } else {
                         self.llm_model.trim().to_string()
                     };
+                    let model = self.model_for_active_language(&base);
                     std::sync::Arc::new(shiori_llm::AnthropicExplainer::with_model(key, model))
                 }
             }
             LlmProvider::Ollama => std::sync::Arc::new(shiori_llm::OllamaExplainer::new(
                 self.ollama_url.clone(),
-                self.ollama_model.trim(),
+                self.model_for_active_language(&self.ollama_model),
             )),
             LlmProvider::Custom => std::sync::Arc::new(shiori_llm::OpenAiCompatExplainer::new(
                 self.custom_url.trim(),
                 self.custom_api_key.trim(),
-                self.custom_model.trim(),
+                self.model_for_active_language(&self.custom_model),
             )),
         }
     }

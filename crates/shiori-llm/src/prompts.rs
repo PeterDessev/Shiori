@@ -114,6 +114,30 @@ a natural rewrite. Encourage what they got right. Keep it under 250 words. Use p
     )
 }
 
+/// The chat message that requests a composition exercise. Sent through
+/// the ordinary chat pipeline: the partner replies with a topic, the
+/// learner writes, and the usual paper-style write-up grades it.
+pub fn composition_request(profile: &PromptProfile) -> String {
+    format!(
+        "Please give me a short composition exercise: one topic to write \
+         2–3 sentences about in {name}. State the topic in {name} with a \
+         brief English hint in parentheses, then wait for my attempt.",
+        name = profile.language_name
+    )
+}
+
+/// The chat message that requests a translation drill over a sentence
+/// from the user's own reading.
+pub fn translation_drill_request(profile: &PromptProfile, sentence: &str) -> String {
+    format!(
+        "Translation drill: here is a sentence from my reading:\n\n{sentence}\n\n\
+         Give me a natural English translation of it, then ask me to \
+         translate that English back into {name} without looking. After \
+         my attempt, compare it with the original.",
+        name = profile.language_name
+    )
+}
+
 /// Built-in writing prompts so production mode has material without any
 /// network dependency.
 pub fn writing_prompts() -> &'static [&'static str] {
