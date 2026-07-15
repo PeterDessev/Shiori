@@ -12,7 +12,7 @@ impl ShioriGui {
     pub fn show_stats(&mut self, ctx: &egui::Context) {
         // Cheap aggregate queries; fine to run per frame shown.
         let data = self.with_app(|app| {
-            let words = app.db().word_status_counts()?;
+            let words = app.db().word_status_counts(app.active_lang())?;
             let total_reviews = app.db().review_count()?;
             let today = app.db().reviews_on_day(Utc::now())?;
             let cards = app.db().card_count()?;

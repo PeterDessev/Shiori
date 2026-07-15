@@ -61,6 +61,7 @@ mod tests {
             }];
             app.db()
                 .import_document(
+                    "ja",
                     &shiori_core::DocumentMeta {
                         title: "t".into(),
                         ..Default::default()

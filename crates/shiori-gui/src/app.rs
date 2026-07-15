@@ -894,7 +894,9 @@ impl ShioriGui {
         self.with_app(|app| {
             let word = app.db().word(word_id)?;
             let entry = app.dictionary_entry_for(&word)?;
-            let rank = app.db().frequency_rank(&word.key.lemma)?;
+            let rank = app
+                .db()
+                .frequency_rank(app.active_lang(), &word.key.lemma)?;
             let compound = if try_compound && phrase != word.key.lemma {
                 app.lookup_compound(&phrase)?
             } else {
@@ -1166,7 +1168,9 @@ impl ShioriGui {
 
     /// Load (or reload) the conversation list for the chat sidebar.
     pub fn load_conversations(&mut self) {
-        if let Some(list) = self.with_app(|app| Ok(app.db().list_conversations()?)) {
+        if let Some(list) =
+            self.with_app(|app| Ok(app.db().list_conversations(app.active_lang())?))
+        {
             self.production.conversations = list;
             self.production.loaded = true;
         }
@@ -1215,7 +1219,11 @@ impl ShioriGui {
             None => {
                 let title = truncate_title(&content, 24);
                 let Some(id) = self.with_app(|app| {
-                    Ok(app.db().create_conversation(chrono::Utc::now(), &title)?)
+                    Ok(app.db().create_conversation(
+                        app.active_lang(),
+                        chrono::Utc::now(),
+                        &title,
+                    )?)
                 }) else {
                     return;
                 };

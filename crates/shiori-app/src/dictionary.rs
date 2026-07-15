@@ -86,19 +86,20 @@ impl App {
 
         // Root-form entries first, so a conjugated query leads with the
         // word it is a form of.
+        let source = self.active_dict_source();
         if let Some(a) = &analysis {
-            for seq in self.db().dict_lookup_seqs(&a.lemma)? {
-                if seen.insert(seq) {
-                    if let Some(hit) = self.build_hit(seq)? {
+            for key in self.db().dict_lookup_keys(source, &a.lemma)? {
+                if seen.insert(key.clone()) {
+                    if let Some(hit) = self.build_hit(&key)? {
                         words.push(hit);
                     }
                 }
             }
         }
         // Literal exact/prefix matches on the typed (kana-normalized) form.
-        for seq in self.db().dict_search_seqs(&search, 30)? {
-            if seen.insert(seq) {
-                if let Some(hit) = self.build_hit(seq)? {
+        for key in self.db().dict_search_keys(source, &search, 30)? {
+            if seen.insert(key.clone()) {
+                if let Some(hit) = self.build_hit(&key)? {
                     words.push(hit);
                 }
             }
@@ -162,11 +163,14 @@ impl App {
         Ok(out)
     }
 
-    /// Build a search hit from a dictionary sequence id, resolving its
+    /// Build a search hit from a dictionary entry key, resolving its
     /// tracked word and JLPT level. Returns `None` for a missing or
     /// corrupt entry.
-    fn build_hit(&self, seq: i64) -> Result<Option<DictSearchHit>> {
-        let Some(json) = self.db().dict_entry_json(seq)? else {
+    fn build_hit(&self, entry_key: &str) -> Result<Option<DictSearchHit>> {
+        let Some(json) = self
+            .db()
+            .dict_entry_json(self.active_dict_source(), entry_key)?
+        else {
             return Ok(None);
         };
         let Ok(entry) = serde_json::from_str::<DictEntry>(&json) else {
@@ -174,7 +178,7 @@ impl App {
         };
         let word = self
             .db()
-            .words_by_lemma(entry.headword())?
+            .words_by_lemma(self.active_lang(), entry.headword())?
             .into_iter()
             .next();
         let kanji = entry.kanji.first().map(|f| f.text.as_str()).unwrap_or("");
@@ -217,7 +221,7 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use shiori_db::DictFormRow;
+    use shiori_db::{DictFormRow, FormRole};
 
     fn app_with_dict() -> App {
         let app = App::with_db(
@@ -250,40 +254,43 @@ mod tests {
         })
         .to_string();
         app.db()
-            .import_dictionary(vec![
-                (
-                    1467640,
-                    neko_json,
-                    vec![
-                        DictFormRow {
-                            text: "猫".into(),
-                            is_kana: false,
-                            is_common: true,
-                        },
-                        DictFormRow {
-                            text: "ねこ".into(),
-                            is_kana: true,
-                            is_common: true,
-                        },
-                    ],
-                ),
-                (
-                    1358280,
-                    taberu_json,
-                    vec![
-                        DictFormRow {
-                            text: "食べる".into(),
-                            is_kana: false,
-                            is_common: true,
-                        },
-                        DictFormRow {
-                            text: "たべる".into(),
-                            is_kana: true,
-                            is_common: true,
-                        },
-                    ],
-                ),
-            ])
+            .import_dictionary(
+                "jmdict",
+                vec![
+                    (
+                        "1467640".to_string(),
+                        neko_json,
+                        vec![
+                            DictFormRow {
+                                text: "猫".into(),
+                                role: FormRole::Orthographic,
+                                is_common: true,
+                            },
+                            DictFormRow {
+                                text: "ねこ".into(),
+                                role: FormRole::Phonetic,
+                                is_common: true,
+                            },
+                        ],
+                    ),
+                    (
+                        "1358280".to_string(),
+                        taberu_json,
+                        vec![
+                            DictFormRow {
+                                text: "食べる".into(),
+                                role: FormRole::Orthographic,
+                                is_common: true,
+                            },
+                            DictFormRow {
+                                text: "たべる".into(),
+                                role: FormRole::Phonetic,
+                                is_common: true,
+                            },
+                        ],
+                    ),
+                ],
+            )
             .unwrap();
         app.db()
             .import_kanji(vec![shiori_db::KanjiRow {
@@ -395,6 +402,8 @@ mod tests {
                     pos: PartOfSpeech::Prenominal,
                     start: 0,
                     end: neko_start,
+                    morph: None,
+                    gloss: None,
                 },
                 NewToken {
                     surface: "猫".into(),
@@ -403,6 +412,8 @@ mod tests {
                     pos: PartOfSpeech::Noun,
                     start: neko_start,
                     end: neko_end,
+                    morph: None,
+                    gloss: None,
                 },
                 NewToken {
                     surface: "が".into(),
@@ -411,11 +422,14 @@ mod tests {
                     pos: PartOfSpeech::Particle,
                     start: neko_end,
                     end: neko_end + "が".len(),
+                    morph: None,
+                    gloss: None,
                 },
             ],
         }];
         app.db()
             .import_document(
+                "ja",
                 &shiori_core::DocumentMeta {
                     title: "fixture".into(),
                     ..Default::default()
@@ -428,7 +442,7 @@ mod tests {
 
         let word = app
             .db()
-            .words_by_lemma("猫")
+            .words_by_lemma("ja", "猫")
             .unwrap()
             .into_iter()
             .next()

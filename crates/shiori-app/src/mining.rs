@@ -57,11 +57,12 @@ impl App {
     /// Frequency rank of a word, trying lemma first, then reading (the
     /// frequency list mixes scripts).
     fn corpus_rank(&self, word: &WordRow) -> Result<Option<u32>> {
-        if let Some(rank) = self.db.frequency_rank(&word.key.lemma)? {
+        let lang = self.active_lang();
+        if let Some(rank) = self.db.frequency_rank(lang, &word.key.lemma)? {
             return Ok(Some(rank));
         }
         if !word.key.reading.is_empty() && !is_kana_only(&word.key.lemma) {
-            return Ok(self.db.frequency_rank(&word.key.reading)?);
+            return Ok(self.db.frequency_rank(lang, &word.key.reading)?);
         }
         Ok(None)
     }
@@ -69,18 +70,22 @@ impl App {
     /// Resolve (and cache) the dictionary entry for a word.
     pub fn dictionary_entry_for(&self, word: &WordRow) -> Result<Option<DictEntry>> {
         // Cached resolution first.
-        if let Some(seq) = word.dict_seq {
-            if let Some(json) = self.db.dict_entry_json(seq)? {
+        if let Some(dict_ref) = &word.dict_ref {
+            if let Some(json) = self.db.dict_entry_json(&dict_ref.source, &dict_ref.key)? {
                 return Ok(Some(serde_json::from_str(&json).map_err(|e| {
-                    crate::AppError::Invalid(format!("corrupt dictionary entry {seq}: {e}"))
+                    crate::AppError::Invalid(format!(
+                        "corrupt dictionary entry {}/{}: {e}",
+                        dict_ref.source, dict_ref.key
+                    ))
                 })?));
             }
         }
 
-        let seqs = self.db.dict_lookup_seqs(&word.key.lemma)?;
-        let mut candidates = Vec::with_capacity(seqs.len());
-        for seq in seqs {
-            if let Some(json) = self.db.dict_entry_json(seq)? {
+        let source = self.active_dict_source();
+        let keys = self.db.dict_lookup_keys(source, &word.key.lemma)?;
+        let mut candidates = Vec::with_capacity(keys.len());
+        for key in keys {
+            if let Some(json) = self.db.dict_entry_json(source, &key)? {
                 if let Ok(entry) = serde_json::from_str::<DictEntry>(&json) {
                     candidates.push(entry);
                 }
@@ -90,7 +95,13 @@ impl App {
             shiori_dict::pick_best_entry(candidates.iter(), &word.key.lemma, &word.key.reading)
                 .cloned();
         if let Some(entry) = &best {
-            self.db.set_word_dict_seq(word.id, Some(entry.seq()))?;
+            self.db.set_word_dict_ref(
+                word.id,
+                Some(&shiori_db::DictRef {
+                    source: source.to_string(),
+                    key: entry.seq().to_string(),
+                }),
+            )?;
         }
         Ok(best)
     }
@@ -101,10 +112,11 @@ impl App {
     /// analyzer-split compounds like 低声 (prefix 低 + noun 声) that JMdict
     /// knows as one word.
     pub fn lookup_compound(&self, surface: &str) -> Result<Option<DictEntry>> {
-        let seqs = self.db.dict_lookup_seqs(surface)?;
-        let mut candidates = Vec::with_capacity(seqs.len());
-        for seq in seqs {
-            if let Some(json) = self.db.dict_entry_json(seq)? {
+        let source = self.active_dict_source();
+        let keys = self.db.dict_lookup_keys(source, surface)?;
+        let mut candidates = Vec::with_capacity(keys.len());
+        for key in keys {
+            if let Some(json) = self.db.dict_entry_json(source, &key)? {
                 if let Ok(entry) = serde_json::from_str::<DictEntry>(&json) {
                     candidates.push(entry);
                 }

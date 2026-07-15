@@ -22,12 +22,12 @@ mod words;
 
 pub use cards::CardRow;
 pub use chat::{ChatAnnotationRow, ChatMessageRow, ConversationRow};
-pub use dict::DictFormRow;
+pub use dict::{DictFormRow, FormRole};
 pub use documents::{DocumentSummary, NewSentence, NewToken, TokenRow};
 pub use kanji::KanjiRow;
 pub use sessions::ReadingTotals;
 pub use stats::{JlptShare, StatusCount};
-pub use words::{DocWord, WordRow};
+pub use words::{DictRef, DocWord, WordRow};
 
 use std::path::Path;
 
@@ -58,7 +58,25 @@ impl Db {
             // one place; failure surfaces as the rusqlite open error below.
             let _ = std::fs::create_dir_all(parent);
         }
-        Self::from_connection(Connection::open(path)?)
+        let conn = Connection::open(path)?;
+        // The v8 migration rebuilds the tables holding irreplaceable SRS
+        // state, so take a one-time file copy before touching them.
+        let stored: Option<String> = conn
+            .query_row(
+                "SELECT value FROM meta WHERE key = 'schema_version'",
+                [],
+                |r| r.get(0),
+            )
+            .ok();
+        if stored.is_some_and(|v| v.parse::<i64>().unwrap_or(0) < 8) {
+            let mut backup = path.as_os_str().to_owned();
+            backup.push(".v7-backup");
+            let backup = std::path::PathBuf::from(backup);
+            if !backup.exists() {
+                conn.execute("VACUUM INTO ?1", [backup.to_string_lossy().as_ref()])?;
+            }
+        }
+        Self::from_connection(conn)
     }
 
     /// Open a fresh in-memory database (used by tests).

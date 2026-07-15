@@ -17,6 +17,9 @@ pub struct SentenceId(pub i64);
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Document {
     pub id: DocumentId,
+    /// Language the document was imported under (BCP-47-ish code:
+    /// "ja", "grc", "es", …).
+    pub lang: String,
     pub title: String,
     /// Author name; empty when unknown.
     pub author: String,

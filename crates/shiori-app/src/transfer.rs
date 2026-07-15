@@ -49,16 +49,28 @@ impl App {
                 reps: row.card.reps,
                 lapses: row.card.lapses,
             });
-            notes.push(AnkiNote {
-                // The "jrc-" prefix predates the Shiori rename; it must
-                // stay stable or re-imports into Anki would duplicate
-                // every previously exported note.
-                guid: format!(
+            // The "jrc-" prefix predates the Shiori rename; it must stay
+            // stable for Japanese words or re-imports into Anki would
+            // duplicate every previously exported note. Other languages
+            // never shipped under it, so they get the namespaced scheme.
+            let guid = if word.lang == "ja" {
+                format!(
                     "jrc-{}-{}-{}",
                     word.key.lemma,
                     word.key.reading,
                     word.key.pos.as_str()
-                ),
+                )
+            } else {
+                format!(
+                    "shiori-{}-{}-{}-{}",
+                    word.lang,
+                    word.key.lemma,
+                    word.key.reading,
+                    word.key.pos.as_str()
+                )
+            };
+            notes.push(AnkiNote {
+                guid,
                 fields: [
                     word.key.lemma.clone(),
                     word.key.reading.clone(),
@@ -117,7 +129,7 @@ impl App {
             reading: head.token.reading.clone(),
             pos: head.token.pos,
         };
-        let word = self.db().ensure_word(&key)?;
+        let word = self.db().ensure_word(self.active_lang(), &key)?;
         if self.db().card(word.id)?.is_some() {
             // Never clobber existing scheduling.
             return Ok(false);
@@ -206,11 +218,10 @@ mod tests {
 
         let word = other
             .db()
-            .find_word(&shiori_core::WordKey::new(
-                "勉強",
-                "べんきょう",
-                shiori_core::PartOfSpeech::Noun,
-            ))
+            .find_word(
+                "ja",
+                &shiori_core::WordKey::new("勉強", "べんきょう", shiori_core::PartOfSpeech::Noun),
+            )
             .unwrap()
             .expect("imported word exists");
         assert_eq!(word.status, KnowledgeStatus::Learning);

@@ -36,10 +36,10 @@ pub struct ChatAnnotationRow {
 }
 
 impl Db {
-    pub fn create_conversation(&self, at: DateTime<Utc>, title: &str) -> Result<i64> {
+    pub fn create_conversation(&self, lang: &str, at: DateTime<Utc>, title: &str) -> Result<i64> {
         self.conn().execute(
-            "INSERT INTO conversations(started_at, title) VALUES (?1, ?2)",
-            params![at, title],
+            "INSERT INTO conversations(lang, started_at, title) VALUES (?1, ?2, ?3)",
+            params![lang, at, title],
         )?;
         Ok(self.conn().last_insert_rowid())
     }
@@ -58,14 +58,15 @@ impl Db {
         Ok(())
     }
 
-    /// All conversations, newest first.
-    pub fn list_conversations(&self) -> Result<Vec<ConversationRow>> {
+    /// One language's conversations, newest first.
+    pub fn list_conversations(&self, lang: &str) -> Result<Vec<ConversationRow>> {
         let mut stmt = self.conn().prepare(
             "SELECT c.id, c.started_at, c.title,
                     (SELECT COUNT(*) FROM chat_messages m WHERE m.conversation_id = c.id)
-             FROM conversations c ORDER BY c.started_at DESC, c.id DESC",
+             FROM conversations c WHERE c.lang = ?1
+             ORDER BY c.started_at DESC, c.id DESC",
         )?;
-        let rows = stmt.query_map([], |r| {
+        let rows = stmt.query_map([lang], |r| {
             Ok(ConversationRow {
                 id: r.get(0)?,
                 started_at: r.get(1)?,
@@ -162,7 +163,7 @@ mod tests {
     fn conversation_roundtrip() {
         let db = Db::open_in_memory().unwrap();
         let now = Utc::now();
-        let conv = db.create_conversation(now, "").unwrap();
+        let conv = db.create_conversation("ja", now, "").unwrap();
         db.set_conversation_title(conv, "天気の話").unwrap();
 
         let m1 = db
@@ -184,10 +185,12 @@ mod tests {
         )
         .unwrap();
 
-        let convs = db.list_conversations().unwrap();
+        let convs = db.list_conversations("ja").unwrap();
         assert_eq!(convs.len(), 1);
         assert_eq!(convs[0].title, "天気の話");
         assert_eq!(convs[0].message_count, 2);
+        // Another language's history is separate.
+        assert!(db.list_conversations("grc").unwrap().is_empty());
 
         let messages = db.conversation_messages(conv).unwrap();
         assert_eq!(messages.len(), 2);
@@ -203,7 +206,7 @@ mod tests {
     #[test]
     fn deleting_a_conversation_cascades() {
         let db = Db::open_in_memory().unwrap();
-        let conv = db.create_conversation(Utc::now(), "x").unwrap();
+        let conv = db.create_conversation("ja", Utc::now(), "x").unwrap();
         let m = db
             .add_chat_message(conv, "user", "テスト", Utc::now())
             .unwrap();
@@ -218,7 +221,7 @@ mod tests {
         )
         .unwrap();
         db.delete_conversation(conv).unwrap();
-        assert!(db.list_conversations().unwrap().is_empty());
+        assert!(db.list_conversations("ja").unwrap().is_empty());
         let orphans: i64 = db
             .conn()
             .query_row("SELECT COUNT(*) FROM chat_annotations", [], |r| r.get(0))
@@ -230,8 +233,8 @@ mod tests {
     fn message_indices_are_per_conversation() {
         let db = Db::open_in_memory().unwrap();
         let now = Utc::now();
-        let a = db.create_conversation(now, "a").unwrap();
-        let b = db.create_conversation(now, "b").unwrap();
+        let a = db.create_conversation("ja", now, "a").unwrap();
+        let b = db.create_conversation("ja", now, "b").unwrap();
         db.add_chat_message(a, "user", "one", now).unwrap();
         db.add_chat_message(b, "user", "uno", now).unwrap();
         db.add_chat_message(a, "assistant", "two", now).unwrap();

@@ -47,11 +47,14 @@ impl App {
                         token.end += base;
                         let word = self
                             .db()
-                            .find_word(&WordKey {
-                                lemma: t.lemma.clone(),
-                                reading: t.reading.clone(),
-                                pos: t.pos,
-                            })
+                            .find_word(
+                                self.active_lang(),
+                                &WordKey {
+                                    lemma: t.lemma.clone(),
+                                    reading: t.reading.clone(),
+                                    pos: t.pos,
+                                },
+                            )
                             .unwrap_or(None);
                         ChatTokenRow { token, word }
                     })
@@ -65,7 +68,7 @@ impl App {
     /// The tracked word for a key, created at `unknown` if new — used
     /// when the user clicks a chat token the library has never seen.
     pub fn ensure_word(&self, key: &WordKey) -> Result<WordRow> {
-        Ok(self.db().ensure_word(key)?)
+        Ok(self.db().ensure_word(self.active_lang(), key)?)
     }
 
     /// Put a word into the SRS without a context sentence (chat words
@@ -86,7 +89,7 @@ impl App {
     pub fn chat_level_hint(&self) -> Result<String> {
         let known: u32 = self
             .db()
-            .word_status_counts()?
+            .word_status_counts(self.active_lang())?
             .iter()
             .filter(|(s, _)| *s == KnowledgeStatus::Known)
             .map(|(_, n)| *n)

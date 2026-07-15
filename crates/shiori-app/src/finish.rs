@@ -39,7 +39,7 @@ impl App {
     pub fn finish_sweep_plan(&self, document: DocumentId) -> Result<SweepPlan> {
         // The user's known band: where their known vocabulary lives in
         // the corpus frequency ranking.
-        let ranks = self.db().known_word_ranks()?;
+        let ranks = self.db().known_word_ranks(self.active_lang())?;
         let band_edge = if ranks.len() >= MIN_BAND_SAMPLE {
             Some(ranks[ranks.len() * 9 / 10])
         } else {
@@ -55,7 +55,9 @@ impl App {
             if !shiori_nlp::kana::is_japanese(&word.key.lemma) {
                 continue;
             }
-            let corpus_rank = self.db().frequency_rank(&word.key.lemma)?;
+            let corpus_rank = self
+                .db()
+                .frequency_rank(self.active_lang(), &word.key.lemma)?;
 
             if word.key.pos == PartOfSpeech::ProperNoun {
                 plan.to_ignored.push(SweepCandidate {
@@ -129,6 +131,8 @@ mod tests {
             pos,
             start: 0,
             end: surface.len(),
+            morph: None,
+            gloss: None,
         }
     }
 
@@ -151,6 +155,7 @@ mod tests {
         let doc = app
             .db()
             .import_document(
+                "ja",
                 &shiori_core::DocumentMeta {
                     title: "t".into(),
                     ..Default::default()
@@ -189,11 +194,10 @@ mod tests {
         // The user marked メロス as learning during reading.
         let melos = app
             .db()
-            .find_word(&shiori_core::WordKey::new(
-                "メロス",
-                "ヨミ",
-                PartOfSpeech::ProperNoun,
-            ))
+            .find_word(
+                "ja",
+                &shiori_core::WordKey::new("メロス", "ヨミ", PartOfSpeech::ProperNoun),
+            )
             .unwrap()
             .unwrap();
         app.db()
@@ -214,17 +218,19 @@ mod tests {
         );
         let cat = app
             .db()
-            .find_word(&shiori_core::WordKey::new("猫", "ヨミ", PartOfSpeech::Noun))
+            .find_word(
+                "ja",
+                &shiori_core::WordKey::new("猫", "ヨミ", PartOfSpeech::Noun),
+            )
             .unwrap()
             .unwrap();
         assert_eq!(cat.status, KnowledgeStatus::Known);
         let kyoto = app
             .db()
-            .find_word(&shiori_core::WordKey::new(
-                "京都",
-                "ヨミ",
-                PartOfSpeech::ProperNoun,
-            ))
+            .find_word(
+                "ja",
+                &shiori_core::WordKey::new("京都", "ヨミ", PartOfSpeech::ProperNoun),
+            )
             .unwrap()
             .unwrap();
         assert_eq!(kyoto.status, KnowledgeStatus::Ignored);

@@ -22,7 +22,7 @@ impl App {
             return Err(AppError::Invalid("document title must not be empty".into()));
         }
         let hash = content_hash(text);
-        if let Some(existing) = self.db.find_document_by_hash(&hash)? {
+        if let Some(existing) = self.db.find_document_by_hash(self.active_lang(), &hash)? {
             return Ok(existing);
         }
 
@@ -43,6 +43,8 @@ impl App {
                             pos: t.pos,
                             start: t.start,
                             end: t.end,
+                            morph: None,
+                            gloss: None,
                         })
                         .collect(),
                 });
@@ -56,7 +58,7 @@ impl App {
 
         Ok(self
             .db
-            .import_document(&meta, &hash, Utc::now(), &sentences)?)
+            .import_document(self.active_lang(), &meta, &hash, Utc::now(), &sentences)?)
     }
 
     /// Import a file from disk (txt/md, HTML, EPUB, or PDF — see

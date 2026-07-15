@@ -5,14 +5,24 @@ use shiori_core::{DocumentId, KnowledgeStatus, PartOfSpeech, SentenceId, WordId,
 
 use crate::{Db, DbError, Result};
 
+/// Reference from a tracked word into a dictionary: which source resolved
+/// it and under which entry key ('jmdict' keys by sequence id; other
+/// lexicons may key by lemma + homograph number).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DictRef {
+    pub source: String,
+    pub key: String,
+}
+
 /// A tracked word with its knowledge state.
 #[derive(Debug, Clone)]
 pub struct WordRow {
     pub id: WordId,
+    pub lang: String,
     pub key: WordKey,
     pub status: KnowledgeStatus,
-    /// JMdict sequence id this word resolved to, if any.
-    pub dict_seq: Option<i64>,
+    /// Dictionary entry this word resolved to, if any.
+    pub dict_ref: Option<DictRef>,
 }
 
 /// A word as it occurs within one document.
@@ -26,19 +36,24 @@ pub struct DocWord {
 }
 
 fn row_to_word(r: &rusqlite::Row<'_>) -> rusqlite::Result<WordRow> {
+    let dict_source: Option<String> = r.get(6)?;
+    let dict_key: Option<String> = r.get(7)?;
     Ok(WordRow {
         id: WordId(r.get(0)?),
+        lang: r.get(1)?,
         key: WordKey {
-            lemma: r.get(1)?,
-            reading: r.get(2)?,
-            pos: PartOfSpeech::from_str_lossy(&r.get::<_, String>(3)?),
+            lemma: r.get(2)?,
+            reading: r.get(3)?,
+            pos: PartOfSpeech::from_str_lossy(&r.get::<_, String>(4)?),
         },
-        status: KnowledgeStatus::from_str_lossy(&r.get::<_, String>(4)?),
-        dict_seq: r.get(5)?,
+        status: KnowledgeStatus::from_str_lossy(&r.get::<_, String>(5)?),
+        dict_ref: dict_source
+            .zip(dict_key)
+            .map(|(source, key)| DictRef { source, key }),
     })
 }
 
-const WORD_COLS: &str = "id, lemma, reading, pos, status, dict_seq";
+const WORD_COLS: &str = "id, lang, lemma, reading, pos, status, dict_source, dict_key";
 
 impl Db {
     pub fn word(&self, id: WordId) -> Result<WordRow> {
@@ -54,33 +69,34 @@ impl Db {
             })
     }
 
-    /// All tracked words sharing a lemma (any reading/POS).
-    pub fn words_by_lemma(&self, lemma: &str) -> Result<Vec<WordRow>> {
-        let mut stmt = self
-            .conn()
-            .prepare(&format!("SELECT {WORD_COLS} FROM words WHERE lemma = ?1"))?;
-        let rows = stmt.query_map([lemma], row_to_word)?;
+    /// All tracked words of a language sharing a lemma (any reading/POS).
+    pub fn words_by_lemma(&self, lang: &str, lemma: &str) -> Result<Vec<WordRow>> {
+        let mut stmt = self.conn().prepare(&format!(
+            "SELECT {WORD_COLS} FROM words WHERE lang = ?1 AND lemma = ?2"
+        ))?;
+        let rows = stmt.query_map([lang, lemma], row_to_word)?;
         Ok(rows.collect::<std::result::Result<_, _>>()?)
     }
 
     /// The word for a key, inserted at the default status if new.
-    pub fn ensure_word(&self, key: &WordKey) -> Result<WordRow> {
-        if let Some(word) = self.find_word(key)? {
+    pub fn ensure_word(&self, lang: &str, key: &WordKey) -> Result<WordRow> {
+        if let Some(word) = self.find_word(lang, key)? {
             return Ok(word);
         }
         self.conn().execute(
-            "INSERT INTO words(lemma, reading, pos) VALUES (?1, ?2, ?3)",
-            params![key.lemma, key.reading, key.pos.as_str()],
+            "INSERT INTO words(lang, lemma, reading, pos) VALUES (?1, ?2, ?3, ?4)",
+            params![lang, key.lemma, key.reading, key.pos.as_str()],
         )?;
-        self.find_word(key)?.ok_or(DbError::NotFound("word"))
+        self.find_word(lang, key)?.ok_or(DbError::NotFound("word"))
     }
 
-    pub fn find_word(&self, key: &WordKey) -> Result<Option<WordRow>> {
+    pub fn find_word(&self, lang: &str, key: &WordKey) -> Result<Option<WordRow>> {
         let result = self.conn().query_row(
             &format!(
-                "SELECT {WORD_COLS} FROM words WHERE lemma = ?1 AND reading = ?2 AND pos = ?3"
+                "SELECT {WORD_COLS} FROM words
+                 WHERE lang = ?1 AND lemma = ?2 AND reading = ?3 AND pos = ?4"
             ),
-            params![key.lemma, key.reading, key.pos.as_str()],
+            params![lang, key.lemma, key.reading, key.pos.as_str()],
             row_to_word,
         );
         match result {
@@ -114,32 +130,37 @@ impl Db {
         Ok(())
     }
 
-    /// Corpus frequency ranks of every known word that has one, sorted
-    /// ascending. The shape of this distribution is the user's "known
-    /// band" for missed-word detection.
-    pub fn known_word_ranks(&self) -> Result<Vec<u32>> {
+    /// Corpus frequency ranks of every known word (of one language) that
+    /// has one, sorted ascending. The shape of this distribution is the
+    /// user's "known band" for missed-word detection.
+    pub fn known_word_ranks(&self, lang: &str) -> Result<Vec<u32>> {
         let mut stmt = self.conn().prepare(
-            "SELECT f.rank FROM words w JOIN frequency f ON f.word = w.lemma
-             WHERE w.status = 'known' ORDER BY f.rank",
+            "SELECT f.rank FROM words w
+             JOIN frequency f ON f.lang = w.lang AND f.word = w.lemma
+             WHERE w.lang = ?1 AND w.status = 'known' ORDER BY f.rank",
         )?;
-        let rows = stmt.query_map([], |r| r.get::<_, i64>(0).map(|n| n as u32))?;
+        let rows = stmt.query_map([lang], |r| r.get::<_, i64>(0).map(|n| n as u32))?;
         Ok(rows.collect::<std::result::Result<_, _>>()?)
     }
 
-    pub fn set_word_dict_seq(&self, id: WordId, seq: Option<i64>) -> Result<()> {
+    pub fn set_word_dict_ref(&self, id: WordId, dict_ref: Option<&DictRef>) -> Result<()> {
         self.conn().execute(
-            "UPDATE words SET dict_seq = ?2 WHERE id = ?1",
-            params![id.0, seq],
+            "UPDATE words SET dict_source = ?2, dict_key = ?3 WHERE id = ?1",
+            params![
+                id.0,
+                dict_ref.map(|d| d.source.as_str()),
+                dict_ref.map(|d| d.key.as_str())
+            ],
         )?;
         Ok(())
     }
 
-    /// Global counts of words per knowledge status.
-    pub fn word_status_counts(&self) -> Result<Vec<(KnowledgeStatus, u32)>> {
+    /// Counts of one language's words per knowledge status.
+    pub fn word_status_counts(&self, lang: &str) -> Result<Vec<(KnowledgeStatus, u32)>> {
         let mut stmt = self
             .conn()
-            .prepare("SELECT status, COUNT(*) FROM words GROUP BY status")?;
-        let rows = stmt.query_map([], |r| {
+            .prepare("SELECT status, COUNT(*) FROM words WHERE lang = ?1 GROUP BY status")?;
+        let rows = stmt.query_map([lang], |r| {
             Ok((
                 KnowledgeStatus::from_str_lossy(&r.get::<_, String>(0)?),
                 r.get::<_, i64>(1)? as u32,
@@ -152,7 +173,8 @@ impl Db {
     /// sentence each appears in, most frequent first.
     pub fn document_words(&self, document: DocumentId) -> Result<Vec<DocWord>> {
         let mut stmt = self.conn().prepare(
-            "SELECT w.id, w.lemma, w.reading, w.pos, w.status, w.dict_seq,
+            "SELECT w.id, w.lang, w.lemma, w.reading, w.pos, w.status,
+                    w.dict_source, w.dict_key,
                     COUNT(*) AS occurrences,
                     MIN(s.id) AS first_sentence
              FROM tokens t
@@ -165,8 +187,8 @@ impl Db {
         let rows = stmt.query_map([document.0], |r| {
             Ok(DocWord {
                 word: row_to_word(r)?,
-                occurrences: r.get::<_, i64>(6)? as u32,
-                first_sentence_id: SentenceId(r.get(7)?),
+                occurrences: r.get::<_, i64>(8)? as u32,
+                first_sentence_id: SentenceId(r.get(9)?),
             })
         })?;
         Ok(rows.collect::<std::result::Result<_, _>>()?)
@@ -184,14 +206,30 @@ mod tests {
         import_fixture(&db);
 
         let key = WordKey::new("猫", "ねこ", PartOfSpeech::Noun);
-        let word = db.find_word(&key).unwrap().expect("猫 was imported");
+        let word = db.find_word("ja", &key).unwrap().expect("猫 was imported");
         assert_eq!(word.status, KnowledgeStatus::Unknown);
 
         db.set_word_status(word.id, KnowledgeStatus::Known).unwrap();
         assert_eq!(db.word(word.id).unwrap().status, KnowledgeStatus::Known);
 
-        db.set_word_dict_seq(word.id, Some(1467640)).unwrap();
-        assert_eq!(db.word(word.id).unwrap().dict_seq, Some(1467640));
+        let dict_ref = DictRef {
+            source: "jmdict".into(),
+            key: "1467640".into(),
+        };
+        db.set_word_dict_ref(word.id, Some(&dict_ref)).unwrap();
+        assert_eq!(db.word(word.id).unwrap().dict_ref, Some(dict_ref));
+    }
+
+    #[test]
+    fn words_are_scoped_by_language() {
+        let db = Db::open_in_memory().unwrap();
+        let key = WordKey::new("sol", "", PartOfSpeech::Noun);
+        let es = db.ensure_word("es", &key).unwrap();
+        let la = db.ensure_word("la", &key).unwrap();
+        assert_ne!(es.id, la.id, "same key in two languages is two words");
+        assert_eq!(db.ensure_word("es", &key).unwrap().id, es.id);
+        assert!(db.find_word("grc", &key).unwrap().is_none());
+        assert_eq!(db.words_by_lemma("es", "sol").unwrap().len(), 1);
     }
 
     #[test]
@@ -202,7 +240,7 @@ mod tests {
             Err(DbError::NotFound("word"))
         ));
         assert!(db
-            .find_word(&WordKey::new("ない", "ない", PartOfSpeech::Noun))
+            .find_word("ja", &WordKey::new("ない", "ない", PartOfSpeech::Noun))
             .unwrap()
             .is_none());
         assert!(db
@@ -230,11 +268,13 @@ mod tests {
     fn status_counts() {
         let db = Db::open_in_memory().unwrap();
         import_fixture(&db);
-        let counts = db.word_status_counts().unwrap();
+        let counts = db.word_status_counts("ja").unwrap();
         let unknown = counts
             .iter()
             .find(|(s, _)| *s == KnowledgeStatus::Unknown)
             .unwrap();
         assert_eq!(unknown.1, 7);
+        // Another language's counts are empty.
+        assert!(db.word_status_counts("grc").unwrap().is_empty());
     }
 }

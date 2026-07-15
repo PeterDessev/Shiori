@@ -109,6 +109,20 @@ impl App {
         &self.db
     }
 
+    /// Language every service currently operates in.
+    ///
+    /// Fixed to Japanese until the language switcher lands; every
+    /// language-scoped database call routes through this so the switch
+    /// becomes a one-field change.
+    pub fn active_lang(&self) -> &'static str {
+        "ja"
+    }
+
+    /// Dictionary source backing the active language.
+    pub fn active_dict_source(&self) -> &'static str {
+        "jmdict"
+    }
+
     pub fn scheduler(&self) -> &Scheduler {
         &self.scheduler
     }

@@ -9,7 +9,8 @@ use shiori_core::{
 
 use crate::{Db, DbError, Result};
 
-/// A token as produced by the analyzer, ready for import.
+/// A token as produced by the analyzer (or carried by a pre-annotated
+/// text), ready for import.
 #[derive(Debug, Clone)]
 pub struct NewToken {
     pub surface: String,
@@ -18,6 +19,11 @@ pub struct NewToken {
     pub pos: PartOfSpeech,
     pub start: usize,
     pub end: usize,
+    /// Language-pack parse code for this occurrence (e.g. "V-AAI-3S");
+    /// `None` for analyzer-produced tokens.
+    pub morph: Option<String>,
+    /// Short per-occurrence gloss from a pre-annotated text.
+    pub gloss: Option<String>,
 }
 
 /// A sentence ready for import.
@@ -42,28 +48,37 @@ pub struct TokenRow {
     pub token: Token,
     pub word_id: WordId,
     pub status: KnowledgeStatus,
+    /// Stored parse code of this occurrence, if the text was imported
+    /// pre-annotated.
+    pub morph: Option<String>,
+    /// Stored per-occurrence gloss, if the text was imported pre-annotated.
+    pub gloss: Option<String>,
 }
 
 fn row_to_document(r: &rusqlite::Row<'_>) -> rusqlite::Result<Document> {
     Ok(Document {
         id: DocumentId(r.get(0)?),
-        title: r.get(1)?,
-        author: r.get(2)?,
-        publisher: r.get(3)?,
-        published: r.get(4)?,
-        last_sentence: r.get::<_, i64>(5)? as u32,
-        added_at: r.get(6)?,
+        lang: r.get(1)?,
+        title: r.get(2)?,
+        author: r.get(3)?,
+        publisher: r.get(4)?,
+        published: r.get(5)?,
+        last_sentence: r.get::<_, i64>(6)? as u32,
+        added_at: r.get(7)?,
     })
 }
 
+const DOC_COLS: &str = "id, lang, title, author, publisher, published, last_sentence, added_at";
+
 impl Db {
-    /// Id of the document with this content hash, if already imported.
-    pub fn find_document_by_hash(&self, hash: &str) -> Result<Option<DocumentId>> {
+    /// Id of the document with this content hash in this language, if
+    /// already imported.
+    pub fn find_document_by_hash(&self, lang: &str, hash: &str) -> Result<Option<DocumentId>> {
         let mut stmt = self
             .conn()
-            .prepare("SELECT id FROM documents WHERE content_hash = ?1")?;
+            .prepare("SELECT id FROM documents WHERE lang = ?1 AND content_hash = ?2")?;
         let id = stmt
-            .query_row([hash], |r| r.get::<_, i64>(0))
+            .query_row([lang, hash], |r| r.get::<_, i64>(0))
             .map(DocumentId);
         match id {
             Ok(id) => Ok(Some(id)),
@@ -74,10 +89,11 @@ impl Db {
 
     /// Import a fully analyzed document in one transaction.
     ///
-    /// Words are upserted by their (lemma, reading, pos) identity; tokens
-    /// reference them.
+    /// Words are upserted by their (lang, lemma, reading, pos) identity;
+    /// tokens reference them.
     pub fn import_document(
         &self,
+        lang: &str,
         meta: &DocumentMeta,
         content_hash: &str,
         added_at: DateTime<Utc>,
@@ -86,9 +102,11 @@ impl Db {
         let tx = self.conn().unchecked_transaction()?;
 
         tx.execute(
-            "INSERT INTO documents(title, author, publisher, published, added_at, content_hash)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            "INSERT INTO documents(lang, title, author, publisher, published, added_at,
+                                   content_hash)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             params![
+                lang,
                 meta.title,
                 meta.author,
                 meta.publisher,
@@ -104,13 +122,15 @@ impl Db {
                 "INSERT INTO sentences(document_id, idx, paragraph, text)
                  VALUES (?1, ?2, ?3, ?4)",
             )?;
-            let mut find_word =
-                tx.prepare("SELECT id FROM words WHERE lemma = ?1 AND reading = ?2 AND pos = ?3")?;
+            let mut find_word = tx.prepare(
+                "SELECT id FROM words
+                 WHERE lang = ?1 AND lemma = ?2 AND reading = ?3 AND pos = ?4",
+            )?;
             let mut insert_word =
-                tx.prepare("INSERT INTO words(lemma, reading, pos) VALUES (?1, ?2, ?3)")?;
+                tx.prepare("INSERT INTO words(lang, lemma, reading, pos) VALUES (?1, ?2, ?3, ?4)")?;
             let mut insert_token = tx.prepare(
-                "INSERT INTO tokens(sentence_id, idx, word_id, surface, start, end)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                "INSERT INTO tokens(sentence_id, idx, word_id, surface, start, end, morph, gloss)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             )?;
 
             for (idx, sentence) in sentences.iter().enumerate() {
@@ -125,11 +145,11 @@ impl Db {
                 for (t_idx, token) in sentence.tokens.iter().enumerate() {
                     let pos = token.pos.as_str();
                     let word_id: i64 = match find_word
-                        .query_row(params![token.lemma, token.reading, pos], |r| r.get(0))
+                        .query_row(params![lang, token.lemma, token.reading, pos], |r| r.get(0))
                     {
                         Ok(id) => id,
                         Err(rusqlite::Error::QueryReturnedNoRows) => {
-                            insert_word.execute(params![token.lemma, token.reading, pos])?;
+                            insert_word.execute(params![lang, token.lemma, token.reading, pos])?;
                             tx.last_insert_rowid()
                         }
                         Err(e) => return Err(e.into()),
@@ -140,7 +160,9 @@ impl Db {
                         word_id,
                         token.surface,
                         token.start as i64,
-                        token.end as i64
+                        token.end as i64,
+                        token.morph,
+                        token.gloss
                     ])?;
                 }
             }
@@ -153,8 +175,7 @@ impl Db {
     pub fn document(&self, id: DocumentId) -> Result<Document> {
         self.conn()
             .query_row(
-                "SELECT id, title, author, publisher, published, last_sentence, added_at
-                 FROM documents WHERE id = ?1",
+                &format!("SELECT {DOC_COLS} FROM documents WHERE id = ?1"),
                 [id.0],
                 row_to_document,
             )
@@ -167,8 +188,8 @@ impl Db {
     /// All documents, newest first, with sentence/token counts.
     pub fn list_documents(&self) -> Result<Vec<DocumentSummary>> {
         let mut stmt = self.conn().prepare(
-            "SELECT d.id, d.title, d.author, d.publisher, d.published, d.last_sentence,
-                    d.added_at,
+            "SELECT d.id, d.lang, d.title, d.author, d.publisher, d.published,
+                    d.last_sentence, d.added_at,
                     (SELECT COUNT(*) FROM sentences s WHERE s.document_id = d.id),
                     (SELECT COUNT(*) FROM tokens t
                        JOIN sentences s ON s.id = t.sentence_id
@@ -179,8 +200,8 @@ impl Db {
         let rows = stmt.query_map([], |r| {
             Ok(DocumentSummary {
                 document: row_to_document(r)?,
-                sentence_count: r.get::<_, i64>(7)? as u32,
-                token_count: r.get::<_, i64>(8)? as u32,
+                sentence_count: r.get::<_, i64>(8)? as u32,
+                token_count: r.get::<_, i64>(9)? as u32,
             })
         })?;
         Ok(rows.collect::<std::result::Result<_, _>>()?)
@@ -332,7 +353,8 @@ impl Db {
     /// Tokens of a sentence in order, joined with word status.
     pub fn sentence_tokens(&self, sentence: SentenceId) -> Result<Vec<TokenRow>> {
         let mut stmt = self.conn().prepare(
-            "SELECT t.surface, w.lemma, w.reading, w.pos, t.start, t.end, w.id, w.status
+            "SELECT t.surface, w.lemma, w.reading, w.pos, t.start, t.end, w.id, w.status,
+                    t.morph, t.gloss
              FROM tokens t JOIN words w ON w.id = t.word_id
              WHERE t.sentence_id = ?1 ORDER BY t.idx",
         )?;
@@ -348,6 +370,8 @@ impl Db {
                 },
                 word_id: WordId(r.get(6)?),
                 status: KnowledgeStatus::from_str_lossy(&r.get::<_, String>(7)?),
+                morph: r.get(8)?,
+                gloss: r.get(9)?,
             })
         })?;
         Ok(rows.collect::<std::result::Result<_, _>>()?)
@@ -383,6 +407,7 @@ pub(crate) mod tests {
             },
         ];
         db.import_document(
+            "ja",
             &DocumentMeta {
                 title: "fixture".into(),
                 author: "fixture author".into(),
@@ -409,6 +434,8 @@ pub(crate) mod tests {
             pos,
             start,
             end: start + surface.len(),
+            morph: None,
+            gloss: None,
         }
     }
 
@@ -420,6 +447,7 @@ pub(crate) mod tests {
         let docs = db.list_documents().unwrap();
         assert_eq!(docs.len(), 1);
         assert_eq!(docs[0].document.title, "fixture");
+        assert_eq!(docs[0].document.lang, "ja");
         assert_eq!(docs[0].document.author, "fixture author");
         assert_eq!(docs[0].document.publisher, "");
         assert_eq!(docs[0].sentence_count, 2);
@@ -435,6 +463,66 @@ pub(crate) mod tests {
         assert_eq!(tokens[0].token.surface, "猫");
         assert_eq!(tokens[0].status, KnowledgeStatus::Unknown);
         assert_eq!(tokens[0].token.pos, PartOfSpeech::Noun);
+        assert_eq!(tokens[0].morph, None);
+    }
+
+    #[test]
+    fn pre_annotated_tokens_round_trip_morph_and_gloss() {
+        let db = Db::open_in_memory().unwrap();
+        let doc = db
+            .import_document(
+                "grc",
+                &DocumentMeta::titled("John"),
+                "hash-grc",
+                Utc::now(),
+                &[NewSentence {
+                    paragraph: 0,
+                    text: "Ἐν ἀρχῇ ἦν ὁ λόγος".into(),
+                    tokens: vec![
+                        NewToken {
+                            surface: "Ἐν".into(),
+                            lemma: "ἐν".into(),
+                            reading: String::new(),
+                            pos: PartOfSpeech::Unknown,
+                            start: 0,
+                            end: "Ἐν".len(),
+                            morph: Some("P".into()),
+                            gloss: Some("in".into()),
+                        },
+                        NewToken {
+                            surface: "λόγος".into(),
+                            lemma: "λόγος".into(),
+                            reading: String::new(),
+                            pos: PartOfSpeech::Noun,
+                            start: "Ἐν ἀρχῇ ἦν ὁ ".len(),
+                            end: "Ἐν ἀρχῇ ἦν ὁ λόγος".len(),
+                            morph: Some("N-NSM".into()),
+                            gloss: Some("word".into()),
+                        },
+                    ],
+                }],
+            )
+            .unwrap();
+        let sentences = db.sentences(doc).unwrap();
+        let tokens = db.sentence_tokens(sentences[0].id).unwrap();
+        assert_eq!(tokens[0].morph.as_deref(), Some("P"));
+        assert_eq!(tokens[0].gloss.as_deref(), Some("in"));
+        assert_eq!(tokens[1].morph.as_deref(), Some("N-NSM"));
+        // The stored words are scoped to the document's language.
+        assert!(db
+            .find_word(
+                "grc",
+                &shiori_core::WordKey::new("λόγος", "", PartOfSpeech::Noun)
+            )
+            .unwrap()
+            .is_some());
+        assert!(db
+            .find_word(
+                "ja",
+                &shiori_core::WordKey::new("λόγος", "", PartOfSpeech::Noun)
+            )
+            .unwrap()
+            .is_none());
     }
 
     #[test]
@@ -497,6 +585,7 @@ pub(crate) mod tests {
         // A second document also containing 猫.
         let doc2 = db
             .import_document(
+                "ja",
                 &DocumentMeta {
                     title: "second".into(),
                     ..Default::default()
@@ -536,11 +625,26 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn content_hash_lookup() {
+    fn content_hash_lookup_is_language_scoped() {
         let db = Db::open_in_memory().unwrap();
         let doc_id = import_fixture(&db);
-        assert_eq!(db.find_document_by_hash("hash-1").unwrap(), Some(doc_id));
-        assert_eq!(db.find_document_by_hash("nope").unwrap(), None);
+        assert_eq!(
+            db.find_document_by_hash("ja", "hash-1").unwrap(),
+            Some(doc_id)
+        );
+        assert_eq!(db.find_document_by_hash("ja", "nope").unwrap(), None);
+        // The same file may be imported again under another language.
+        assert_eq!(db.find_document_by_hash("grc", "hash-1").unwrap(), None);
+        let other = db
+            .import_document(
+                "grc",
+                &DocumentMeta::titled("same bytes"),
+                "hash-1",
+                Utc::now(),
+                &[],
+            )
+            .unwrap();
+        assert_ne!(other, doc_id);
     }
 
     #[test]

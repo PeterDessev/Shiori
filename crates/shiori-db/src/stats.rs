@@ -31,19 +31,33 @@ pub struct JlptShare {
 
 impl Db {
     /// Replace the JLPT vocabulary lists.
+    ///
+    /// Stored in the generic `graded_vocab` table under ('ja', 'jlpt');
+    /// the JLPT N-level (5 easiest … 1 hardest) maps to the ascending
+    /// difficulty ordinal as `ord = 6 - level`.
     pub fn import_jlpt<I>(&self, words: I) -> Result<u64>
     where
         I: IntoIterator<Item = (u8, String, String)>,
     {
         let tx = self.conn().unchecked_transaction()?;
-        tx.execute("DELETE FROM jlpt_words", [])?;
+        tx.execute(
+            "DELETE FROM graded_vocab WHERE lang = 'ja' AND scheme = 'jlpt'",
+            [],
+        )?;
         let mut count = 0u64;
         {
             let mut stmt = tx.prepare(
-                "INSERT OR IGNORE INTO jlpt_words(level, word, kana) VALUES (?1, ?2, ?3)",
+                "INSERT OR IGNORE INTO graded_vocab(lang, scheme, level_ord, level_label,
+                                                    form, alt_form)
+                 VALUES ('ja', 'jlpt', ?1, ?2, ?3, ?4)",
             )?;
             for (level, word, kana) in words {
-                stmt.execute(rusqlite::params![level, word, kana])?;
+                stmt.execute(rusqlite::params![
+                    6 - i64::from(level),
+                    format!("N{level}"),
+                    word,
+                    kana
+                ])?;
                 count += 1;
             }
         }
@@ -52,24 +66,25 @@ impl Db {
     }
 
     pub fn jlpt_count(&self) -> Result<u64> {
-        Ok(self
-            .conn()
-            .query_row("SELECT COUNT(*) FROM jlpt_words", [], |r| {
-                r.get::<_, i64>(0)
-            })? as u64)
+        Ok(self.conn().query_row(
+            "SELECT COUNT(*) FROM graded_vocab WHERE lang = 'ja' AND scheme = 'jlpt'",
+            [],
+            |r| r.get::<_, i64>(0),
+        )? as u64)
     }
 
     /// JLPT level of a word (5 = easiest N5 … 1 = hardest N1), matched by
     /// kanji form or, for kana-only list entries, by reading. Returns the
     /// easiest (highest) level when a word spans more than one list.
     pub fn jlpt_level(&self, kanji: &str, kana: &str) -> Result<Option<u8>> {
-        let level: Option<i64> = self.conn().query_row(
-            "SELECT MAX(level) FROM jlpt_words
-             WHERE (?1 <> '' AND word = ?1) OR (word = '' AND kana = ?2)",
+        let ord: Option<i64> = self.conn().query_row(
+            "SELECT MIN(level_ord) FROM graded_vocab
+             WHERE lang = 'ja' AND scheme = 'jlpt'
+               AND ((?1 <> '' AND form = ?1) OR (form = '' AND alt_form = ?2))",
             rusqlite::params![kanji, kana],
             |r| r.get(0),
         )?;
-        Ok(level.map(|l| l as u8))
+        Ok(ord.map(|o| (6 - o) as u8))
     }
 
     /// Per level: how much of that level's vocabulary the user knows.
@@ -77,17 +92,19 @@ impl Db {
     /// kana lemma.
     pub fn jlpt_known_shares(&self) -> Result<Vec<JlptShare>> {
         let mut stmt = self.conn().prepare(
-            "SELECT j.level, COUNT(*),
+            "SELECT j.level_ord, COUNT(*),
                     SUM(EXISTS(
                         SELECT 1 FROM words w
-                        WHERE w.status = 'known'
-                          AND w.lemma = CASE WHEN j.word = '' THEN j.kana ELSE j.word END
+                        WHERE w.lang = 'ja' AND w.status = 'known'
+                          AND w.lemma = CASE WHEN j.form = '' THEN j.alt_form ELSE j.form END
                     ))
-             FROM jlpt_words j GROUP BY j.level ORDER BY j.level DESC",
+             FROM graded_vocab j
+             WHERE j.lang = 'ja' AND j.scheme = 'jlpt'
+             GROUP BY j.level_ord ORDER BY j.level_ord",
         )?;
         let rows = stmt.query_map([], |r| {
             Ok(JlptShare {
-                level: r.get::<_, i64>(0)? as u8,
+                level: (6 - r.get::<_, i64>(0)?) as u8,
                 total: r.get::<_, i64>(1)? as u32,
                 known: r.get::<_, i64>(2)? as u32,
             })
@@ -147,16 +164,18 @@ impl Db {
         Ok(rows.collect::<std::result::Result<_, _>>()?)
     }
 
-    /// Known-word counts within corpus frequency rank bands: for each
-    /// bound, how many of the `bound` most frequent words are known.
-    pub fn known_in_rank_bands(&self, bounds: &[u32]) -> Result<Vec<(u32, u32)>> {
+    /// Known-word counts within one language's corpus frequency rank
+    /// bands: for each bound, how many of the `bound` most frequent words
+    /// are known.
+    pub fn known_in_rank_bands(&self, lang: &str, bounds: &[u32]) -> Result<Vec<(u32, u32)>> {
         let mut out = Vec::new();
         for &bound in bounds {
             let known: i64 = self.conn().query_row(
                 "SELECT COUNT(DISTINCT f.word) FROM frequency f
-                 JOIN words w ON w.lemma = f.word AND w.status = 'known'
-                 WHERE f.rank <= ?1",
-                [bound],
+                 JOIN words w ON w.lang = f.lang AND w.lemma = f.word
+                              AND w.status = 'known'
+                 WHERE f.lang = ?1 AND f.rank <= ?2",
+                rusqlite::params![lang, bound],
                 |r| r.get(0),
             )?;
             out.push((bound, known as u32));
@@ -249,7 +268,7 @@ mod tests {
 
         // Knowing 猫 moves N5 to 1/2; levels sort easiest-first.
         let cat = db
-            .find_word(&WordKey::new("猫", "ねこ", PartOfSpeech::Noun))
+            .find_word("ja", &WordKey::new("猫", "ねこ", PartOfSpeech::Noun))
             .unwrap()
             .unwrap();
         db.set_word_status(cat.id, KnowledgeStatus::Known).unwrap();
@@ -266,7 +285,10 @@ mod tests {
         assert!(db.due_forecast(14).unwrap().is_empty());
         assert!(db.learning_starts_by_day().unwrap().is_empty());
         assert!(db.matured_by_day(60.0).unwrap().is_empty());
-        assert_eq!(db.known_in_rank_bands(&[1000]).unwrap(), vec![(1000, 0)]);
+        assert_eq!(
+            db.known_in_rank_bands("ja", &[1000]).unwrap(),
+            vec![(1000, 0)]
+        );
     }
 
     #[test]
@@ -284,7 +306,7 @@ mod tests {
 
         // Mark 猫 known: 1 word / 2 tokens move over.
         let cat = db
-            .find_word(&WordKey::new("猫", "ねこ", PartOfSpeech::Noun))
+            .find_word("ja", &WordKey::new("猫", "ねこ", PartOfSpeech::Noun))
             .unwrap()
             .unwrap();
         db.set_word_status(cat.id, KnowledgeStatus::Known).unwrap();

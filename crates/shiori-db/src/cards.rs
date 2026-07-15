@@ -172,7 +172,7 @@ mod tests {
     use shiori_srs::Scheduler;
 
     fn word_id(db: &Db, lemma: &str, reading: &str, pos: PartOfSpeech) -> WordId {
-        db.find_word(&WordKey::new(lemma, reading, pos))
+        db.find_word("ja", &WordKey::new(lemma, reading, pos))
             .unwrap()
             .unwrap()
             .id

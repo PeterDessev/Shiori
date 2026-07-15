@@ -157,7 +157,9 @@ impl App {
             matured_by_day: self.db().matured_by_day(60.0)?,
             jlpt,
             comfortable_level,
-            rank_bands: self.db().known_in_rank_bands(&[1000, 2000, 5000, 10000])?,
+            rank_bands: self
+                .db()
+                .known_in_rank_bands(self.active_lang(), &[1000, 2000, 5000, 10000])?,
         })
     }
 }

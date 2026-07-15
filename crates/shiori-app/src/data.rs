@@ -1,6 +1,6 @@
 //! First-run data acquisition: dictionary and frequency list.
 
-use shiori_db::DictFormRow;
+use shiori_db::{DictFormRow, FormRole};
 use shiori_dict::{download, FrequencyList, JmdictFile};
 
 use crate::{App, Result};
@@ -23,8 +23,8 @@ impl DataStatus {
 impl App {
     pub fn data_status(&self) -> Result<DataStatus> {
         Ok(DataStatus {
-            dict_entries: self.db.dict_entry_count()?,
-            frequency_words: self.db.frequency_count()?,
+            dict_entries: self.db.dict_entry_count(self.active_dict_source())?,
+            frequency_words: self.db.frequency_count(self.active_lang())?,
             kanji: self.db.kanji_count()?,
             jlpt_words: self.db.jlpt_count()?,
         })
@@ -39,7 +39,7 @@ impl App {
         &self,
         mut on_progress: impl FnMut(&str),
     ) -> Result<DataStatus> {
-        if self.db.dict_entry_count()? == 0 {
+        if self.db.dict_entry_count(self.active_dict_source())? == 0 {
             on_progress("Downloading JMdict dictionary…");
             let path = download::ensure_jmdict(&self.data_dir)?;
             on_progress("Parsing dictionary…");
@@ -47,7 +47,7 @@ impl App {
             on_progress("Importing dictionary into database…");
             self.import_dictionary_json(&json)?;
         }
-        if self.db.frequency_count()? == 0 {
+        if self.db.frequency_count(self.active_lang())? == 0 {
             on_progress("Downloading frequency list…");
             let path = download::ensure_frequency_list(&self.data_dir)?;
             let text = std::fs::read_to_string(path)?;
@@ -97,7 +97,8 @@ impl App {
         Ok(self.db.import_kanji(rows)?)
     }
 
-    /// Parse a jmdict-simplified JSON document and store it.
+    /// Parse a jmdict-simplified JSON document and store it under the
+    /// 'jmdict' source.
     pub fn import_dictionary_json(&self, json: &str) -> Result<u64> {
         let file = JmdictFile::parse(json)?;
         let entries = file.words.into_iter().filter_map(|entry| {
@@ -110,24 +111,25 @@ impl App {
                 .iter()
                 .map(|f| DictFormRow {
                     text: f.text.clone(),
-                    is_kana: false,
+                    role: FormRole::Orthographic,
                     is_common: f.common,
                 })
                 .chain(entry.kana.iter().map(|f| DictFormRow {
                     text: f.text.clone(),
-                    is_kana: true,
+                    role: FormRole::Phonetic,
                     is_common: f.common,
                 }))
                 .collect();
             let json = serde_json::to_string(&entry).ok()?;
-            Some((seq, json, forms))
+            Some((seq.to_string(), json, forms))
         });
-        Ok(self.db.import_dictionary(entries)?)
+        Ok(self.db.import_dictionary("jmdict", entries)?)
     }
 
-    /// Parse a one-word-per-line frequency list and store it.
+    /// Parse a one-word-per-line frequency list and store it for the
+    /// active language.
     pub fn import_frequency_text(&self, text: &str) -> Result<u64> {
         let list = FrequencyList::parse(text);
-        Ok(self.db.import_frequency(list.iter())?)
+        Ok(self.db.import_frequency(self.active_lang(), list.iter())?)
     }
 }
