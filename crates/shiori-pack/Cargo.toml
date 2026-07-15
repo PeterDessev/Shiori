@@ -1,0 +1,16 @@
+[package]
+name = "shiori-pack"
+description = "Data-driven language packs: manifests, SIAT annotated texts, and the pack-backed LanguageService"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+shiori-core.workspace = true
+shiori-lang.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+toml = "0.8"
+unicode-normalization = "0.1"

@@ -92,7 +92,8 @@ impl App {
         // word it is a form of.
         let source = self.active_dict_source();
         if let Some(a) = &analysis {
-            for key in self.db().dict_lookup_keys(source, &a.lemma)? {
+            let lookup = self.service().normalize_lookup(&a.lemma);
+            for key in self.db().dict_lookup_keys(source, &lookup)? {
                 if seen.insert(key.clone()) {
                     if let Some(hit) = self.build_hit(&key)? {
                         words.push(hit);
@@ -100,8 +101,10 @@ impl App {
                 }
             }
         }
-        // Literal exact/prefix matches on the typed (kana-normalized) form.
-        for key in self.db().dict_search_keys(source, &search, 30)? {
+        // Literal exact/prefix matches on the typed form, folded into the
+        // language's lookup key (kana stays verbatim; Greek folds accents).
+        let folded = self.service().normalize_lookup(&search);
+        for key in self.db().dict_search_keys(source, &folded, 30)? {
             if seen.insert(key.clone()) {
                 if let Some(hit) = self.build_hit(&key)? {
                     words.push(hit);

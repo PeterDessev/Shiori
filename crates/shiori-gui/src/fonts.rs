@@ -143,6 +143,43 @@ pub fn install_japanese_fonts(ctx: &egui::Context, data_dir: &Path, font: Reader
             .or_default()
             .push("japanese".to_owned());
     }
+    push_script_fallback(&mut fonts);
     ctx.set_fonts(fonts);
     true
+}
+
+/// System fonts with broad non-CJK script coverage, in preference order.
+/// Segoe UI covers polytonic Greek (Greek Extended) completely; the
+/// Japanese system fonts cover almost none of it.
+fn script_fallback_paths() -> Vec<&'static str> {
+    vec![
+        // A pack-downloaded Gentium would be picked up here first once
+        // font downloads land; system fonts carry Greek until then.
+        "C:\\Windows\\Fonts\\segoeui.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+    ]
+}
+
+/// Append a wide-coverage fallback font so non-CJK scripts (polytonic
+/// Greek for the Koine pack, Cyrillic…) render instead of tofu. Sits
+/// after the Japanese fallback, so CJK glyph resolution is unchanged.
+fn push_script_fallback(fonts: &mut egui::FontDefinitions) {
+    let Some(bytes) = script_fallback_paths()
+        .into_iter()
+        .find_map(|p| std::fs::read(p).ok())
+    else {
+        return;
+    };
+    fonts.font_data.insert(
+        "script-fallback".to_owned(),
+        Arc::new(egui::FontData::from_owned(bytes)),
+    );
+    for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
+        fonts
+            .families
+            .entry(family)
+            .or_default()
+            .push("script-fallback".to_owned());
+    }
 }

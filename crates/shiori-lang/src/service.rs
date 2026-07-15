@@ -53,6 +53,14 @@ pub trait LanguageService: Send + Sync {
         None
     }
 
+    /// Fold text into the language's dictionary lookup key (Greek:
+    /// strip accents/breathings, lowercase, final sigma → medial).
+    /// Pack dictionaries index their forms pre-folded with the same
+    /// function. Default: unchanged.
+    fn normalize_lookup(&self, text: &str) -> String {
+        text.to_string()
+    }
+
     /// Normalize a stored reading for display (katakana → hiragana for
     /// Japanese). Default: unchanged.
     fn reading_display(&self, reading: &str) -> String {
@@ -106,6 +114,13 @@ pub trait LanguageService: Send + Sync {
     /// partner's system prompt.
     fn level_hint(&self, known_words: u32) -> String {
         format!("The user has about {known_words} recorded known words in this language.")
+    }
+
+    /// Graded-vocabulary scheme for level statistics, as
+    /// `(scheme_key, display_name)` — ("jlpt", "JLPT") for Japanese.
+    /// `None` when the language has no level lists.
+    fn graded_scheme(&self) -> Option<(String, String)> {
+        None
     }
 
     /// Language fragments for LLM prompt construction.

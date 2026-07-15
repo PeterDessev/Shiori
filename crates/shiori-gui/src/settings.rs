@@ -216,6 +216,9 @@ pub struct Settings {
     pub review_examples: bool,
     /// How hard the chat partner's Japanese pushes the user.
     pub chat_challenge: ChatChallenge,
+    /// Language the app operates in ("ja", "grc", …); languages beyond
+    /// Japanese come from packs in `<data>/packs/`.
+    pub active_language: String,
     pub shortcuts: Shortcuts,
 }
 
@@ -267,6 +270,7 @@ impl Default for Settings {
             furigana_first_x: 3,
             review_examples: true,
             chat_challenge: ChatChallenge::Push,
+            active_language: "ja".to_string(),
             shortcuts: Shortcuts::default(),
         }
     }

@@ -36,6 +36,14 @@ pub enum PartOfSpeech {
     Prefix,
     Suffix,
     Symbol,
+    /// Definite article (Greek ὁ, Spanish el…); Japanese has none.
+    Article,
+    /// Preposition (Greek ἐν, Spanish de…).
+    Preposition,
+    /// Determiner (demonstratives and quantifiers in analytic languages).
+    Determiner,
+    /// Numeral as a word class (Greek εἷς); distinct from digit tokens.
+    Numeral,
     Unknown,
 }
 
@@ -53,6 +61,9 @@ impl PartOfSpeech {
                 | PartOfSpeech::Prefix
                 | PartOfSpeech::Suffix
                 | PartOfSpeech::DependentNoun
+                | PartOfSpeech::Article
+                | PartOfSpeech::Preposition
+                | PartOfSpeech::Determiner
                 | PartOfSpeech::Unknown
         )
     }
@@ -85,6 +96,10 @@ impl PartOfSpeech {
             PartOfSpeech::Prefix => "prefix",
             PartOfSpeech::Suffix => "suffix",
             PartOfSpeech::Symbol => "symbol",
+            PartOfSpeech::Article => "article",
+            PartOfSpeech::Preposition => "preposition",
+            PartOfSpeech::Determiner => "determiner",
+            PartOfSpeech::Numeral => "numeral",
             PartOfSpeech::Unknown => "unknown",
         }
     }
@@ -109,6 +124,10 @@ impl PartOfSpeech {
             "prefix" => PartOfSpeech::Prefix,
             "suffix" => PartOfSpeech::Suffix,
             "symbol" => PartOfSpeech::Symbol,
+            "article" => PartOfSpeech::Article,
+            "preposition" => PartOfSpeech::Preposition,
+            "determiner" => PartOfSpeech::Determiner,
+            "numeral" => PartOfSpeech::Numeral,
             _ => PartOfSpeech::Unknown,
         }
     }
@@ -196,6 +215,10 @@ mod tests {
             PartOfSpeech::Prefix,
             PartOfSpeech::Suffix,
             PartOfSpeech::Symbol,
+            PartOfSpeech::Article,
+            PartOfSpeech::Preposition,
+            PartOfSpeech::Determiner,
+            PartOfSpeech::Numeral,
             PartOfSpeech::Unknown,
         ];
         for pos in all {

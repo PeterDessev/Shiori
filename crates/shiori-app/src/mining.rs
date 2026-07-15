@@ -83,7 +83,8 @@ impl App {
         }
 
         let source = self.active_dict_source();
-        let keys = self.db.dict_lookup_keys(source, &word.key.lemma)?;
+        let lookup = self.service().normalize_lookup(&word.key.lemma);
+        let keys = self.db.dict_lookup_keys(source, &lookup)?;
         let mut candidates = Vec::with_capacity(keys.len());
         for key in keys {
             if let Some(json) = self.db.dict_entry_json(source, &key)? {
@@ -114,7 +115,8 @@ impl App {
     /// knows as one word.
     pub fn lookup_compound(&self, surface: &str) -> Result<Option<DictEntry>> {
         let source = self.active_dict_source();
-        let keys = self.db.dict_lookup_keys(source, surface)?;
+        let lookup = self.service().normalize_lookup(surface);
+        let keys = self.db.dict_lookup_keys(source, &lookup)?;
         let mut candidates = Vec::with_capacity(keys.len());
         for key in keys {
             if let Some(json) = self.db.dict_entry_json(source, &key)? {

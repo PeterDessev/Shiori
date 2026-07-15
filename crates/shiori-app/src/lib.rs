@@ -12,6 +12,7 @@ pub mod extract;
 mod finish;
 mod ingest;
 mod mining;
+mod packs;
 mod review;
 mod sessions;
 mod sources;
@@ -64,6 +65,8 @@ pub struct App {
     db: Db,
     /// Installed language implementations, by language code.
     services: HashMap<String, Arc<dyn LanguageService>>,
+    /// Discovered language packs, by language code.
+    packs: HashMap<String, shiori_pack::Pack>,
     /// Language the whole app currently operates in.
     active: String,
     scheduler: Scheduler,
@@ -108,13 +111,57 @@ impl App {
         let japanese: Arc<dyn LanguageService> = Arc::new(shiori_nlp::Japanese::new()?);
         let mut services: HashMap<String, Arc<dyn LanguageService>> = HashMap::new();
         services.insert(japanese.lang().to_string(), japanese);
+
+        // Every pack under <data_dir>/packs/ becomes a language, no
+        // recompile needed.
+        let mut packs = HashMap::new();
+        for pack in shiori_pack::discover_packs(&data_dir) {
+            let lang = pack.manifest.lang.clone();
+            services.insert(
+                lang.clone(),
+                Arc::new(shiori_pack::PackLanguage::new(&pack.manifest)),
+            );
+            packs.insert(lang, pack);
+        }
+
         Ok(Self {
             db,
             services,
+            packs,
             active: "ja".to_string(),
             scheduler: Scheduler::default(),
             data_dir,
         })
+    }
+
+    /// Languages the app can operate in: (code, display name), Japanese
+    /// first, then packs alphabetically.
+    pub fn available_languages(&self) -> Vec<(String, String)> {
+        let mut out = vec![("ja".to_string(), "Japanese".to_string())];
+        let mut langs: Vec<_> = self.packs.values().collect();
+        langs.sort_by(|a, b| a.manifest.lang.cmp(&b.manifest.lang));
+        for pack in langs {
+            out.push((pack.manifest.lang.clone(), pack.manifest.name.clone()));
+        }
+        out
+    }
+
+    /// Switch the active language, installing the pack's reference data
+    /// on first use.
+    pub fn set_active_lang(&mut self, lang: &str) -> Result<()> {
+        if !self.services.contains_key(lang) {
+            return Err(AppError::Invalid(format!(
+                "no language '{lang}' is installed"
+            )));
+        }
+        self.ensure_pack_data(lang)?;
+        self.active = lang.to_string();
+        Ok(())
+    }
+
+    /// The active language's pack, when it is pack-driven.
+    pub fn active_pack(&self) -> Option<&shiori_pack::Pack> {
+        self.packs.get(&self.active)
     }
 
     pub fn db(&self) -> &Db {

@@ -123,6 +123,10 @@ impl LanguageService for Japanese {
         format!("The user has about {known} recorded known words, suggesting {level}.")
     }
 
+    fn graded_scheme(&self) -> Option<(String, String)> {
+        Some(("jlpt".to_string(), "JLPT".to_string()))
+    }
+
     fn prompt_profile(&self) -> &PromptProfile {
         &self.prompt
     }

@@ -55,7 +55,7 @@ impl ShioriGui {
                         });
 
                     // Level grading.
-                    if !overview.jlpt.is_empty() {
+                    if !overview.levels.is_empty() {
                         ui.add_space(10.0);
                         ui.label(egui::RichText::new("Level").strong());
                         match &overview.comfortable_level {
@@ -70,14 +70,14 @@ impl ShioriGui {
                             }
                         }
                         ui.add_space(4.0);
-                        for share in &overview.jlpt {
+                        for share in &overview.levels {
                             let frac = if share.total > 0 {
                                 share.known as f32 / share.total as f32
                             } else {
                                 0.0
                             };
                             ui.horizontal(|ui| {
-                                ui.label(format!("N{}", share.level));
+                                ui.label(&share.label);
                                 ui.add(egui::ProgressBar::new(frac).desired_width(220.0).text(
                                     format!(
                                         "{}/{} ({:.0}%)",

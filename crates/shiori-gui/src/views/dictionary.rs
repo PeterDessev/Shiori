@@ -644,6 +644,10 @@ fn coarse_pos_label(pos: PartOfSpeech) -> &'static str {
         PartOfSpeech::Prefix => "prefix",
         PartOfSpeech::Suffix => "suffix",
         PartOfSpeech::Symbol => "symbol",
+        PartOfSpeech::Article => "article",
+        PartOfSpeech::Preposition => "preposition",
+        PartOfSpeech::Determiner => "determiner",
+        PartOfSpeech::Numeral => "numeral",
         PartOfSpeech::Unknown => "unknown",
     }
 }

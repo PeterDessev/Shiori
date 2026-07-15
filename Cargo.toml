@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/shiori-core",
     "crates/shiori-lang",
+    "crates/shiori-pack",
     "crates/shiori-nlp",
     "crates/shiori-srs",
     "crates/shiori-dict",
@@ -22,6 +23,7 @@ authors = ["Peter Dessev <peter.dessev@gmail.com>"]
 [workspace.dependencies]
 shiori-core = { path = "crates/shiori-core" }
 shiori-lang = { path = "crates/shiori-lang" }
+shiori-pack = { path = "crates/shiori-pack" }
 shiori-nlp = { path = "crates/shiori-nlp" }
 shiori-srs = { path = "crates/shiori-srs" }
 shiori-dict = { path = "crates/shiori-dict" }

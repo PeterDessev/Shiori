@@ -18,13 +18,23 @@ pub struct StatusCount {
 /// are excluded from comprehension statistics. Keep in sync with
 /// `shiori_core::PartOfSpeech::is_content_word` (verified by test below).
 const NON_CONTENT_POS: &str = "('particle', 'auxiliary_verb', 'symbol', 'number', 'prefix', \
-                               'suffix', 'dependent_noun', 'unknown')";
+                               'suffix', 'dependent_noun', 'article', 'preposition', \
+                               'determiner', 'unknown')";
 
 /// Known-word share of one JLPT level's vocabulary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct JlptShare {
     /// 5 (easiest) … 1 (hardest).
     pub level: u8,
+    pub known: u32,
+    pub total: u32,
+}
+
+/// Known-word share of one graded-vocabulary level, any language/scheme.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GradedShare {
+    /// Display label ("N3", "Core 50×+").
+    pub label: String,
     pub known: u32,
     pub total: u32,
 }
@@ -105,6 +115,65 @@ impl Db {
         let rows = stmt.query_map([], |r| {
             Ok(JlptShare {
                 level: (6 - r.get::<_, i64>(0)?) as u8,
+                total: r.get::<_, i64>(1)? as u32,
+                known: r.get::<_, i64>(2)? as u32,
+            })
+        })?;
+        Ok(rows.collect::<std::result::Result<_, _>>()?)
+    }
+
+    /// Replace one language+scheme's graded vocabulary list.
+    /// `level_ord` ascends with difficulty (1 = easiest).
+    pub fn import_graded_vocab<I>(&self, lang: &str, scheme: &str, rows: I) -> Result<u64>
+    where
+        I: IntoIterator<Item = (u32, String, String, String)>,
+    {
+        let tx = self.conn().unchecked_transaction()?;
+        tx.execute(
+            "DELETE FROM graded_vocab WHERE lang = ?1 AND scheme = ?2",
+            [lang, scheme],
+        )?;
+        let mut count = 0u64;
+        {
+            let mut stmt = tx.prepare(
+                "INSERT OR IGNORE INTO graded_vocab(lang, scheme, level_ord, level_label,
+                                                    form, alt_form)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            )?;
+            for (ord, label, form, alt) in rows {
+                stmt.execute(rusqlite::params![lang, scheme, ord, label, form, alt])?;
+                count += 1;
+            }
+        }
+        tx.commit()?;
+        Ok(count)
+    }
+
+    pub fn graded_count(&self, lang: &str, scheme: &str) -> Result<u64> {
+        Ok(self.conn().query_row(
+            "SELECT COUNT(*) FROM graded_vocab WHERE lang = ?1 AND scheme = ?2",
+            [lang, scheme],
+            |r| r.get::<_, i64>(0),
+        )? as u64)
+    }
+
+    /// Per level (easiest first): how much of that level's vocabulary
+    /// the user knows. Entries with an empty `form` match on `alt_form`.
+    pub fn graded_known_shares(&self, lang: &str, scheme: &str) -> Result<Vec<GradedShare>> {
+        let mut stmt = self.conn().prepare(
+            "SELECT j.level_label, COUNT(*),
+                    SUM(EXISTS(
+                        SELECT 1 FROM words w
+                        WHERE w.lang = ?1 AND w.status = 'known'
+                          AND w.lemma = CASE WHEN j.form = '' THEN j.alt_form ELSE j.form END
+                    ))
+             FROM graded_vocab j
+             WHERE j.lang = ?1 AND j.scheme = ?2
+             GROUP BY j.level_ord, j.level_label ORDER BY j.level_ord",
+        )?;
+        let rows = stmt.query_map([lang, scheme], |r| {
+            Ok(GradedShare {
+                label: r.get(0)?,
                 total: r.get::<_, i64>(1)? as u32,
                 known: r.get::<_, i64>(2)? as u32,
             })
@@ -231,6 +300,10 @@ mod tests {
             PartOfSpeech::Prefix,
             PartOfSpeech::Suffix,
             PartOfSpeech::Symbol,
+            PartOfSpeech::Article,
+            PartOfSpeech::Preposition,
+            PartOfSpeech::Determiner,
+            PartOfSpeech::Numeral,
             PartOfSpeech::Unknown,
         ];
         for pos in all {

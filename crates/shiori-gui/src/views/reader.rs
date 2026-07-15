@@ -553,12 +553,19 @@ impl ShioriGui {
                             }
                         };
                         if show_ruby {
-                            if let Some(ruby) = token_furigana(
-                                lang.as_ref(),
-                                &row.token.surface,
-                                &row.token.lemma,
-                                &row.token.reading,
-                            ) {
+                            // Pre-annotated texts carry a per-occurrence
+                            // gloss: the same slot furigana uses becomes
+                            // an interlinear gloss layer. Analyzer-based
+                            // languages fall through to ruby readings.
+                            let ruby = row.gloss.clone().or_else(|| {
+                                token_furigana(
+                                    lang.as_ref(),
+                                    &row.token.surface,
+                                    &row.token.lemma,
+                                    &row.token.reading,
+                                )
+                            });
+                            if let Some(ruby) = ruby {
                                 ui.painter().text(
                                     egui::pos2(response.rect.center().x, response.rect.top() - 1.0),
                                     egui::Align2::CENTER_BOTTOM,
@@ -733,11 +740,16 @@ impl ShioriGui {
             .join(lang.joiner());
         let inflection = lang.analyze_inflection(&group_tokens);
         let word_id = view.tokens[t_idx].word_id;
+        // Pre-annotated texts carry this occurrence's parse code.
+        let morph_code = view.tokens[t_idx].morph.clone();
         // Nominal multi-token groups (低＋声, 日本語＋版) may exist in the
         // dictionary as one word; verb chains never do.
         let try_compound = group_tokens.len() > 1 && lang.compound_lookup_pos(group_tokens[0].pos);
 
-        let panel = self.load_word_panel(word_id, phrase, inflection, try_compound);
+        let mut panel = self.load_word_panel(word_id, phrase, inflection, try_compound);
+        if let (Some(panel), Some(code)) = (panel.as_mut(), morph_code) {
+            panel.morph = self.with_app(|app| Ok(app.describe_morph(&code)));
+        }
         if let Some(reader) = self.reader.as_mut() {
             reader.selected = Some((s_idx, g_idx));
             reader.panel = panel;
@@ -843,6 +855,15 @@ impl ShioriGui {
                     ui.label("·");
                     ui.label(format!("status: {}", panel.word.status.as_str()));
                 });
+                // Decoded parse of the clicked occurrence, from a
+                // pre-annotated text's stored analysis.
+                if let Some(morph) = &panel.morph {
+                    ui.label(
+                        egui::RichText::new(format!("this form: {morph}"))
+                            .italics()
+                            .color(ui.visuals().strong_text_color()),
+                    );
+                }
                 if let Some(rank) = panel.rank {
                     ui.label(format!("corpus frequency rank: #{rank}"));
                 }

@@ -107,9 +107,12 @@ pub struct StatsOverview {
     /// Cumulative count of words whose card stability matured past the
     /// known threshold, per day.
     pub matured_by_day: Vec<(String, u32)>,
-    /// Known share per JLPT level, easiest (N5) first.
-    pub jlpt: Vec<shiori_db::JlptShare>,
-    /// "Comfortable reading level" derived from the JLPT shares.
+    /// Known share per graded-vocabulary level, easiest first (JLPT for
+    /// Japanese, GNT frequency tiers for Koine Greek…).
+    pub levels: Vec<shiori_db::GradedShare>,
+    /// Display name of the level scheme ("JLPT", "GNT tier").
+    pub level_scheme: String,
+    /// "Comfortable reading level" derived from the level shares.
     pub comfortable_level: Option<String>,
     /// (rank bound, known words within it) coverage of the corpus.
     pub rank_bands: Vec<(u32, u32)>,
@@ -134,13 +137,19 @@ impl App {
             .sum();
 
         let (correct, total) = self.db().retention_counts(30)?;
-        let jlpt = self.db().jlpt_known_shares()?;
+        let (levels, level_scheme) = match self.service().graded_scheme() {
+            Some((key, display)) => (
+                self.db().graded_known_shares(self.active_lang(), &key)?,
+                display,
+            ),
+            None => (Vec::new(), String::new()),
+        };
         // Comfortable level: hardest level where this and every easier
-        // level is at least half known. jlpt is sorted easiest-first.
+        // level is at least half known. levels are sorted easiest-first.
         let mut comfortable_level = None;
-        for share in &jlpt {
+        for share in &levels {
             if share.total > 0 && f64::from(share.known) / f64::from(share.total) >= 0.5 {
-                comfortable_level = Some(format!("around JLPT N{}", share.level));
+                comfortable_level = Some(format!("around {level_scheme} {}", share.label));
             } else {
                 break;
             }
@@ -155,7 +164,8 @@ impl App {
             learning_rate_30d: f64::from(recent) / 30.0,
             retention_30d: (total > 0).then(|| f64::from(correct) / f64::from(total)),
             matured_by_day: self.db().matured_by_day(60.0)?,
-            jlpt,
+            levels,
+            level_scheme,
             comfortable_level,
             rank_bands: self
                 .db()

@@ -97,6 +97,47 @@ impl ShioriGui {
     }
 
     fn settings_general(&mut self, ui: &mut egui::Ui) {
+        ui.heading("Language");
+        let languages = self
+            .with_app(|app| Ok(app.available_languages()))
+            .unwrap_or_default();
+        let active = self.settings.active_language.clone();
+        let active_name = languages
+            .iter()
+            .find(|(code, _)| *code == active)
+            .map(|(_, name)| name.clone())
+            .unwrap_or_else(|| active.clone());
+        let mut selected: Option<String> = None;
+        ui.horizontal(|ui| {
+            ui.label("Active language:");
+            egui::ComboBox::from_id_salt("active-language")
+                .selected_text(active_name)
+                .show_ui(ui, |ui| {
+                    for (code, name) in &languages {
+                        if ui.selectable_label(*code == active, name).clicked() {
+                            selected = Some(code.clone());
+                        }
+                    }
+                });
+        });
+        if languages.len() == 1 {
+            ui.weak(
+                "More languages install as packs: drop a pack folder into \
+                 the data directory under packs\\<code>\\ and restart.",
+            );
+        } else {
+            ui.weak(
+                "Library, reviews, statistics, and chat all follow the \
+                 active language; nothing mixes.",
+            );
+        }
+        if let Some(code) = selected {
+            if code != active {
+                self.switch_language(&code);
+            }
+        }
+
+        ui.add_space(12.0);
         ui.heading("About");
         ui.label(
             "Shiori（栞・bookmark） — comprehensible-input reading with \

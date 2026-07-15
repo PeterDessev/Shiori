@@ -9,6 +9,8 @@ authors.workspace = true
 [dependencies]
 shiori-core.workspace = true
 shiori-lang.workspace = true
+shiori-pack.workspace = true
+serde.workspace = true
 shiori-nlp.workspace = true
 shiori-srs.workspace = true
 shiori-dict.workspace = true

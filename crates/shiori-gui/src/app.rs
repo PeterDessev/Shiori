@@ -78,6 +78,9 @@ pub struct WordPanel {
     /// Dictionary entry for the whole phrase when the analyzer split a
     /// word JMdict knows as one (低声 = 低＋声).
     pub compound: Option<DictEntry>,
+    /// Decoded parse of *this occurrence* for pre-annotated texts
+    /// ("verb · present active indicative · 3rd person singular").
+    pub morph: Option<String>,
 }
 
 /// One wrapped display line of the reader: the (sentence, token) cells laid
@@ -651,11 +654,66 @@ impl ShioriGui {
         }
     }
 
-    /// Refresh the library/stat caches from the database.
+    /// Run a closure against the app mutably (language switching).
+    pub fn with_app_mut<T>(
+        &mut self,
+        f: impl FnOnce(&mut App) -> Result<T, shiori_app::AppError>,
+    ) -> Option<T> {
+        let app = self.app.clone()?;
+        let mut guard = match app.lock() {
+            Ok(g) => g,
+            Err(_) => {
+                self.error = Some("internal error: app lock poisoned".into());
+                return None;
+            }
+        };
+        match f(&mut guard) {
+            Ok(v) => Some(v),
+            Err(e) => {
+                self.error = Some(e.to_string());
+                None
+            }
+        }
+    }
+
+    /// Switch the active language: everything scoped — library, stats,
+    /// dictionary, chat — re-reads under the new language.
+    pub fn switch_language(&mut self, code: &str) {
+        let code = code.to_string();
+        if self
+            .with_app_mut(|app| app.set_active_lang(&code))
+            .is_none()
+        {
+            return;
+        }
+        self.settings.active_language = code.clone();
+        self.settings_draft.active_language = code;
+        let _ = self.settings.save(&self.data_dir);
+        self.lang = self.with_app(|app| Ok(app.lang_service()));
+        // Language-scoped view state resets; the new language's data
+        // loads through the usual caches.
+        self.reader = None;
+        self.book_info = None;
+        self.sweep = None;
+        self.dictionary = DictionaryState::default();
+        self.production = ProductionState::default();
+        self.review = ReviewState::default();
+        self.data_status = self.with_app(|app| app.data_status());
+        self.phase = match &self.data_status {
+            Some(s) if s.is_ready() => Phase::Ready,
+            _ => Phase::NeedsData,
+        };
+        self.refresh_caches();
+        self.load_conversations();
+    }
+
+    /// Refresh the library/stat caches from the database (active
+    /// language only).
     pub fn refresh_caches(&mut self) {
         if let Some(recs) = self.with_app(|app| {
             let mut stats = HashMap::new();
-            let docs = app.db().list_documents()?;
+            let mut docs = app.db().list_documents()?;
+            docs.retain(|d| d.document.lang == app.active_lang());
             for d in &docs {
                 stats.insert(d.document.id.0, app.document_stats(d.document.id)?);
             }
@@ -670,6 +728,16 @@ impl ShioriGui {
         while let Ok(msg) = self.rx.try_recv() {
             match msg {
                 Msg::AppOpened(Ok(app)) => {
+                    let mut app = app;
+                    // Restore the persisted language before anything
+                    // reads through the service.
+                    let desired = self.settings.active_language.clone();
+                    if !desired.is_empty() && desired != app.active_lang() {
+                        if let Err(e) = app.set_active_lang(&desired) {
+                            self.error =
+                                Some(format!("could not activate language '{desired}': {e}"));
+                        }
+                    }
                     let status = app.data_status().ok();
                     self.lang = Some(app.lang_service());
                     self.app = Some(Arc::new(Mutex::new(*app)));
@@ -904,9 +972,18 @@ impl ShioriGui {
         self.with_app(|app| {
             let word = app.db().word(word_id)?;
             let entry = app.dictionary_entry_for(&word)?;
-            let rank = app
-                .db()
-                .frequency_rank(app.active_lang(), &word.key.lemma)?;
+            // Frequency lists key by the language's lookup forms (folded
+            // lemma for packs; lemma-then-reading for Japanese).
+            let mut rank = None;
+            for form in app
+                .lang_service()
+                .frequency_forms(&word.key.lemma, &word.key.reading)
+            {
+                rank = app.db().frequency_rank(app.active_lang(), &form)?;
+                if rank.is_some() {
+                    break;
+                }
+            }
             let compound = if try_compound && phrase != word.key.lemma {
                 app.lookup_compound(&phrase)?
             } else {
@@ -919,6 +996,7 @@ impl ShioriGui {
                 phrase,
                 inflection,
                 compound,
+                morph: None,
             })
         })
     }

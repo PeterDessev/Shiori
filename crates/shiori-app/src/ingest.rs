@@ -66,6 +66,17 @@ impl App {
     /// The original file is copied into `<data_dir>/books/` so the library
     /// survives the source being moved or deleted.
     pub fn import_file(&self, path: &std::path::Path) -> Result<DocumentId> {
+        // Pre-annotated texts (SIAT) import their stored analysis
+        // directly; no analyzer runs.
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_lowercase())
+            .unwrap_or_default();
+        if name.ends_with(".siat.jsonl") || name.ends_with(".siat") {
+            let raw = std::fs::read_to_string(path)?;
+            return self.import_siat_str(&raw);
+        }
+
         let extracted = crate::extract::extract_document(path, self.service().extract_profile())?;
         let mut meta = extracted.meta;
         if meta.title.trim().is_empty() {
@@ -93,7 +104,7 @@ impl App {
 
 /// FNV-1a 64-bit content hash, hex-encoded. Deterministic across runs and
 /// Rust versions (used for import dedup, not security).
-fn content_hash(text: &str) -> String {
+pub(crate) fn content_hash(text: &str) -> String {
     const OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
     const PRIME: u64 = 0x0000_0100_0000_01b3;
     let mut hash = OFFSET;

@@ -5,28 +5,45 @@ use shiori_dict::{download, FrequencyList, JmdictFile};
 
 use crate::{App, Result};
 
-/// What reference data is present in the database.
+/// What reference data is present in the database for the active
+/// language.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DataStatus {
     pub dict_entries: u64,
     pub frequency_words: u64,
+    /// Japanese only; 0 and irrelevant for pack languages.
     pub kanji: u64,
+    /// Japanese only; 0 and irrelevant for pack languages.
     pub jlpt_words: u64,
+    /// Whether everything the active language declares is present.
+    pub ready: bool,
 }
 
 impl DataStatus {
     pub fn is_ready(&self) -> bool {
-        self.dict_entries > 0 && self.frequency_words > 0 && self.kanji > 0 && self.jlpt_words > 0
+        self.ready
     }
 }
 
 impl App {
     pub fn data_status(&self) -> Result<DataStatus> {
+        let dict_entries = self.db.dict_entry_count(self.active_dict_source())?;
+        let frequency_words = self.db.frequency_count(self.active_lang())?;
+        let kanji = self.db.kanji_count()?;
+        let jlpt_words = self.db.jlpt_count()?;
+        // Japanese requires its full reference bundle; pack languages
+        // declare what they ship and only the dictionary is essential.
+        let ready = if self.active_lang() == "ja" {
+            dict_entries > 0 && frequency_words > 0 && kanji > 0 && jlpt_words > 0
+        } else {
+            dict_entries > 0
+        };
         Ok(DataStatus {
-            dict_entries: self.db.dict_entry_count(self.active_dict_source())?,
-            frequency_words: self.db.frequency_count(self.active_lang())?,
-            kanji: self.db.kanji_count()?,
-            jlpt_words: self.db.jlpt_count()?,
+            dict_entries,
+            frequency_words,
+            kanji,
+            jlpt_words,
+            ready,
         })
     }
 
@@ -39,6 +56,14 @@ impl App {
         &self,
         mut on_progress: impl FnMut(&str),
     ) -> Result<DataStatus> {
+        // Pack languages install from their local pack directory; the
+        // download pipeline below is Japanese's reference bundle.
+        if self.active_lang() != "ja" {
+            on_progress("Installing language pack data…");
+            self.ensure_pack_data(self.active_lang())?;
+            on_progress("Reference data ready.");
+            return self.data_status();
+        }
         if self.db.dict_entry_count(self.active_dict_source())? == 0 {
             on_progress("Downloading JMdict dictionary…");
             let path = download::ensure_jmdict(&self.data_dir)?;

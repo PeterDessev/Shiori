@@ -186,6 +186,41 @@ impl Db {
         )?;
         Ok(n as u64)
     }
+
+    /// Replace one source's tag decodings (parse codes, POS codes).
+    pub fn import_dict_tags<I>(&self, source: &str, tags: I) -> Result<u64>
+    where
+        I: IntoIterator<Item = (String, String)>,
+    {
+        let tx = self.conn().unchecked_transaction()?;
+        tx.execute("DELETE FROM dict_tags WHERE source = ?1", [source])?;
+        let mut count = 0u64;
+        {
+            let mut insert = tx.prepare(
+                "INSERT OR REPLACE INTO dict_tags(source, code, label) VALUES (?1, ?2, ?3)",
+            )?;
+            for (code, label) in tags {
+                insert.execute(params![source, code, label])?;
+                count += 1;
+            }
+        }
+        tx.commit()?;
+        Ok(count)
+    }
+
+    /// Human label for a source's tag code, if the pack declared one.
+    pub fn dict_tag_label(&self, source: &str, code: &str) -> Result<Option<String>> {
+        let result = self.conn().query_row(
+            "SELECT label FROM dict_tags WHERE source = ?1 AND code = ?2",
+            [source, code],
+            |r| r.get(0),
+        );
+        match result {
+            Ok(label) => Ok(Some(label)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
 }
 
 #[cfg(test)]
