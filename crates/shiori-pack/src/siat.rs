@@ -234,19 +234,10 @@ pub fn from_morphgnt(
         let start = sentence.text.len();
         sentence.text.push_str(&row.text);
         let end = sentence.text.len();
-        // The parse code column packs person/tense/voice/mood/case/
-        // number/gender/degree into 8 positions; keep it verbatim with
-        // the POS prefix (e.g. "V-PAI-3S" style codes come pre-joined in
-        // Robinson-style data; MorphGNT keeps them split, so join here).
-        let morph = if row.parse.chars().all(|c| c == '-') {
-            row.pos.clone()
-        } else {
-            format!("{}-{}", row.pos, row.parse.trim_matches('-'))
-        };
         sentence.tokens.push(SiatToken {
             s: row.text,
             l: row.lemma.clone(),
-            m: morph,
+            m: robinson_code(&row.pos, &row.parse),
             g: gloss_of(&row.lemma).unwrap_or_default(),
             start,
             end,
@@ -271,6 +262,36 @@ pub fn from_morphgnt(
 
 fn jsonl_lines(s: &str) -> impl Iterator<Item = &str> {
     s.lines().map(str::trim).filter(|l| !l.is_empty())
+}
+
+/// Join a MorphGNT positional parse column into Robinson-style dashed
+/// segments: `V` + `3IAI-S--` → `V-IAI-3S`; `N` + `----DSF-` → `N-DSF`;
+/// participles carry both: `V` + `-PAP-NSM-`-style codes → `V-PAP-NSM`.
+///
+/// Positions: person, tense, voice, mood, case, number, gender, degree.
+pub fn robinson_code(pos: &str, parse: &str) -> String {
+    let chars: Vec<char> = parse.chars().collect();
+    let at = |i: usize| chars.get(i).copied().unwrap_or('-');
+    let (person, tense, voice, mood) = (at(0), at(1), at(2), at(3));
+    let (case, number, gender, degree) = (at(4), at(5), at(6), at(7));
+
+    let mut segments = vec![pos.to_string()];
+    if mood != '-' {
+        segments.push(format!("{tense}{voice}{mood}"));
+    }
+    if person != '-' {
+        segments.push(format!("{person}{number}"));
+    }
+    if case != '-' {
+        segments.push(format!("{case}{number}{gender}"));
+    }
+    match degree {
+        'C' => segments.push("COMP".to_string()),
+        'S' => segments.push("SUPL".to_string()),
+        _ => {}
+    }
+    segments.retain(|s| !s.is_empty());
+    segments.join("-")
 }
 
 /// Coarse part of speech from a MorphGNT/Robinson-style parse code's
@@ -389,9 +410,9 @@ mod tests {
 040101 P- -------- Ἐν Ἐν ἐν ἐν
 040101 N- ----DSF- ἀρχῇ ἀρχῇ ἀρχῇ ἀρχή
 040101 V- 3IAI-S-- ἦν ἦν ἦν εἰμί
-040101 RA -----NSM ὁ ὁ ὁ ὁ
-040101 N- -----NSM λόγος λόγος λόγος λόγος
-040102 N- -----NSM οὗτος οὗτος οὗτος οὗτος
+040101 RA ----NSM- ὁ ὁ ὁ ὁ
+040101 N- ----NSM- λόγος λόγος λόγος λόγος
+040102 N- ----NSM- οὗτος οὗτος οὗτος οὗτος
 ";
         let gloss = |lemma: &str| match lemma {
             "λόγος" => Some("word".to_string()),
@@ -404,8 +425,22 @@ mod tests {
         assert_eq!(v1.text, "Ἐν ἀρχῇ ἦν ὁ λόγος");
         assert_eq!(v1.tokens.len(), 5);
         assert_eq!(v1.tokens[1].m, "N-DSF");
+        assert_eq!(v1.tokens[2].m, "V-IAI-3S");
+        assert_eq!(v1.tokens[3].m, "RA-NSM");
         assert_eq!(v1.tokens[4].g, "word");
         // The converted output passes its own validator.
         parse(&to_jsonl(&doc)).unwrap();
+    }
+
+    #[test]
+    fn robinson_codes_decompose_participles_and_degrees() {
+        // Present active participle, nominative singular masculine:
+        // both the tense/voice/mood and case/number/gender slots fire.
+        assert_eq!(robinson_code("V", "-PAPNSM-"), "V-PAP-NSM");
+        // Comparative adjective.
+        assert_eq!(robinson_code("A", "----NSM-"), "A-NSM");
+        assert_eq!(robinson_code("A", "----NSMC"), "A-NSM-COMP");
+        // Bare preposition.
+        assert_eq!(robinson_code("P", "--------"), "P");
     }
 }

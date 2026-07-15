@@ -4339,6 +4339,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "shiori-packc"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "shiori-pack",
+]
+
+[[package]]
 name = "shiori-srs"
 version = "0.1.0"
 dependencies = [

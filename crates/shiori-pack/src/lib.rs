@@ -23,7 +23,7 @@ mod language;
 pub mod manifest;
 pub mod siat;
 
-pub use language::PackLanguage;
+pub use language::{fold_lookup, normalize_nfc, PackLanguage};
 pub use manifest::Manifest;
 
 use std::path::{Path, PathBuf};

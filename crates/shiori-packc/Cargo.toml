@@ -1,0 +1,11 @@
+[package]
+name = "shiori-packc"
+description = "The pack compiler: builds Shiori language packs from upstream open data (CI tool, never shipped in the app)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+shiori-pack.workspace = true
+serde_json.workspace = true

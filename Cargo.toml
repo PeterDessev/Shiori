@@ -4,6 +4,7 @@ members = [
     "crates/shiori-core",
     "crates/shiori-lang",
     "crates/shiori-pack",
+    "crates/shiori-packc",
     "crates/shiori-nlp",
     "crates/shiori-srs",
     "crates/shiori-dict",
