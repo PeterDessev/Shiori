@@ -3,7 +3,6 @@
 use shiori_core::{DocumentId, KnowledgeStatus, Sentence};
 use shiori_db::WordRow;
 use shiori_dict::DictEntry;
-use shiori_nlp::is_kana_only;
 
 use crate::{App, Result};
 
@@ -34,8 +33,8 @@ impl App {
             if word.status != KnowledgeStatus::Unknown || !word.key.pos.is_content_word() {
                 continue;
             }
-            // Skip non-Japanese noise (latin fragments, lone punctuation).
-            if !shiori_nlp::kana::is_japanese(&word.key.lemma) {
+            // Skip out-of-language noise (foreign fragments, punctuation).
+            if !self.service().is_target_language(&word.key.lemma) {
                 continue;
             }
             let corpus_rank = self.corpus_rank(word)?;
@@ -54,15 +53,17 @@ impl App {
         Ok(out)
     }
 
-    /// Frequency rank of a word, trying lemma first, then reading (the
-    /// frequency list mixes scripts).
+    /// Frequency rank of a word, trying the language's lookup forms in
+    /// order (Japanese also tries the reading; its list mixes scripts).
     fn corpus_rank(&self, word: &WordRow) -> Result<Option<u32>> {
         let lang = self.active_lang();
-        if let Some(rank) = self.db.frequency_rank(lang, &word.key.lemma)? {
-            return Ok(Some(rank));
-        }
-        if !word.key.reading.is_empty() && !is_kana_only(&word.key.lemma) {
-            return Ok(self.db.frequency_rank(lang, &word.key.reading)?);
+        for form in self
+            .service()
+            .frequency_forms(&word.key.lemma, &word.key.reading)
+        {
+            if let Some(rank) = self.db.frequency_rank(lang, &form)? {
+                return Ok(Some(rank));
+            }
         }
         Ok(None)
     }

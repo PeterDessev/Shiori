@@ -21,21 +21,7 @@ impl Japanese {
     pub fn new() -> Result<Self, NlpError> {
         Ok(Self {
             analyzer: Analyzer::new()?,
-            prompt: PromptProfile {
-                language_name: "Japanese".into(),
-                chat_persona: "a friendly native Japanese speaker".into(),
-                citation_guidance: "When you cite Japanese, give it in Japanese script \
-                                    followed by a reading in parentheses where helpful."
-                    .into(),
-                grammar_skeleton: "particles, verb forms, clause structure".into(),
-                quote_open: "「".into(),
-                quote_close: "」".into(),
-                immerse_instruction: "Write natural native Japanese without simplification; \
-                                      the user wants full immersion."
-                    .into(),
-                unnatural_authority: "phrasing a native speaker would not use".into(),
-                synthetic_disclaimer: None,
-            },
+            prompt: PromptProfile::japanese(),
             extract: ExtractProfile {
                 legacy_encodings: vec!["shift_jis".into()],
                 japanese_conventions: true,
@@ -87,6 +73,10 @@ impl LanguageService for Japanese {
         crate::romaji::romaji_to_kana(query)
     }
 
+    fn reading_display(&self, reading: &str) -> String {
+        crate::kana::katakana_to_hiragana(reading)
+    }
+
     fn ruby(&self, text: &str, reading: &str) -> Vec<RubySegment> {
         crate::ruby::ruby_segments(text, reading)
     }
@@ -109,6 +99,16 @@ impl LanguageService for Japanese {
         text.chars()
             .filter(|c| crate::kana::contains_kanji(&c.to_string()))
             .collect()
+    }
+
+    fn frequency_forms(&self, lemma: &str, reading: &str) -> Vec<String> {
+        // The Japanese frequency list mixes scripts: try the lemma, then
+        // the reading for non-kana lemmas.
+        let mut forms = vec![lemma.to_string()];
+        if !reading.is_empty() && !crate::kana::is_kana_only(lemma) {
+            forms.push(reading.to_string());
+        }
+        forms
     }
 
     fn level_hint(&self, known: u32) -> String {

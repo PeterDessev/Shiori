@@ -52,7 +52,7 @@ impl App {
             if word.status != KnowledgeStatus::Unknown {
                 continue;
             }
-            if !shiori_nlp::kana::is_japanese(&word.key.lemma) {
+            if !self.service().is_target_language(&word.key.lemma) {
                 continue;
             }
             let corpus_rank = self

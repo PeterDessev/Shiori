@@ -1,7 +1,12 @@
 //! Prompt construction (pure, unit-tested) and offline writing prompts.
+//!
+//! Every builder takes the language's [`PromptProfile`] so the same
+//! machinery serves Japanese, Koine Greek, and whatever comes next.
+
+use shiori_lang::PromptProfile;
 
 /// What the user is looking at when they ask for an explanation.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct SentenceContext {
     /// The sentence to explain.
     pub sentence: String,
@@ -9,6 +14,20 @@ pub struct SentenceContext {
     pub focus_word: Option<String>,
     /// Rough self-assessed level, e.g. "beginner", "intermediate".
     pub learner_level: Option<String>,
+    /// Language fragments for prompt construction. Defaults to Japanese;
+    /// callers set it from the active language service.
+    pub profile: PromptProfile,
+}
+
+impl Default for SentenceContext {
+    fn default() -> Self {
+        Self {
+            sentence: String::new(),
+            focus_word: None,
+            learner_level: None,
+            profile: PromptProfile::japanese(),
+        }
+    }
 }
 
 impl SentenceContext {
@@ -23,23 +42,46 @@ impl SentenceContext {
         self.focus_word = Some(word.into());
         self
     }
+
+    pub fn with_profile(mut self, profile: PromptProfile) -> Self {
+        self.profile = profile;
+        self
+    }
 }
 
-/// System prompt shared by both features.
-pub const SYSTEM_PROMPT: &str = "You are a Japanese language tutor inside a reading application. \
-The user is reading real Japanese text. Answer in English, concisely, for an adult learner. \
-Do not use emoji — the reader cannot display them. When you cite Japanese, give it in Japanese \
-script followed by a reading in parentheses where helpful.";
+/// System prompt shared by the explain and feedback features.
+pub fn system_prompt(profile: &PromptProfile) -> String {
+    let mut prompt = format!(
+        "You are a {name} language tutor inside a reading application. \
+The user is reading real {name} text. Answer in English, concisely, for an adult learner. \
+Do not use emoji — the reader cannot display them. {citation}",
+        name = profile.language_name,
+        citation = profile.citation_guidance,
+    );
+    if let Some(disclaimer) = &profile.synthetic_disclaimer {
+        prompt.push(' ');
+        prompt.push_str(disclaimer);
+    }
+    prompt
+}
 
 /// Build the user prompt for a sentence explanation.
 pub fn build_explain_prompt(context: &SentenceContext) -> String {
+    let profile = &context.profile;
     let mut prompt = String::new();
-    prompt.push_str("Explain this Japanese sentence — not just what it means, but why it is constructed the way it is:\n\n");
+    prompt.push_str(&format!(
+        "Explain this {} sentence — not just what it means, but why it is constructed the way it is:\n\n",
+        profile.language_name
+    ));
     prompt.push_str(&context.sentence);
-    prompt.push_str("\n\nCover: overall meaning, the grammatical skeleton (particles, verb forms, clause structure), and any register or nuance worth knowing.");
+    prompt.push_str(&format!(
+        "\n\nCover: overall meaning, the grammatical skeleton ({}), and any register or nuance worth knowing.",
+        profile.grammar_skeleton
+    ));
     if let Some(word) = &context.focus_word {
         prompt.push_str(&format!(
-            "\nPay special attention to 「{word}」: what it contributes here and how it is used in general."
+            "\nPay special attention to {}{word}{}: what it contributes here and how it is used in general.",
+            profile.quote_open, profile.quote_close
         ));
     }
     if let Some(level) = &context.learner_level {
@@ -57,13 +99,18 @@ to lay out comparisons instead.",
 }
 
 /// Build the user prompt for production-mode feedback.
-pub fn build_feedback_prompt(writing_prompt: &str, user_text: &str) -> String {
+pub fn build_feedback_prompt(
+    profile: &PromptProfile,
+    writing_prompt: &str,
+    user_text: &str,
+) -> String {
     format!(
         "The learner was given this writing prompt:\n\n{writing_prompt}\n\n\
 They wrote:\n\n{user_text}\n\n\
 Give feedback on naturalness. Point out anything ungrammatical, then anything grammatical \
-but unnatural (word choice, register, phrasing a native speaker would not use), and suggest \
-a natural rewrite. Encourage what they got right. Keep it under 250 words. Use plain text."
+but unnatural (word choice, register, {authority}), and suggest \
+a natural rewrite. Encourage what they got right. Keep it under 250 words. Use plain text.",
+        authority = profile.unnatural_authority,
     )
 }
 
@@ -105,10 +152,23 @@ mod tests {
 
     #[test]
     fn feedback_prompt_embeds_both_texts() {
-        let prompt = build_feedback_prompt("好きな食べ物は？", "私は寿司が好きです。");
+        let prompt = build_feedback_prompt(
+            &PromptProfile::japanese(),
+            "好きな食べ物は？",
+            "私は寿司が好きです。",
+        );
         assert!(prompt.contains("好きな食べ物は？"));
         assert!(prompt.contains("私は寿司が好きです。"));
         assert!(prompt.contains("naturalness"));
+        assert!(prompt.contains("phrasing a native speaker would not use"));
+    }
+
+    #[test]
+    fn system_prompt_is_profile_driven() {
+        let ja = system_prompt(&PromptProfile::japanese());
+        assert!(ja.contains("You are a Japanese language tutor"));
+        assert!(ja.contains("reading real Japanese text"));
+        assert!(ja.contains("in Japanese script followed by a reading in parentheses"));
     }
 
     #[test]

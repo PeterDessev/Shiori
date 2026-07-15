@@ -4212,6 +4212,7 @@ dependencies = [
  "shiori-core",
  "shiori-db",
  "shiori-dict",
+ "shiori-lang",
  "shiori-nlp",
  "shiori-srs",
  "thiserror 2.0.18",
@@ -4274,6 +4275,7 @@ dependencies = [
  "shiori-core",
  "shiori-db",
  "shiori-dict",
+ "shiori-lang",
  "shiori-llm",
  "shiori-nlp",
  "shiori-srs",
@@ -4296,6 +4298,7 @@ dependencies = [
  "serde",
  "serde_json",
  "shiori-core",
+ "shiori-lang",
  "thiserror 2.0.18",
  "ureq",
 ]

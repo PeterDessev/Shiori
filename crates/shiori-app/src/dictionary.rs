@@ -75,8 +75,12 @@ impl App {
         if raw.is_empty() {
             return Ok(DictSearchResults::default());
         }
-        // rōmaji → kana; anything already Japanese is searched verbatim.
-        let search = shiori_nlp::romaji_to_kana(raw).unwrap_or_else(|| raw.to_string());
+        // Transliterate (rōmaji → kana, betacode → Greek…); anything
+        // already in the target script is searched verbatim.
+        let search = self
+            .service()
+            .search_transliterate(raw)
+            .unwrap_or_else(|| raw.to_string());
 
         // Reduce a conjugated/compounded query to its dictionary root.
         let analysis = self.analyze_query(&search);
@@ -105,17 +109,18 @@ impl App {
             }
         }
 
-        // Kanji cards: from the query itself, then from top headwords.
+        // Character cards (kanji for Japanese): from the query itself,
+        // then from top headwords. Empty for languages without the
+        // capability.
         let mut seen_kanji = HashSet::new();
         let mut kanji = Vec::new();
         let mut add_from = |text: &str, kanji: &mut Vec<KanjiRow>| -> Result<()> {
-            for c in text.chars() {
+            for c in self.service().grapheme_card_chars(text) {
                 if kanji.len() >= 6 {
                     break;
                 }
-                let s = c.to_string();
-                if shiori_nlp::kana::contains_kanji(&s) && seen_kanji.insert(c) {
-                    if let Some(row) = self.db().kanji(&s)? {
+                if seen_kanji.insert(c) {
+                    if let Some(row) = self.db().kanji(&c.to_string())? {
                         kanji.push(row);
                     }
                 }
@@ -186,15 +191,15 @@ impl App {
         Ok(Some(DictSearchHit { entry, word, jlpt }))
     }
 
-    /// If the query is a conjugated or compounded Japanese form, describe
-    /// it: its dictionary root and the grammar of its tail. Plain
-    /// dictionary forms (a bare noun, an unconjugated verb) return `None`.
+    /// If the query is a conjugated or compounded form, describe it: its
+    /// dictionary root and the grammar of its tail. Plain dictionary
+    /// forms (a bare noun, an unconjugated verb) return `None`.
     fn analyze_query(&self, text: &str) -> Option<QueryAnalysis> {
-        if !shiori_nlp::kana::is_japanese(text) {
+        if !self.service().is_target_language(text) {
             return None;
         }
-        let tokens = self.analyzer().tokenize_sentence(text).ok()?;
-        let groups = shiori_nlp::phrase_groups(&tokens);
+        let tokens = self.service().tokenize_sentence(text).ok()?;
+        let groups = self.service().phrase_groups(&tokens);
         let &(start, end) = groups.first()?;
         let group = &tokens[start..end];
         let head = group.first()?;
@@ -202,7 +207,7 @@ impl App {
             return None;
         }
         let surface: String = group.iter().map(|t| t.surface.as_str()).collect();
-        let inflection = shiori_nlp::analyze_inflection(group);
+        let inflection = self.service().analyze_inflection(group);
         // Only worth surfacing when the typed form is not already the plain
         // dictionary form (i.e. it is conjugated or compounded).
         if inflection.is_plain() && surface == head.lemma {

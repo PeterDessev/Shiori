@@ -207,13 +207,16 @@ fn word_occurrences(sentences: &[SentenceView]) -> Vec<Vec<u32>> {
 }
 
 /// Compute phrase groups for each sentence.
-fn compute_groups(sentences: &[SentenceView]) -> Vec<Vec<(usize, usize)>> {
+fn compute_groups(
+    service: &dyn shiori_lang::LanguageService,
+    sentences: &[SentenceView],
+) -> Vec<Vec<(usize, usize)>> {
     sentences
         .iter()
         .map(|view| {
             let tokens: Vec<shiori_core::Token> =
                 view.tokens.iter().map(|r| r.token.clone()).collect();
-            shiori_nlp::phrase_groups(&tokens)
+            service.phrase_groups(&tokens)
         })
         .collect()
 }
@@ -368,6 +371,9 @@ pub struct ShioriGui {
     pub tx: Sender<Msg>,
     rx: Receiver<Msg>,
     pub app: Option<Arc<Mutex<App>>>,
+    /// Active language implementation, shared out of the app so views
+    /// can call it per-token without taking the app lock.
+    pub lang: Option<Arc<dyn shiori_lang::LanguageService>>,
     pub explainer: Arc<dyn Explainer>,
     pub phase: Phase,
     pub progress: Vec<String>,
@@ -478,6 +484,7 @@ impl ShioriGui {
             tx,
             rx,
             app: None,
+            lang: None,
             explainer: settings.build_explainer(),
             phase: Phase::Starting,
             progress: Vec::new(),
@@ -664,6 +671,7 @@ impl ShioriGui {
             match msg {
                 Msg::AppOpened(Ok(app)) => {
                     let status = app.data_status().ok();
+                    self.lang = Some(app.lang_service());
                     self.app = Some(Arc::new(Mutex::new(*app)));
                     self.data_status = status;
                     self.phase = match &self.data_status {
@@ -828,7 +836,7 @@ impl ShioriGui {
                 let tokens = app.db().sentence_tokens(sentence.id)?;
                 sentences.push(SentenceView { sentence, tokens });
             }
-            let groups = compute_groups(&sentences);
+            let groups = compute_groups(app.lang_service().as_ref(), &sentences);
             let (para_ranges, _) = paragraph_structure(&sentences);
             let word_occurrence = word_occurrences(&sentences);
             let pending_restore = (doc.last_sentence > 0).then_some(doc.last_sentence as usize);
@@ -874,8 +882,10 @@ impl ShioriGui {
             }
             Ok(out)
         });
-        if let (Some(reader), Some(sentences)) = (self.reader.as_mut(), refreshed) {
-            reader.groups = compute_groups(&sentences);
+        if let (Some(reader), Some(sentences), Some(lang)) =
+            (self.reader.as_mut(), refreshed, self.lang.as_ref())
+        {
+            reader.groups = compute_groups(lang.as_ref(), &sentences);
             reader.word_occurrence = word_occurrences(&sentences);
             reader.sentences = sentences;
         }
@@ -1151,10 +1161,14 @@ impl ShioriGui {
         reader.explaining = true;
         reader.explanation = None;
         let explainer = self.explainer.clone();
+        let profile = self.lang.as_ref().map(|l| l.prompt_profile().clone());
         let tx = self.tx.clone();
         let ctx = ctx.clone();
         std::thread::spawn(move || {
             let mut context = shiori_llm::SentenceContext::new(sentence);
+            if let Some(profile) = profile {
+                context = context.with_profile(profile);
+            }
             if let Some(word) = focus {
                 context = context.with_focus(word);
             }
@@ -1271,8 +1285,16 @@ impl ShioriGui {
         let level_hint = self
             .with_app(|app| app.chat_level_hint())
             .unwrap_or_else(|| "Level unknown; infer it from their messages.".into());
-        let system =
-            shiori_llm::chat_system_prompt(&level_hint, self.settings.chat_challenge.to_llm());
+        let profile = self
+            .lang
+            .as_ref()
+            .map(|l| l.prompt_profile().clone())
+            .unwrap_or_else(shiori_llm::PromptProfile::japanese);
+        let system = shiori_llm::chat_system_prompt(
+            &profile,
+            &level_hint,
+            self.settings.chat_challenge.to_llm(),
+        );
 
         self.production.waiting = true;
         let explainer = self.explainer.clone();

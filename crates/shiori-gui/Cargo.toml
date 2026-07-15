@@ -19,6 +19,7 @@ dirs = "6"
 chrono.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+shiori-lang = { version = "0.1.0", path = "../shiori-lang" }
 shiori-nlp = { version = "0.1.0", path = "../shiori-nlp" }
 egui_extras = "0.31"
 egui_commonmark = { version = "0.20", default-features = false, features = ["pulldown_cmark"] }

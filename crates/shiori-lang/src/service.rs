@@ -53,6 +53,12 @@ pub trait LanguageService: Send + Sync {
         None
     }
 
+    /// Normalize a stored reading for display (katakana → hiragana for
+    /// Japanese). Default: unchanged.
+    fn reading_display(&self, reading: &str) -> String {
+        reading.to_string()
+    }
+
     /// Split a word into display segments with per-segment annotations
     /// (furigana over kanji runs for Japanese). Default: one unannotated
     /// segment — languages whose annotations ride on stored token
@@ -86,6 +92,14 @@ pub trait LanguageService: Send + Sync {
     /// [`PartOfSpeech::is_content_word`] by default.
     fn is_content_word(&self, pos: PartOfSpeech) -> bool {
         pos.is_content_word()
+    }
+
+    /// Forms to try, in order, when looking a word up in the frequency
+    /// list. Default: the lemma. Japanese also tries the reading because
+    /// its list mixes scripts.
+    fn frequency_forms(&self, lemma: &str, reading: &str) -> Vec<String> {
+        let _ = reading;
+        vec![lemma.to_string()]
     }
 
     /// One-line description of the user's vocabulary size for the chat

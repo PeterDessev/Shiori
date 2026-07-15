@@ -110,12 +110,12 @@ impl App {
     }
 
     fn import_note(&self, note: &ImportedNote, now: chrono::DateTime<Utc>) -> Result<bool> {
-        // The expression is the first field containing Japanese.
+        // The expression is the first field in the active language.
         let Some(expression) = note
             .fields
             .iter()
             .map(|f| crate::extract::strip_html(f))
-            .find(|f| shiori_nlp::kana::is_japanese(f.trim()))
+            .find(|f| self.service().is_target_language(f.trim()))
         else {
             return Ok(false);
         };

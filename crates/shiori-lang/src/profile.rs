@@ -34,6 +34,28 @@ pub struct PromptProfile {
     pub synthetic_disclaimer: Option<String>,
 }
 
+impl PromptProfile {
+    /// The Japanese profile — also the default wherever a profile is not
+    /// supplied, preserving the app's original prompt wording.
+    pub fn japanese() -> Self {
+        Self {
+            language_name: "Japanese".into(),
+            chat_persona: "a friendly native Japanese speaker".into(),
+            citation_guidance: "When you cite Japanese, give it in Japanese script \
+                                followed by a reading in parentheses where helpful."
+                .into(),
+            grammar_skeleton: "particles, verb forms, clause structure".into(),
+            quote_open: "「".into(),
+            quote_close: "」".into(),
+            immerse_instruction: "Write natural native Japanese without simplification; \
+                                  the user wants full immersion."
+                .into(),
+            unnatural_authority: "phrasing a native speaker would not use".into(),
+            synthetic_disclaimer: None,
+        }
+    }
+}
+
 /// How to read files for this language.
 #[derive(Debug, Clone, Default)]
 pub struct ExtractProfile {

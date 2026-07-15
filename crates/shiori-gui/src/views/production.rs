@@ -310,6 +310,7 @@ impl ShioriGui {
     /// phrase.
     fn chat_transcript(&mut self, ctx: &egui::Context) -> Option<(usize, usize, usize)> {
         let mut clicked = None;
+        let lang = self.lang.clone();
         egui::CentralPanel::default().show(ctx, |ui| {
             if self.production.messages.is_empty() {
                 ui.add_space(40.0);
@@ -362,8 +363,15 @@ impl ShioriGui {
                                     ui.with_layout(
                                         egui::Layout::top_down(egui::Align::Min),
                                         |ui| {
-                                            if let Some(c) = chat_message_body(ui, message, m_idx) {
-                                                clicked = Some(c);
+                                            if let Some(lang) = &lang {
+                                                if let Some(c) = chat_message_body(
+                                                    ui,
+                                                    lang.as_ref(),
+                                                    message,
+                                                    m_idx,
+                                                ) {
+                                                    clicked = Some(c);
+                                                }
                                             }
                                         },
                                     );
@@ -398,8 +406,15 @@ impl ShioriGui {
         if group.is_empty() {
             return;
         }
-        let phrase: String = group.iter().map(|t| t.surface.as_str()).collect();
-        let inflection = shiori_nlp::analyze_inflection(&group);
+        let Some(lang) = self.lang.clone() else {
+            return;
+        };
+        let phrase: String = group
+            .iter()
+            .map(|t| t.surface.as_str())
+            .collect::<Vec<_>>()
+            .join(lang.joiner());
+        let inflection = lang.analyze_inflection(&group);
         // The clicked group's head token decides the word.
         let head = &tokens[start];
         let key = WordKey {
@@ -407,14 +422,7 @@ impl ShioriGui {
             reading: head.token.reading.clone(),
             pos: head.token.pos,
         };
-        let try_compound = group.len() > 1
-            && matches!(
-                group[0].pos,
-                shiori_core::PartOfSpeech::Noun
-                    | shiori_core::PartOfSpeech::ProperNoun
-                    | shiori_core::PartOfSpeech::AdjectivalNoun
-                    | shiori_core::PartOfSpeech::Prefix
-            );
+        let try_compound = group.len() > 1 && lang.compound_lookup_pos(group[0].pos);
         // The write-up note overlapping the clicked phrase, if any.
         let phrase_start = head.token.start;
         let phrase_end = tokens[end - 1].token.end;
@@ -436,6 +444,7 @@ impl ShioriGui {
 /// clicked (message, sentence, group) triple.
 fn chat_message_body(
     ui: &mut egui::Ui,
+    lang: &dyn shiori_lang::LanguageService,
     message: &crate::app::ChatMessageView,
     m_idx: usize,
 ) -> Option<(usize, usize, usize)> {
@@ -445,11 +454,11 @@ fn chat_message_body(
         ui.spacing_mut().item_spacing.y = 6.0;
         for (s_idx, (tokens, groups)) in message.sentences.iter().enumerate() {
             for (t_idx, row) in tokens.iter().enumerate() {
-                let japanese = shiori_nlp::kana::is_japanese(&row.token.surface);
+                let clickable = lang.is_target_language(&row.token.surface);
                 let text = egui::RichText::new(&row.token.surface).size(17.0);
                 let label = egui::Label::new(text)
                     .wrap_mode(egui::TextWrapMode::Extend)
-                    .sense(if japanese {
+                    .sense(if clickable {
                         egui::Sense::click()
                     } else {
                         egui::Sense::hover()
@@ -479,7 +488,7 @@ fn chat_message_body(
                     response.clone().on_hover_text(&annotation.note);
                 }
 
-                if japanese {
+                if clickable {
                     let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
                     if response.clicked() {
                         let group = groups.iter().position(|(s, e)| (*s..*e).contains(&t_idx));

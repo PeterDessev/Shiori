@@ -26,7 +26,7 @@ impl App {
             return Ok(existing);
         }
 
-        let analyzed = self.analyzer.analyze(text)?;
+        let analyzed = self.service().analyze(text)?;
         let mut sentences = Vec::new();
         for (p_idx, paragraph) in analyzed.paragraphs.iter().enumerate() {
             for sentence in &paragraph.sentences {
@@ -51,9 +51,7 @@ impl App {
             }
         }
         if sentences.is_empty() {
-            return Err(AppError::Invalid(
-                "no Japanese sentences found in the text".into(),
-            ));
+            return Err(AppError::Invalid("no sentences found in the text".into()));
         }
 
         Ok(self
@@ -68,7 +66,7 @@ impl App {
     /// The original file is copied into `<data_dir>/books/` so the library
     /// survives the source being moved or deleted.
     pub fn import_file(&self, path: &std::path::Path) -> Result<DocumentId> {
-        let extracted = crate::extract::extract_document(path)?;
+        let extracted = crate::extract::extract_document(path, self.service().extract_profile())?;
         let mut meta = extracted.meta;
         if meta.title.trim().is_empty() {
             meta.title = path

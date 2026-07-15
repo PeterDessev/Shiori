@@ -24,7 +24,7 @@ pub type ChatSentence = (Vec<ChatTokenRow>, Vec<(usize, usize)>);
 impl App {
     /// Tokenize a chat message for display, sentence by sentence.
     pub fn analyze_chat_text(&self, text: &str) -> Result<Vec<ChatSentence>> {
-        let analyzed = self.analyzer().analyze(text)?;
+        let analyzed = self.service().analyze(text)?;
         let mut out = Vec::new();
         // Sentences appear in order; walk a cursor to locate each one's
         // byte offset in the original text.
@@ -37,7 +37,7 @@ impl App {
                     .unwrap_or(cursor);
                 cursor = base + sentence.text.len();
 
-                let groups = shiori_nlp::phrase_groups(&sentence.tokens);
+                let groups = self.service().phrase_groups(&sentence.tokens);
                 let tokens = sentence
                     .tokens
                     .iter()
@@ -85,7 +85,8 @@ impl App {
     }
 
     /// One-line description of the user's recorded vocabulary for the
-    /// chat partner's system prompt.
+    /// chat partner's system prompt, phrased in the active language's
+    /// proficiency framework.
     pub fn chat_level_hint(&self) -> Result<String> {
         let known: u32 = self
             .db()
@@ -94,17 +95,7 @@ impl App {
             .filter(|(s, _)| *s == KnowledgeStatus::Known)
             .map(|(_, n)| *n)
             .sum();
-        let level = match known {
-            0..=150 => "a beginner (around JLPT N5)",
-            151..=600 => "an upper beginner (around JLPT N5–N4)",
-            601..=1500 => "lower intermediate (around JLPT N4)",
-            1501..=3500 => "intermediate (around JLPT N3)",
-            3501..=7000 => "upper intermediate (around JLPT N2)",
-            _ => "advanced (around JLPT N1)",
-        };
-        Ok(format!(
-            "The user has about {known} recorded known words, suggesting {level}."
-        ))
+        Ok(self.service().level_hint(known))
     }
 }
 

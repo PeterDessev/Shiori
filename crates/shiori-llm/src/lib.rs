@@ -18,7 +18,10 @@ pub use chat::{
 };
 pub use ollama::{OllamaClient, OllamaExplainer, OllamaModel, PullProgress, DEFAULT_OLLAMA_URL};
 pub use openai_compat::OpenAiCompatExplainer;
-pub use prompts::{build_explain_prompt, build_feedback_prompt, writing_prompts, SentenceContext};
+pub use prompts::{
+    build_explain_prompt, build_feedback_prompt, system_prompt, writing_prompts, SentenceContext,
+};
+pub use shiori_lang::PromptProfile;
 
 /// Clip a string to at most `max` characters (for error displays).
 pub(crate) fn truncate(s: &str, max: usize) -> &str {
@@ -42,7 +45,8 @@ pub enum LlmError {
     Response(String),
 }
 
-/// A backend that can explain Japanese and critique the user's writing.
+/// A backend that can explain the target language and critique the
+/// user's writing.
 ///
 /// Implementations must be cheap to share across threads; calls may block
 /// (run them off the GUI thread).
@@ -54,11 +58,16 @@ pub trait Explainer: Send + Sync {
     fn is_available(&self) -> bool;
 
     /// Explain not just what a sentence means but *why* it is constructed
-    /// the way it is.
+    /// the way it is. The language comes from `context.profile`.
     fn explain_sentence(&self, context: &SentenceContext) -> Result<String, LlmError>;
 
-    /// Feedback on the naturalness of user-written Japanese.
-    fn production_feedback(&self, prompt: &str, user_text: &str) -> Result<String, LlmError>;
+    /// Feedback on the naturalness of the user's writing.
+    fn production_feedback(
+        &self,
+        profile: &PromptProfile,
+        prompt: &str,
+        user_text: &str,
+    ) -> Result<String, LlmError>;
 
     /// One turn of free conversation: a system prompt plus the message
     /// history, returning the model's raw text.
@@ -85,7 +94,12 @@ impl Explainer for Disabled {
         Err(LlmError::NotConfigured)
     }
 
-    fn production_feedback(&self, _prompt: &str, _user_text: &str) -> Result<String, LlmError> {
+    fn production_feedback(
+        &self,
+        _profile: &PromptProfile,
+        _prompt: &str,
+        _user_text: &str,
+    ) -> Result<String, LlmError> {
         Err(LlmError::NotConfigured)
     }
 }
@@ -112,7 +126,7 @@ mod tests {
             Err(LlmError::NotConfigured)
         ));
         assert!(matches!(
-            backend.production_feedback("prompt", "text"),
+            backend.production_feedback(&PromptProfile::japanese(), "prompt", "text"),
             Err(LlmError::NotConfigured)
         ));
     }

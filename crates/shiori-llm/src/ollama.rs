@@ -8,7 +8,7 @@ use std::io::BufRead;
 
 use serde::Deserialize;
 
-use crate::prompts::{build_explain_prompt, build_feedback_prompt, SentenceContext, SYSTEM_PROMPT};
+use crate::prompts::{build_explain_prompt, build_feedback_prompt, SentenceContext};
 use crate::{Explainer, LlmError};
 
 pub const DEFAULT_OLLAMA_URL: &str = "http://localhost:11434";
@@ -163,7 +163,7 @@ impl OllamaExplainer {
         &self.model
     }
 
-    fn complete(&self, user_prompt: &str) -> Result<String, LlmError> {
+    fn complete(&self, system: &str, user_prompt: &str) -> Result<String, LlmError> {
         #[derive(Deserialize)]
         struct ChatResponse {
             message: ChatMessage,
@@ -178,7 +178,7 @@ impl OllamaExplainer {
             "model": self.model,
             "stream": false,
             "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": system},
                 {"role": "user", "content": user_prompt}
             ]
         });
@@ -209,11 +209,22 @@ impl Explainer for OllamaExplainer {
     }
 
     fn explain_sentence(&self, context: &SentenceContext) -> Result<String, LlmError> {
-        self.complete(&build_explain_prompt(context))
+        self.complete(
+            &crate::prompts::system_prompt(&context.profile),
+            &build_explain_prompt(context),
+        )
     }
 
-    fn production_feedback(&self, prompt: &str, user_text: &str) -> Result<String, LlmError> {
-        self.complete(&build_feedback_prompt(prompt, user_text))
+    fn production_feedback(
+        &self,
+        profile: &crate::PromptProfile,
+        prompt: &str,
+        user_text: &str,
+    ) -> Result<String, LlmError> {
+        self.complete(
+            &crate::prompts::system_prompt(profile),
+            &build_feedback_prompt(profile, prompt, user_text),
+        )
     }
 
     fn chat(&self, system: &str, history: &[crate::ChatMessage]) -> Result<String, LlmError> {

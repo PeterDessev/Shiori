@@ -2,7 +2,7 @@
 
 use serde::Deserialize;
 
-use crate::prompts::{build_explain_prompt, build_feedback_prompt, SentenceContext, SYSTEM_PROMPT};
+use crate::prompts::{build_explain_prompt, build_feedback_prompt, SentenceContext};
 use crate::{Explainer, LlmError};
 
 const API_URL: &str = "https://api.anthropic.com/v1/messages";
@@ -36,11 +36,11 @@ impl AnthropicExplainer {
         &self.model
     }
 
-    fn complete(&self, user_prompt: &str) -> Result<String, LlmError> {
+    fn complete(&self, system: &str, user_prompt: &str) -> Result<String, LlmError> {
         self.request(serde_json::json!({
             "model": self.model,
             "max_tokens": MAX_TOKENS,
-            "system": SYSTEM_PROMPT,
+            "system": system,
             "thinking": {"type": "adaptive"},
             "messages": [
                 {"role": "user", "content": user_prompt}
@@ -81,11 +81,22 @@ impl Explainer for AnthropicExplainer {
     }
 
     fn explain_sentence(&self, context: &SentenceContext) -> Result<String, LlmError> {
-        self.complete(&build_explain_prompt(context))
+        self.complete(
+            &crate::prompts::system_prompt(&context.profile),
+            &build_explain_prompt(context),
+        )
     }
 
-    fn production_feedback(&self, prompt: &str, user_text: &str) -> Result<String, LlmError> {
-        self.complete(&build_feedback_prompt(prompt, user_text))
+    fn production_feedback(
+        &self,
+        profile: &crate::PromptProfile,
+        prompt: &str,
+        user_text: &str,
+    ) -> Result<String, LlmError> {
+        self.complete(
+            &crate::prompts::system_prompt(profile),
+            &build_feedback_prompt(profile, prompt, user_text),
+        )
     }
 
     fn chat(&self, system: &str, history: &[crate::ChatMessage]) -> Result<String, LlmError> {

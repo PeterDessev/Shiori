@@ -7,6 +7,7 @@
 //! they can copy substrings — and are located in the text here.
 
 use serde::Deserialize;
+use shiori_lang::PromptProfile;
 
 use crate::LlmError;
 
@@ -32,32 +33,27 @@ impl ChatRole {
     }
 }
 
-/// How hard the partner's Japanese should push the user.
+/// How hard the partner's language should push the user.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Challenge {
     /// Stay at the user's comfortable level.
     Match,
     /// Slightly above: comprehensible input with stretch.
     Push,
-    /// Natural native Japanese, no simplification.
+    /// Natural unrestricted text, no simplification.
     Immerse,
 }
 
 impl Challenge {
-    fn instruction(self) -> &'static str {
+    fn instruction(self, profile: &PromptProfile) -> String {
         match self {
-            Challenge::Match => {
-                "Match the user's level closely: use vocabulary and grammar they \
+            Challenge::Match => "Match the user's level closely: use vocabulary and grammar they \
                  have shown they can handle."
-            }
-            Challenge::Push => {
-                "Aim slightly above the user's level: mostly comprehensible, with \
+                .to_string(),
+            Challenge::Push => "Aim slightly above the user's level: mostly comprehensible, with \
                  a few new words or patterns per reply that context makes clear."
-            }
-            Challenge::Immerse => {
-                "Write natural native Japanese without simplification; the user \
-                 wants full immersion."
-            }
+                .to_string(),
+            Challenge::Immerse => profile.immerse_instruction.clone(),
         }
     }
 }
@@ -106,19 +102,30 @@ pub struct ChatTurnOutcome {
 ///
 /// `level_hint` describes the user's recorded vocabulary; the model is
 /// told to weigh the user's actual messages more heavily, so a small
-/// recorded vocabulary never caps the conversation.
-pub fn chat_system_prompt(level_hint: &str, challenge: Challenge) -> String {
+/// recorded vocabulary never caps the conversation. For dead languages
+/// the profile's synthetic disclaimer reframes the persona and the
+/// correction authority around attested usage.
+pub fn chat_system_prompt(
+    profile: &PromptProfile,
+    level_hint: &str,
+    challenge: Challenge,
+) -> String {
+    let disclaimer = profile
+        .synthetic_disclaimer
+        .as_ref()
+        .map(|d| format!("\n\n{d}"))
+        .unwrap_or_default();
     format!(
-        "You are a friendly native Japanese speaker having a written \
-         conversation with a learner. Reply ONLY in Japanese, naturally and \
+        "You are {persona} having a written \
+         conversation with a learner. Reply ONLY in {name}, naturally and \
          engagingly, as a conversation partner — ask follow-ups, react, share \
          your own thoughts. Keep replies to a few sentences.\n\
-         NEVER correct, grade, or comment on the user's Japanese inside your \
+         NEVER correct, grade, or comment on the user's {name} inside your \
          reply; respond to what they *meant*, the way a friend would.\n\
          \n\
          Level guidance: {level_hint} This estimate may lag reality — the \
          user's own messages are the better signal; adapt to what they \
-         actually write. {challenge}\n\
+         actually write. {challenge}{disclaimer}\n\
          \n\
          Separately from the conversation, write up the user's LATEST message \
          like a teacher marking a paper. For each grammatically wrong or \
@@ -132,8 +139,11 @@ pub fn chat_system_prompt(level_hint: &str, challenge: Challenge) -> String {
          Respond with ONLY this JSON, no other text:\n\
          {{\"reply\": \"...\", \"annotations\": [{{\"quote\": \"...\", \
          \"severity\": \"error\", \"note\": \"...\"}}]}}",
+        persona = profile.chat_persona,
+        name = profile.language_name,
         level_hint = level_hint,
-        challenge = challenge.instruction(),
+        challenge = challenge.instruction(profile),
+        disclaimer = disclaimer,
     )
 }
 
@@ -286,9 +296,34 @@ mod tests {
 
     #[test]
     fn system_prompt_embeds_level_and_challenge() {
-        let p = chat_system_prompt("knows ~1200 words (around JLPT N4).", Challenge::Push);
+        let p = chat_system_prompt(
+            &PromptProfile::japanese(),
+            "knows ~1200 words (around JLPT N4).",
+            Challenge::Push,
+        );
         assert!(p.contains("N4"));
         assert!(p.contains("slightly above"));
         assert!(p.contains("NEVER correct"));
+        assert!(p.contains("a friendly native Japanese speaker"));
+        assert!(p.contains("Reply ONLY in Japanese"));
+    }
+
+    #[test]
+    fn dead_language_profile_reframes_the_persona() {
+        let mut profile = PromptProfile::japanese();
+        profile.language_name = "Koine Greek".into();
+        profile.chat_persona = "an educated first-century writer of Koine Greek".into();
+        profile.synthetic_disclaimer = Some(
+            "Koine Greek has no living native speakers; judge naturalness against \
+             attested usage in the period's texts."
+                .into(),
+        );
+        profile.immerse_instruction =
+            "Write unrestricted literary Koine; the user wants full immersion.".into();
+        let p = chat_system_prompt(&profile, "knows ~300 words.", Challenge::Immerse);
+        assert!(p.contains("Reply ONLY in Koine Greek"));
+        assert!(p.contains("first-century writer"));
+        assert!(p.contains("attested usage"));
+        assert!(p.contains("unrestricted literary Koine"));
     }
 }

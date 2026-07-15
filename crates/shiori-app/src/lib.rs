@@ -27,10 +27,12 @@ pub use review::ReviewItem;
 pub use sources::{AozoraWork, WikisourceHit};
 pub use stats::{DifficultyBand, DocStats, Recommendation, StatsOverview};
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use shiori_db::Db;
-use shiori_nlp::Analyzer;
+use shiori_lang::LanguageService;
 use shiori_srs::Scheduler;
 
 /// Errors surfaced by application services.
@@ -38,6 +40,9 @@ use shiori_srs::Scheduler;
 pub enum AppError {
     #[error(transparent)]
     Nlp(#[from] shiori_nlp::NlpError),
+
+    #[error(transparent)]
+    Lang(#[from] shiori_lang::LangError),
 
     #[error(transparent)]
     Dict(#[from] shiori_dict::DictError),
@@ -57,7 +62,10 @@ pub type Result<T, E = AppError> = std::result::Result<T, E>;
 /// The application service layer.
 pub struct App {
     db: Db,
-    analyzer: Analyzer,
+    /// Installed language implementations, by language code.
+    services: HashMap<String, Arc<dyn LanguageService>>,
+    /// Language the whole app currently operates in.
+    active: String,
     scheduler: Scheduler,
     data_dir: PathBuf,
 }
@@ -97,9 +105,13 @@ impl App {
 
     /// Open over an existing database handle (tests use an in-memory one).
     pub fn with_db(db: Db, data_dir: PathBuf) -> Result<Self> {
+        let japanese: Arc<dyn LanguageService> = Arc::new(shiori_nlp::Japanese::new()?);
+        let mut services: HashMap<String, Arc<dyn LanguageService>> = HashMap::new();
+        services.insert(japanese.lang().to_string(), japanese);
         Ok(Self {
             db,
-            analyzer: Analyzer::new()?,
+            services,
+            active: "ja".to_string(),
             scheduler: Scheduler::default(),
             data_dir,
         })
@@ -109,26 +121,37 @@ impl App {
         &self.db
     }
 
-    /// Language every service currently operates in.
-    ///
-    /// Fixed to Japanese until the language switcher lands; every
-    /// language-scoped database call routes through this so the switch
-    /// becomes a one-field change.
-    pub fn active_lang(&self) -> &'static str {
-        "ja"
+    /// Language the whole app currently operates in; every
+    /// language-scoped database call routes through this.
+    pub fn active_lang(&self) -> &str {
+        &self.active
     }
 
     /// Dictionary source backing the active language.
-    pub fn active_dict_source(&self) -> &'static str {
-        "jmdict"
+    pub fn active_dict_source(&self) -> &str {
+        self.service().dict_source()
+    }
+
+    /// The active language implementation.
+    pub(crate) fn service(&self) -> &dyn LanguageService {
+        self.services
+            .get(&self.active)
+            .expect("active language always has a service")
+            .as_ref()
+    }
+
+    /// Shared handle to the active language implementation, for callers
+    /// (the GUI) that need it without holding the app lock.
+    pub fn lang_service(&self) -> Arc<dyn LanguageService> {
+        Arc::clone(
+            self.services
+                .get(&self.active)
+                .expect("active language always has a service"),
+        )
     }
 
     pub fn scheduler(&self) -> &Scheduler {
         &self.scheduler
-    }
-
-    pub fn analyzer(&self) -> &Analyzer {
-        &self.analyzer
     }
 
     pub fn data_dir(&self) -> &Path {

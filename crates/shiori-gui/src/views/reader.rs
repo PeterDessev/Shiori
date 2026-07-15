@@ -43,6 +43,9 @@ impl ShioriGui {
         let mut clicked: Option<(usize, usize)> = None; // (sentence, token)
         let mut explain_requested = false;
         let mut open_explanation_modal = false;
+        let Some(lang) = self.lang.clone() else {
+            return;
+        };
         // While the explanation modal floats over the reading view, reader
         // input (word clicks, page flips, shortcuts) is suppressed so it can't
         // disturb the page underneath. The away clock still ticks below —
@@ -501,11 +504,11 @@ impl ShioriGui {
                             (Some((ss, sg)), Some(g)) => ss == si && sg == g,
                             _ => false,
                         };
-                        let japanese = shiori_nlp::kana::is_japanese(&row.token.surface);
+                        let clickable = lang.is_target_language(&row.token.surface);
                         let fill = if selected {
                             Some(selection_fill)
                         } else if show_unknown
-                            && japanese
+                            && clickable
                             && row.status == KnowledgeStatus::Unknown
                             && row.token.pos.is_lexical()
                         {
@@ -519,7 +522,7 @@ impl ShioriGui {
                         // painted highlights as page-wide bars.
                         let label = egui::Label::new(text)
                             .wrap_mode(egui::TextWrapMode::Extend)
-                            .sense(if japanese {
+                            .sense(if clickable {
                                 egui::Sense::click()
                             } else {
                                 egui::Sense::hover()
@@ -551,6 +554,7 @@ impl ShioriGui {
                         };
                         if show_ruby {
                             if let Some(ruby) = token_furigana(
+                                lang.as_ref(),
                                 &row.token.surface,
                                 &row.token.lemma,
                                 &row.token.reading,
@@ -564,7 +568,7 @@ impl ShioriGui {
                                 );
                             }
                         }
-                        if japanese {
+                        if clickable {
                             let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
                             if response.clicked() {
                                 clicked = Some((si, ti));
@@ -654,15 +658,18 @@ impl ShioriGui {
         let Some(reader) = self.reader.as_ref() else {
             return;
         };
+        let Some(lang) = self.lang.clone() else {
+            return;
+        };
         // Ordered list of (sentence, group, first-token) for every group
-        // that contains Japanese.
+        // that contains target-language text.
         let mut selectable: Vec<(usize, usize, usize)> = Vec::new();
         for (s, groups) in reader.groups.iter().enumerate() {
             for (g, (start, end)) in groups.iter().enumerate() {
-                let has_japanese = reader.sentences[s].tokens[*start..*end]
+                let has_target = reader.sentences[s].tokens[*start..*end]
                     .iter()
-                    .any(|r| shiori_nlp::kana::is_japanese(&r.token.surface));
-                if has_japanese {
+                    .any(|r| lang.is_target_language(&r.token.surface));
+                if has_target {
                     selectable.push((s, g, *start));
                 }
             }
@@ -712,23 +719,23 @@ impl ShioriGui {
         let (start, end) = reader.groups[s_idx][g_idx];
         let view = &reader.sentences[s_idx];
 
+        let Some(lang) = self.lang.clone() else {
+            return;
+        };
         let group_tokens: Vec<shiori_core::Token> = view.tokens[start..end]
             .iter()
             .map(|r| r.token.clone())
             .collect();
-        let phrase: String = group_tokens.iter().map(|t| t.surface.as_str()).collect();
-        let inflection = shiori_nlp::analyze_inflection(&group_tokens);
+        let phrase: String = group_tokens
+            .iter()
+            .map(|t| t.surface.as_str())
+            .collect::<Vec<_>>()
+            .join(lang.joiner());
+        let inflection = lang.analyze_inflection(&group_tokens);
         let word_id = view.tokens[t_idx].word_id;
         // Nominal multi-token groups (低＋声, 日本語＋版) may exist in the
         // dictionary as one word; verb chains never do.
-        let try_compound = group_tokens.len() > 1
-            && matches!(
-                group_tokens[0].pos,
-                shiori_core::PartOfSpeech::Noun
-                    | shiori_core::PartOfSpeech::ProperNoun
-                    | shiori_core::PartOfSpeech::AdjectivalNoun
-                    | shiori_core::PartOfSpeech::Prefix
-            );
+        let try_compound = group_tokens.len() > 1 && lang.compound_lookup_pos(group_tokens[0].pos);
 
         let panel = self.load_word_panel(word_id, phrase, inflection, try_compound);
         if let Some(reader) = self.reader.as_mut() {
@@ -782,6 +789,7 @@ impl ShioriGui {
         open_explanation_modal: &mut bool,
     ) -> Option<WordAction> {
         let mut action = None;
+        let lang = self.lang.clone()?;
         let reader = self.reader.as_ref()?;
 
         egui::ScrollArea::vertical()
@@ -804,7 +812,7 @@ impl ShioriGui {
                 // component below.
                 ui.add_space(4.0);
                 if let Some(compound) = &panel.compound {
-                    ruby_headword(ui, compound.headword(), compound.reading());
+                    ruby_headword(ui, lang.as_ref(), compound.headword(), compound.reading());
                     ui.add_space(2.0);
                     for (i, sense) in compound.senses.iter().take(3).enumerate() {
                         let glosses: Vec<&str> =
@@ -820,7 +828,12 @@ impl ShioriGui {
                             .strong(),
                     );
                 } else {
-                    ruby_headword(ui, &panel.word.key.lemma, &panel.word.key.reading);
+                    ruby_headword(
+                        ui,
+                        lang.as_ref(),
+                        &panel.word.key.lemma,
+                        &panel.word.key.reading,
+                    );
                     if panel.phrase != panel.word.key.lemma {
                         ui.label(format!("in text: {}", panel.phrase));
                     }
@@ -834,18 +847,13 @@ impl ShioriGui {
                     ui.label(format!("corpus frequency rank: #{rank}"));
                 }
 
-                // Kanji chips: expand any kanji of the headword into its
-                // card in the dictionary view.
+                // Character chips (kanji for Japanese): expand any into
+                // its card in the dictionary view.
                 let kanji_chars: Vec<char> = {
                     let mut seen = std::collections::HashSet::new();
-                    panel
-                        .word
-                        .key
-                        .lemma
-                        .chars()
-                        .filter(|c| {
-                            shiori_nlp::kana::contains_kanji(&c.to_string()) && seen.insert(*c)
-                        })
+                    lang.grapheme_card_chars(&panel.word.key.lemma)
+                        .into_iter()
+                        .filter(|c| seen.insert(*c))
                         .collect()
                 };
                 if !kanji_chars.is_empty() {
@@ -1118,18 +1126,23 @@ fn render_markdown(ui: &mut egui::Ui, id: &str, markdown: &str, scrollable: bool
 /// 走る・はしる) the lemma's ruby segments are walked for as long as the
 /// surface still matches them, keeping the kanji-run furigana and
 /// dropping the okurigana the surface no longer has.
-fn token_furigana(surface: &str, lemma: &str, reading: &str) -> Option<String> {
-    if !shiori_nlp::kana::contains_kanji(surface) || reading.is_empty() {
+fn token_furigana(
+    lang: &dyn shiori_lang::LanguageService,
+    surface: &str,
+    lemma: &str,
+    reading: &str,
+) -> Option<String> {
+    if !lang.has_annotatable_script(surface) || reading.is_empty() {
         return None;
     }
-    let hira = shiori_nlp::kana::katakana_to_hiragana(reading);
+    let hira = lang.reading_display(reading);
     if surface == lemma {
         return Some(hira);
     }
     let surf: Vec<char> = surface.chars().collect();
     let mut out = String::new();
     let mut consumed = 0;
-    for seg in shiori_nlp::ruby_segments(lemma, &hira) {
+    for seg in lang.ruby(lemma, &hira) {
         let seg_chars: Vec<char> = seg.text.chars().collect();
         if surf[consumed..].starts_with(&seg_chars[..]) {
             consumed += seg_chars.len();
@@ -1153,8 +1166,13 @@ fn token_furigana(surface: &str, lemma: &str, reading: &str) -> Option<String> {
 
 /// Draw a headword with furigana positioned over the kanji run it reads,
 /// not clumped over the whole word: 食(た)べる, 引(ひ)き出(だ)し.
-fn ruby_headword(ui: &mut egui::Ui, lemma: &str, reading: &str) {
-    let segments = shiori_nlp::ruby_segments(lemma, reading);
+fn ruby_headword(
+    ui: &mut egui::Ui,
+    lang: &dyn shiori_lang::LanguageService,
+    lemma: &str,
+    reading: &str,
+) {
+    let segments = lang.ruby(lemma, reading);
     let big_font = egui::FontId::proportional(30.0);
     let small_font = egui::FontId::proportional(12.0);
     let text_color = ui.visuals().strong_text_color();
@@ -1210,12 +1228,22 @@ fn ruby_headword(ui: &mut egui::Ui, lemma: &str, reading: &str) {
 #[cfg(test)]
 mod tests {
     use super::token_furigana;
+    use shiori_lang::LanguageService;
+    use std::sync::OnceLock;
+
+    fn ja() -> &'static dyn LanguageService {
+        static S: OnceLock<shiori_nlp::Japanese> = OnceLock::new();
+        S.get_or_init(|| shiori_nlp::Japanese::new().expect("embedded dictionary should load"))
+    }
 
     #[test]
     fn plain_word_gets_its_whole_reading() {
-        assert_eq!(token_furigana("猫", "猫", "ネコ"), Some("ねこ".into()));
         assert_eq!(
-            token_furigana("日本語", "日本語", "ニホンゴ"),
+            token_furigana(ja(), "猫", "猫", "ネコ"),
+            Some("ねこ".into())
+        );
+        assert_eq!(
+            token_furigana(ja(), "日本語", "日本語", "ニホンゴ"),
             Some("にほんご".into())
         );
     }
@@ -1225,19 +1253,19 @@ mod tests {
         // 走っ (from 走る・はしる): ruby segments are 走(はし) + る; the
         // surface diverges after the kanji, so only はし survives.
         assert_eq!(
-            token_furigana("走っ", "走る", "ハシル"),
+            token_furigana(ja(), "走っ", "走る", "ハシル"),
             Some("はし".into())
         );
     }
 
     #[test]
     fn kana_tokens_get_nothing() {
-        assert_eq!(token_furigana("する", "する", "スル"), None);
-        assert_eq!(token_furigana("は", "は", "ハ"), None);
+        assert_eq!(token_furigana(ja(), "する", "する", "スル"), None);
+        assert_eq!(token_furigana(ja(), "は", "は", "ハ"), None);
     }
 
     #[test]
     fn missing_reading_gets_nothing() {
-        assert_eq!(token_furigana("猫", "猫", ""), None);
+        assert_eq!(token_furigana(ja(), "猫", "猫", ""), None);
     }
 }

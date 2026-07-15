@@ -27,8 +27,12 @@ fn main() {
         status.dict_entries, status.frequency_words
     );
 
-    let text = shiori_app::extract::extract_text(std::path::Path::new(&text_file))
-        .expect("extract text from file");
+    let service = app.lang_service();
+    let text = shiori_app::extract::extract_text(
+        std::path::Path::new(&text_file),
+        service.extract_profile(),
+    )
+    .expect("extract text from file");
     let doc = app.import_text(&title, &text).expect("import text");
     println!("[import] document id {}", doc.0);
 

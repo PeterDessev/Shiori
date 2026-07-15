@@ -5,6 +5,7 @@
 use std::path::Path;
 
 use shiori_core::DocumentMeta;
+use shiori_lang::ExtractProfile;
 
 use crate::{AppError, Result};
 
@@ -16,25 +17,27 @@ pub struct ExtractedDoc {
     pub meta: DocumentMeta,
 }
 
-/// Extract readable Japanese text from a file, chosen by extension.
-pub fn extract_text(path: &Path) -> Result<String> {
-    Ok(extract_document(path)?.text)
+/// Extract readable text from a file, chosen by extension.
+pub fn extract_text(path: &Path, profile: &ExtractProfile) -> Result<String> {
+    Ok(extract_document(path, profile)?.text)
 }
 
-/// Extract text and metadata from a file, chosen by extension.
-pub fn extract_document(path: &Path) -> Result<ExtractedDoc> {
+/// Extract text and metadata from a file, chosen by extension. The
+/// profile supplies the language's legacy-encoding fallbacks and whether
+/// Japanese text conventions (Aozora headings) apply.
+pub fn extract_document(path: &Path, profile: &ExtractProfile) -> Result<ExtractedDoc> {
     let ext = path
         .extension()
         .map(|e| e.to_string_lossy().to_lowercase())
         .unwrap_or_default();
     match ext.as_str() {
         "txt" | "md" | "text" | "" => {
-            let text = decode_bytes(&std::fs::read(path)?);
-            let meta = txt_metadata(&text);
+            let text = decode_bytes(&std::fs::read(path)?, &profile.legacy_encodings);
+            let meta = txt_metadata(&text, profile.japanese_conventions);
             Ok(ExtractedDoc { text, meta })
         }
         "html" | "htm" | "xhtml" => {
-            let html = decode_bytes(&std::fs::read(path)?);
+            let html = decode_bytes(&std::fs::read(path)?, &profile.legacy_encodings);
             let meta = DocumentMeta {
                 title: html_title(&html).unwrap_or_default(),
                 ..Default::default()
@@ -57,19 +60,22 @@ pub fn extract_document(path: &Path) -> Result<ExtractedDoc> {
     }
 }
 
-/// Aozora Bunko plain-text convention: line 1 is the title, line 2 the
-/// author, then a blank line before the body. Only trust it when the
-/// lines are short enough to plausibly be a heading — this is a prefill
-/// suggestion, not gospel; the import form remains editable.
-fn txt_metadata(text: &str) -> DocumentMeta {
+/// Heading-prefill heuristic: line 1 is the title, line 2 the author,
+/// then the body (the Aozora Bunko plain-text convention). Only trust it
+/// when the lines are short enough to plausibly be a heading — this is a
+/// prefill suggestion, not gospel; the import form remains editable.
+/// Under Japanese conventions a line ending in 。 is prose, not a
+/// heading; other languages use '.' for the same signal.
+fn txt_metadata(text: &str, japanese_conventions: bool) -> DocumentMeta {
+    let prose_ender = if japanese_conventions { '。' } else { '.' };
     let mut lines = text.lines().map(str::trim).filter(|l| !l.is_empty());
     let (first, second) = (lines.next(), lines.next());
     let mut meta = DocumentMeta::default();
     if let Some(first) = first {
-        if first.chars().count() <= 40 && !first.ends_with('。') {
+        if first.chars().count() <= 40 && !first.ends_with(prose_ender) {
             meta.title = first.to_string();
             if let Some(second) = second {
-                if second.chars().count() <= 20 && !second.ends_with('。') {
+                if second.chars().count() <= 20 && !second.ends_with(prose_ender) {
                     meta.author = second.to_string();
                 }
             }
@@ -90,16 +96,25 @@ fn html_title(html: &str) -> Option<String> {
 }
 
 /// Decode text bytes: UTF-8 (with or without BOM) when valid, otherwise
-/// Shift_JIS — the encoding of virtually all legacy Japanese text files
-/// (Aozora Bunko ships Shift_JIS). Japanese Shift_JIS is essentially never
-/// valid UTF-8, so the check is a reliable discriminator.
-pub fn decode_bytes(bytes: &[u8]) -> String {
+/// the language's legacy encodings in order (Japanese: Shift_JIS, the
+/// encoding of virtually all legacy Japanese text files — Aozora Bunko
+/// ships Shift_JIS). Legacy CJK text is essentially never valid UTF-8,
+/// so the check is a reliable discriminator. With no fallback configured
+/// the bytes decode lossily as UTF-8.
+pub fn decode_bytes(bytes: &[u8], legacy_encodings: &[String]) -> String {
     let bytes = bytes.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(bytes);
     match std::str::from_utf8(bytes) {
         Ok(s) => s.to_string(),
         Err(_) => {
-            let (text, _, _) = encoding_rs::SHIFT_JIS.decode(bytes);
-            text.into_owned()
+            for label in legacy_encodings {
+                if let Some(encoding) = encoding_rs::Encoding::for_label(label.as_bytes()) {
+                    let (text, _, had_errors) = encoding.decode(bytes);
+                    if !had_errors {
+                        return text.into_owned();
+                    }
+                }
+            }
+            String::from_utf8_lossy(bytes).into_owned()
         }
     }
 }
@@ -335,17 +350,34 @@ mod tests {
         );
     }
 
+    fn ja_profile() -> ExtractProfile {
+        ExtractProfile {
+            legacy_encodings: vec!["shift_jis".into()],
+            japanese_conventions: true,
+        }
+    }
+
     #[test]
     fn decodes_utf8_and_shift_jis() {
-        assert_eq!(decode_bytes("日本語".as_bytes()), "日本語");
-        assert_eq!(decode_bytes(b"\xEF\xBB\xBF\xE7\x8C\xAB"), "猫");
+        let sjis = &["shift_jis".to_string()];
+        assert_eq!(decode_bytes("日本語".as_bytes(), sjis), "日本語");
+        assert_eq!(decode_bytes(b"\xEF\xBB\xBF\xE7\x8C\xAB", sjis), "猫");
         // 日本語 in Shift_JIS.
-        assert_eq!(decode_bytes(b"\x93\xFA\x96\x7B\x8C\xEA"), "日本語");
+        assert_eq!(decode_bytes(b"\x93\xFA\x96\x7B\x8C\xEA", sjis), "日本語");
+        // Without a fallback configured, invalid UTF-8 decodes lossily
+        // instead of silently becoming mojibake in another encoding.
+        assert!(decode_bytes(b"\x93\xFA\x96\x7B\x8C\xEA", &[]).contains('\u{FFFD}'));
+        // Greek legacy encodings decode when configured.
+        // "καί" in ISO-8859-7.
+        assert_eq!(
+            decode_bytes(b"\xEA\xE1\xDF", &["iso-8859-7".to_string()]),
+            "καί"
+        );
     }
 
     #[test]
     fn unsupported_extension_is_a_clear_error() {
-        let err = extract_text(Path::new("book.docx")).unwrap_err();
+        let err = extract_text(Path::new("book.docx"), &ja_profile()).unwrap_err();
         assert!(err.to_string().contains("unsupported file type"));
     }
 
@@ -401,7 +433,7 @@ mod tests {
             .unwrap();
         z.finish().unwrap();
 
-        let doc = extract_document(&path).unwrap();
+        let doc = extract_document(&path, &ja_profile()).unwrap();
         let first = doc
             .text
             .find("第一章。猫がいた。")
@@ -416,15 +448,26 @@ mod tests {
     #[test]
     fn aozora_txt_heading_becomes_metadata() {
         let text = "走れメロス\n太宰治\n\nメロスは激怒した。必ず、かの邪智暴虐の王を除かなければならぬと決意した。";
-        let meta = txt_metadata(text);
+        let meta = txt_metadata(text, true);
         assert_eq!(meta.title, "走れメロス");
         assert_eq!(meta.author, "太宰治");
 
         // Ordinary prose must not be mistaken for a heading.
         let prose = "メロスは激怒した。\n必ず、かの邪智暴虐の王を除かなければならぬと決意した。";
-        let meta = txt_metadata(prose);
+        let meta = txt_metadata(prose, true);
         assert_eq!(meta.title, "");
         assert_eq!(meta.author, "");
+    }
+
+    #[test]
+    fn latin_txt_heading_uses_period_as_prose_signal() {
+        let text = "ΚΑΤΑ ΙΩΑΝΝΗΝ\n\nἘν ἀρχῇ ἦν ὁ λόγος.";
+        let meta = txt_metadata(text, false);
+        assert_eq!(meta.title, "ΚΑΤΑ ΙΩΑΝΝΗΝ");
+        // A sentence ending in '.' is prose, not a heading.
+        let prose = "Gallia est omnis divisa in partes tres.\nQuarum unam incolunt Belgae.";
+        let meta = txt_metadata(prose, false);
+        assert_eq!(meta.title, "");
     }
 
     #[test]
