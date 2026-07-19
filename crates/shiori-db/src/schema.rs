@@ -255,6 +255,15 @@ pub(crate) fn migrate(conn: &Connection) -> Result<()> {
         }
     }
 
+    // After every table is at its current shape: the dict_forms FK
+    // needs its own index — the primary key has `text` in the middle,
+    // so without this every dict_entries delete scans dict_forms per
+    // row (purging a replaced pack's 100k entries took hours).
+    conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_dict_forms_entry
+             ON dict_forms(source, entry_key);",
+    )?;
+
     conn.execute(
         "INSERT INTO meta(key, value) VALUES ('schema_version', ?1)
          ON CONFLICT(key) DO UPDATE SET value = ?1",

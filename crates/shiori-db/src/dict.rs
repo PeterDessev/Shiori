@@ -77,6 +77,10 @@ impl Db {
     /// history, documents) lives in other tables and is untouched.
     pub fn purge_reference_data(&self, lang: &str, source: &str) -> Result<()> {
         let tx = self.conn().unchecked_transaction()?;
+        // Children before parents: the forms delete is a fast primary-
+        // key range, and the entries delete's FK cascade then has
+        // nothing left to chase.
+        tx.execute("DELETE FROM dict_forms WHERE source = ?1", [source])?;
         tx.execute("DELETE FROM dict_entries WHERE source = ?1", [source])?;
         tx.execute("DELETE FROM dict_tags WHERE source = ?1", [source])?;
         tx.execute("DELETE FROM frequency WHERE lang = ?1", [lang])?;
