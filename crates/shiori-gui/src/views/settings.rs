@@ -10,6 +10,7 @@ use crate::app::ShioriGui;
 pub enum SettingsCategory {
     #[default]
     General,
+    Languages,
     Appearance,
     Reading,
     Review,
@@ -19,8 +20,9 @@ pub enum SettingsCategory {
 }
 
 impl SettingsCategory {
-    pub const ALL: [SettingsCategory; 7] = [
+    pub const ALL: [SettingsCategory; 8] = [
         SettingsCategory::General,
+        SettingsCategory::Languages,
         SettingsCategory::Appearance,
         SettingsCategory::Reading,
         SettingsCategory::Review,
@@ -32,6 +34,7 @@ impl SettingsCategory {
     fn label(self) -> &'static str {
         match self {
             SettingsCategory::General => "General",
+            SettingsCategory::Languages => "Languages",
             SettingsCategory::Appearance => "Appearance",
             SettingsCategory::Reading => "Reading",
             SettingsCategory::Review => "Review",
@@ -86,6 +89,7 @@ impl ShioriGui {
                 .auto_shrink([false; 2])
                 .show(ui, |ui| match self.settings_category {
                     SettingsCategory::General => self.settings_general(ui),
+                    SettingsCategory::Languages => self.settings_languages(ui),
                     SettingsCategory::Appearance => self.settings_appearance(ui),
                     SettingsCategory::Reading => self.settings_reading(ui),
                     SettingsCategory::Review => self.settings_review(ui),
@@ -98,44 +102,23 @@ impl ShioriGui {
 
     fn settings_general(&mut self, ui: &mut egui::Ui) {
         ui.heading("Language");
-        let languages = self
-            .with_app(|app| Ok(app.available_languages()))
-            .unwrap_or_default();
         let active = self.settings.active_language.clone();
-        let active_name = languages
+        let active_name = self
+            .lang_infos
             .iter()
-            .find(|(code, _)| *code == active)
-            .map(|(_, name)| name.clone())
+            .find(|i| i.lang == active)
+            .map(|i| i.name.clone())
             .unwrap_or_else(|| active.clone());
-        let mut selected: Option<String> = None;
         ui.horizontal(|ui| {
-            ui.label("Active language:");
-            egui::ComboBox::from_id_salt("active-language")
-                .selected_text(active_name)
-                .show_ui(ui, |ui| {
-                    for (code, name) in &languages {
-                        if ui.selectable_label(*code == active, name).clicked() {
-                            selected = Some(code.clone());
-                        }
-                    }
-                });
-        });
-        if languages.len() == 1 {
-            ui.weak(
-                "More languages install as packs: drop a pack folder into \
-                 the data directory under packs\\<code>\\ and restart.",
-            );
-        } else {
-            ui.weak(
-                "Library, reviews, statistics, and chat all follow the \
-                 active language; nothing mixes.",
-            );
-        }
-        if let Some(code) = selected {
-            if code != active {
-                self.switch_language(&code);
+            ui.label(format!("Active language: {active_name}"));
+            if ui.button("Manage languages…").clicked() {
+                self.settings_category = SettingsCategory::Languages;
             }
-        }
+        });
+        ui.weak(
+            "Switching, installing, and removing languages lives on the \
+             Languages page.",
+        );
 
         ui.add_space(12.0);
         ui.heading("About");
@@ -148,6 +131,384 @@ impl ShioriGui {
         ui.add_space(10.0);
         if ui.button("Show getting-started guide").clicked() {
             self.open_welcome();
+        }
+    }
+
+    /// Languages page: switch the active language, inspect installed
+    /// packs, import bundled texts, remove packs, and install new ones
+    /// from a folder, a zip, or a URL.
+    fn settings_languages(&mut self, ui: &mut egui::Ui) {
+        ui.heading("Active language");
+        // Cached registry: reading it live would take the app lock and
+        // scan pack directories every frame (and freeze the page while
+        // a background install holds the lock).
+        let infos = self.lang_infos.clone();
+        let active = self.settings.active_language.clone();
+        let active_name = infos
+            .iter()
+            .find(|i| i.lang == active)
+            .map(|i| i.name.clone())
+            .unwrap_or_else(|| active.clone());
+        let mut selected: Option<String> = None;
+        ui.horizontal(|ui| {
+            ui.label("Active language:");
+            egui::ComboBox::from_id_salt("active-language")
+                .selected_text(active_name)
+                .show_ui(ui, |ui| {
+                    for info in &infos {
+                        if ui
+                            .selectable_label(info.lang == active, &info.name)
+                            .clicked()
+                        {
+                            selected = Some(info.lang.clone());
+                        }
+                    }
+                });
+        });
+        ui.weak(
+            "Library, reviews, statistics, and chat all follow the \
+             active language; nothing mixes.",
+        );
+        if let Some(code) = selected {
+            if code != active {
+                self.switch_language(&code);
+            }
+        }
+
+        ui.add_space(12.0);
+        ui.heading("Installed languages");
+        let mut activate: Option<String> = None;
+        let mut remove: Option<(String, String)> = None;
+        let mut import_texts = false;
+        for info in &infos {
+            ui.group(|ui| {
+                ui.set_width(ui.available_width().min(640.0));
+                ui.horizontal(|ui| {
+                    ui.strong(&info.name);
+                    ui.weak(format!("({})", info.lang));
+                    if info.active {
+                        ui.colored_label(egui::Color32::from_rgb(110, 180, 110), "· active");
+                    }
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if info.pack.is_some() {
+                            if info.active {
+                                ui.add_enabled(false, egui::Button::new("🗑 Remove"))
+                                    .on_disabled_hover_text(
+                                        "Switch to another language before removing this one",
+                                    );
+                            } else if ui.button("🗑 Remove").clicked() {
+                                remove = Some((info.lang.clone(), info.name.clone()));
+                            }
+                        }
+                        if !info.active && ui.button("Activate").clicked() {
+                            activate = Some(info.lang.clone());
+                        }
+                    });
+                });
+                match &info.pack {
+                    None => {
+                        ui.weak(
+                            "Built in — full morphological analysis, dictionary, \
+                             kanji, and JLPT data.",
+                        );
+                        if info.active {
+                            if let Some(status) = &self.data_status {
+                                ui.weak(format!(
+                                    "Dictionary entries: {} · frequency words: {} · \
+                                     kanji: {}",
+                                    status.dict_entries, status.frequency_words, status.kanji
+                                ));
+                            }
+                        }
+                    }
+                    Some(pack) => {
+                        if !pack.license.is_empty() {
+                            ui.weak(&pack.license);
+                        }
+                        let mut features: Vec<String> = Vec::new();
+                        if pack.has_dictionary {
+                            features.push("dictionary".into());
+                        }
+                        if pack.has_morphology {
+                            features.push("full-form morphology".into());
+                        }
+                        if pack.has_frequency {
+                            features.push("frequency list".into());
+                        }
+                        if let Some(scheme) = &pack.graded_scheme {
+                            features.push(format!("graded levels ({scheme})"));
+                        }
+                        if !pack.fonts.is_empty() {
+                            features.push(format!("fonts: {}", pack.fonts.join(", ")));
+                        }
+                        if features.is_empty() {
+                            ui.weak("No data files found — this pack looks incomplete.");
+                        } else {
+                            ui.label(features.join(" · "));
+                        }
+                        if pack.text_count > 0 {
+                            ui.horizontal(|ui| {
+                                ui.label(format!(
+                                    "{} bundled text{}",
+                                    pack.text_count,
+                                    if pack.text_count == 1 { "" } else { "s" }
+                                ));
+                                if info.active {
+                                    if ui
+                                        .button("⬇ Import into library")
+                                        .on_hover_text(
+                                            "Add the pack's pre-annotated texts to your \
+                                             library (already-imported ones are skipped)",
+                                        )
+                                        .clicked()
+                                    {
+                                        import_texts = true;
+                                    }
+                                } else {
+                                    ui.weak("· activate the language to import them");
+                                }
+                            });
+                        }
+                    }
+                }
+            });
+            ui.add_space(6.0);
+        }
+        if let Some(code) = activate {
+            self.switch_language(&code);
+        }
+        if import_texts {
+            self.run_transfer(ui.ctx(), |app| {
+                let (new, existing) = app.import_pack_texts()?;
+                Ok(format!(
+                    "imported {new} bundled text{} ({existing} already in the library)",
+                    if new == 1 { "" } else { "s" }
+                ))
+            });
+        }
+        if remove.is_some() {
+            self.pack_remove_confirm = remove;
+        }
+
+        let installed: std::collections::HashSet<&str> =
+            infos.iter().map(|i| i.lang.as_str()).collect();
+        self.build_from_web_section(ui, &installed);
+
+        ui.add_space(12.0);
+        ui.heading("Add a language");
+        ui.label(
+            "A language pack is a folder (or zip) with a manifest.toml and \
+             the language's data files: dictionary, morphology, frequency \
+             list, and texts.",
+        );
+        ui.add_space(4.0);
+        let busy = self.pack_installing;
+        ui.horizontal(|ui| {
+            if ui
+                .add_enabled(!busy, egui::Button::new("📂 Install from folder…"))
+                .clicked()
+            {
+                if let Some(dir) = rfd::FileDialog::new().pick_folder() {
+                    self.run_pack_job(ui.ctx(), move |app| {
+                        let lang = app.install_pack_from_dir(&dir)?;
+                        Ok(format!("language pack '{lang}' installed"))
+                    });
+                }
+            }
+            if ui
+                .add_enabled(!busy, egui::Button::new("🗜 Install from zip…"))
+                .clicked()
+            {
+                if let Some(path) = rfd::FileDialog::new()
+                    .add_filter("Language pack", &["zip"])
+                    .pick_file()
+                {
+                    self.run_pack_job(ui.ctx(), move |app| {
+                        let lang = app.install_pack_from_zip(&path)?;
+                        Ok(format!("language pack '{lang}' installed"))
+                    });
+                }
+            }
+        });
+        ui.add_space(6.0);
+        egui::Grid::new("pack-url-grid")
+            .spacing([10.0, 6.0])
+            .show(ui, |ui| {
+                ui.label("Download URL:");
+                ui.add_sized(
+                    [360.0, 22.0],
+                    egui::TextEdit::singleline(&mut self.pack_url_input)
+                        .hint_text("https://…/pack.zip"),
+                );
+                ui.end_row();
+                ui.label("SHA-256 (optional):");
+                ui.add_sized(
+                    [360.0, 22.0],
+                    egui::TextEdit::singleline(&mut self.pack_sha_input)
+                        .hint_text("checksum to verify the download against"),
+                );
+                ui.end_row();
+            });
+        ui.horizontal(|ui| {
+            let ready = !busy && !self.pack_url_input.trim().is_empty();
+            if ui
+                .add_enabled(ready, egui::Button::new("⬇ Download and install"))
+                .clicked()
+            {
+                let url = self.pack_url_input.trim().to_string();
+                let sha = self.pack_sha_input.trim().to_string();
+                self.start_pack_download(ui.ctx(), url, sha);
+            }
+            if busy {
+                ui.spinner();
+                ui.weak("installing…");
+            }
+        });
+        ui.add_space(6.0);
+        ui.horizontal(|ui| {
+            if ui.button("📁 Open packs folder").clicked() {
+                if let Some(dir) = self.with_app(|app| Ok(app.packs_dir())) {
+                    let _ = std::fs::create_dir_all(&dir);
+                    open_folder(&dir);
+                }
+            }
+            ui.weak("Packs live in the data directory under packs\\<code>\\.");
+        });
+        ui.weak(
+            "Installs take effect immediately — no restart needed. Removing \
+             a pack keeps its library and review history in the database.",
+        );
+
+        self.pack_remove_dialog(ui.ctx());
+    }
+
+    /// Build-from-public-sources: pick a language, and its dictionary,
+    /// inflection tables (grammar), and frequency list are downloaded
+    /// from upstream and compiled into a pack on this machine — the
+    /// Japanese reference-data model, generalized. Nothing is hosted or
+    /// maintained by Shiori.
+    fn build_from_web_section(
+        &mut self,
+        ui: &mut egui::Ui,
+        installed: &std::collections::HashSet<&str>,
+    ) {
+        ui.add_space(12.0);
+        ui.heading("Build from Wiktionary");
+        ui.label(
+            "Downloads public data — kaikki.org's Wiktextract dump \
+             (dictionary + full inflection tables) and hermitdave's \
+             frequency list — and builds the pack locally, the same way \
+             the Japanese dictionary installs.",
+        );
+        ui.weak(
+            "Wiktionary data CC BY-SA 4.0 & GFDL; FrequencyWords CC BY-SA \
+             4.0. Dumps are large; the download is kept until the build \
+             succeeds so retries don't re-fetch.",
+        );
+        ui.add_space(4.0);
+        ui.horizontal(|ui| {
+            ui.label("Filter:");
+            ui.add_sized(
+                [200.0, 22.0],
+                egui::TextEdit::singleline(&mut self.web_pack_filter)
+                    .hint_text("language name or code"),
+            );
+        });
+        ui.add_space(4.0);
+
+        let filter = self.web_pack_filter.trim().to_lowercase();
+        let busy = self.pack_installing;
+        let mut build: Option<String> = None;
+        for source in shiori_app::WEB_PACK_SOURCES {
+            if !filter.is_empty()
+                && !source.name.to_lowercase().contains(&filter)
+                && !source.lang.contains(&filter)
+            {
+                continue;
+            }
+            ui.horizontal(|ui| {
+                ui.set_width(ui.available_width().min(640.0));
+                ui.strong(source.name);
+                ui.weak(format!(
+                    "({}) · ~{} MB{}",
+                    source.lang,
+                    source.approx_mb,
+                    if source.frequency_code.is_none() {
+                        " · no frequency list"
+                    } else {
+                        ""
+                    }
+                ));
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let label = if installed.contains(source.lang) {
+                        "⬇ Rebuild"
+                    } else {
+                        "⬇ Build"
+                    };
+                    if ui.add_enabled(!busy, egui::Button::new(label)).clicked() {
+                        build = Some(source.lang.to_string());
+                    }
+                    if installed.contains(source.lang) {
+                        ui.colored_label(egui::Color32::from_rgb(110, 180, 110), "installed ✓");
+                    }
+                });
+            });
+        }
+        if let Some(status) = &self.pack_job_status {
+            ui.add_space(4.0);
+            ui.horizontal(|ui| {
+                ui.spinner();
+                ui.weak(status);
+            });
+        }
+        if let Some(lang) = build {
+            self.start_web_pack_build(ui.ctx(), lang);
+        }
+    }
+
+    /// Confirmation dialog for removing a language pack.
+    fn pack_remove_dialog(&mut self, ctx: &egui::Context) {
+        let Some((lang, name)) = self.pack_remove_confirm.clone() else {
+            return;
+        };
+        let mut open = true;
+        let mut confirm = false;
+        let mut cancel = false;
+        egui::Window::new("Remove language pack")
+            .collapsible(false)
+            .resizable(false)
+            .open(&mut open)
+            .show(ctx, |ui| {
+                ui.label(format!(
+                    "Remove {name} ({lang})? The pack's files are deleted \
+                     from the data directory."
+                ));
+                ui.weak(
+                    "Your library, vocabulary, and review history for this \
+                     language stay in the database and come back if the pack \
+                     is reinstalled.",
+                );
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    if ui.button("🗑 Remove").clicked() {
+                        confirm = true;
+                    }
+                    if ui.button("Cancel").clicked() {
+                        cancel = true;
+                    }
+                });
+            });
+        if confirm {
+            self.pack_remove_confirm = None;
+            // Off the frame thread: deleting a pack's directory (texts
+            // included) can take a moment.
+            let code = lang.clone();
+            self.run_pack_job(ctx, move |app| {
+                app.remove_pack(&code)?;
+                Ok(format!("language pack '{code}' removed"))
+            });
+        } else if cancel || !open {
+            self.pack_remove_confirm = None;
         }
     }
 
@@ -246,6 +607,17 @@ impl ShioriGui {
         ui.weak(
             "Readings anchor to specific occurrences in the book: the first X \
              stay annotated no matter how you flip around, the rest never are.",
+        );
+
+        ui.add_space(12.0);
+        ui.heading("Pronunciation");
+        ui.checkbox(
+            &mut self.settings_draft.show_ipa,
+            "Show IPA with dictionary entries",
+        );
+        ui.weak(
+            "Packs built from Wiktionary carry IPA pronunciation; it shows \
+             next to headwords when enabled. Japanese readings are unaffected.",
         );
     }
 
@@ -767,4 +1139,15 @@ impl ShioriGui {
         ui.weak("Stroke order: KanjiVG © Ulrich Apel (CC BY-SA 3.0).");
         ui.weak("JLPT lists: stephenmk/yomitan-jlpt-vocab (CC BY-SA 4.0).");
     }
+}
+
+/// Open a directory in the platform's file manager.
+fn open_folder(path: &std::path::Path) {
+    #[cfg(target_os = "windows")]
+    let command = "explorer";
+    #[cfg(target_os = "macos")]
+    let command = "open";
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let command = "xdg-open";
+    let _ = std::process::Command::new(command).arg(path).spawn();
 }
