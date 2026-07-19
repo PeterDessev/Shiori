@@ -181,55 +181,68 @@ impl Db {
         Ok(rows.collect::<std::result::Result<_, _>>()?)
     }
 
-    /// Cards becoming due per day for the next `days` days; overdue
-    /// cards count under today.
-    pub fn due_forecast(&self, days: u32) -> Result<Vec<(String, u32)>> {
+    /// One language's cards becoming due per day for the next `days`
+    /// days; overdue cards count under today.
+    pub fn due_forecast(&self, lang: &str, days: u32) -> Result<Vec<(String, u32)>> {
         let mut stmt = self.conn().prepare(
             "SELECT MAX(date(due), date('now')) AS day, COUNT(*)
              FROM cards
-             WHERE date(due) <= date('now', '+' || ?1 || ' days')
+             JOIN words w ON w.id = cards.word_id
+             WHERE w.lang = ?1 AND date(due) <= date('now', '+' || ?2 || ' days')
              GROUP BY day ORDER BY day",
         )?;
-        let rows = stmt.query_map([days], |r| Ok((r.get(0)?, r.get::<_, i64>(1)? as u32)))?;
+        let rows = stmt.query_map(rusqlite::params![lang, days], |r| {
+            Ok((r.get(0)?, r.get::<_, i64>(1)? as u32))
+        })?;
         Ok(rows.collect::<std::result::Result<_, _>>()?)
     }
 
-    /// Words whose first review fell on each day (SRS intake rate).
-    pub fn learning_starts_by_day(&self) -> Result<Vec<(String, u32)>> {
+    /// One language's words whose first review fell on each day (SRS
+    /// intake rate).
+    pub fn learning_starts_by_day(&self, lang: &str) -> Result<Vec<(String, u32)>> {
         let mut stmt = self.conn().prepare(
             "SELECT day, COUNT(*) FROM (
-                 SELECT word_id, date(MIN(reviewed_at)) AS day
-                 FROM review_log GROUP BY word_id
+                 SELECT r.word_id, date(MIN(r.reviewed_at)) AS day
+                 FROM review_log r
+                 JOIN words w ON w.id = r.word_id
+                 WHERE w.lang = ?1 GROUP BY r.word_id
              ) GROUP BY day ORDER BY day",
         )?;
-        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get::<_, i64>(1)? as u32)))?;
+        let rows = stmt.query_map([lang], |r| Ok((r.get(0)?, r.get::<_, i64>(1)? as u32)))?;
         Ok(rows.collect::<std::result::Result<_, _>>()?)
     }
 
-    /// (correct, total) reviews within the last `days` days. FSRS Good
-    /// ratings count as correct.
-    pub fn retention_counts(&self, days: u32) -> Result<(u32, u32)> {
+    /// (correct, total) reviews of one language's words within the last
+    /// `days` days. FSRS Good ratings count as correct.
+    pub fn retention_counts(&self, lang: &str, days: u32) -> Result<(u32, u32)> {
         self.conn()
             .query_row(
                 "SELECT COALESCE(SUM(rating >= 3), 0), COUNT(*)
                  FROM review_log
-                 WHERE reviewed_at >= datetime('now', '-' || ?1 || ' days')",
-                [days],
+                 JOIN words w ON w.id = review_log.word_id
+                 WHERE w.lang = ?1
+                   AND reviewed_at >= datetime('now', '-' || ?2 || ' days')",
+                rusqlite::params![lang, days],
                 |r| Ok((r.get::<_, i64>(0)? as u32, r.get::<_, i64>(1)? as u32)),
             )
             .map_err(Into::into)
     }
 
-    /// Words crossing the given stability for the first time, per day —
-    /// the closest reconstructable "vocabulary matured" curve.
-    pub fn matured_by_day(&self, stability: f64) -> Result<Vec<(String, u32)>> {
+    /// One language's words crossing the given stability for the first
+    /// time, per day — the closest reconstructable "vocabulary matured"
+    /// curve.
+    pub fn matured_by_day(&self, lang: &str, stability: f64) -> Result<Vec<(String, u32)>> {
         let mut stmt = self.conn().prepare(
             "SELECT day, COUNT(*) FROM (
-                 SELECT word_id, date(MIN(reviewed_at)) AS day
-                 FROM review_log WHERE stability >= ?1 GROUP BY word_id
+                 SELECT r.word_id, date(MIN(r.reviewed_at)) AS day
+                 FROM review_log r
+                 JOIN words w ON w.id = r.word_id
+                 WHERE w.lang = ?1 AND r.stability >= ?2 GROUP BY r.word_id
              ) GROUP BY day ORDER BY day",
         )?;
-        let rows = stmt.query_map([stability], |r| Ok((r.get(0)?, r.get::<_, i64>(1)? as u32)))?;
+        let rows = stmt.query_map(rusqlite::params![lang, stability], |r| {
+            Ok((r.get(0)?, r.get::<_, i64>(1)? as u32))
+        })?;
         Ok(rows.collect::<std::result::Result<_, _>>()?)
     }
 
@@ -254,15 +267,27 @@ impl Db {
 
     /// Status breakdown over the *content words* of a document.
     pub fn document_status_counts(&self, document: DocumentId) -> Result<Vec<StatusCount>> {
+        self.document_status_counts_from(document, 0)
+    }
+
+    /// Status breakdown over the content words of a document's sentences
+    /// from `from_idx` on — the still-unread part when `from_idx` is the
+    /// reading position.
+    pub fn document_status_counts_from(
+        &self,
+        document: DocumentId,
+        from_idx: u32,
+    ) -> Result<Vec<StatusCount>> {
         let mut stmt = self.conn().prepare(&format!(
             "SELECT w.status, COUNT(DISTINCT w.id), COUNT(*)
              FROM tokens t
              JOIN sentences s ON s.id = t.sentence_id
              JOIN words w ON w.id = t.word_id
-             WHERE s.document_id = ?1 AND w.pos NOT IN {NON_CONTENT_POS}
+             WHERE s.document_id = ?1 AND s.idx >= ?2
+               AND w.pos NOT IN {NON_CONTENT_POS}
              GROUP BY w.status"
         ))?;
-        let rows = stmt.query_map([document.0], |r| {
+        let rows = stmt.query_map(rusqlite::params![document.0, from_idx], |r| {
             Ok(StatusCount {
                 status: KnowledgeStatus::from_str_lossy(&r.get::<_, String>(0)?),
                 words: r.get::<_, i64>(1)? as u32,
@@ -270,6 +295,18 @@ impl Db {
             })
         })?;
         Ok(rows.collect::<std::result::Result<_, _>>()?)
+    }
+
+    /// Characters of sentence text from `from_idx` to the end of a
+    /// document (what is left to read from a saved position).
+    pub fn remaining_chars(&self, document: DocumentId, from_idx: u32) -> Result<u64> {
+        let n: i64 = self.conn().query_row(
+            "SELECT COALESCE(SUM(LENGTH(text)), 0) FROM sentences
+             WHERE document_id = ?1 AND idx >= ?2",
+            rusqlite::params![document.0, from_idx],
+            |r| r.get(0),
+        )?;
+        Ok(n as u64)
     }
 }
 
@@ -354,14 +391,38 @@ mod tests {
     #[test]
     fn retention_and_forecast_queries_run() {
         let db = Db::open_in_memory().unwrap();
-        assert_eq!(db.retention_counts(30).unwrap(), (0, 0));
-        assert!(db.due_forecast(14).unwrap().is_empty());
-        assert!(db.learning_starts_by_day().unwrap().is_empty());
-        assert!(db.matured_by_day(60.0).unwrap().is_empty());
+        assert_eq!(db.retention_counts("ja", 30).unwrap(), (0, 0));
+        assert!(db.due_forecast("ja", 14).unwrap().is_empty());
+        assert!(db.learning_starts_by_day("ja").unwrap().is_empty());
+        assert!(db.matured_by_day("ja", 60.0).unwrap().is_empty());
         assert_eq!(
             db.known_in_rank_bands("ja", &[1000]).unwrap(),
             vec![(1000, 0)]
         );
+    }
+
+    #[test]
+    fn ranged_status_counts_and_remaining_chars() {
+        let db = Db::open_in_memory().unwrap();
+        let doc = import_fixture(&db);
+
+        // From sentence 1 on, only その/猫/走る remain; 猫 recurs from
+        // sentence 0 but counts once as a distinct word.
+        let counts = db.document_status_counts_from(doc, 1).unwrap();
+        assert_eq!(counts.len(), 1);
+        assert_eq!(counts[0].status, KnowledgeStatus::Unknown);
+        assert_eq!((counts[0].words, counts[0].tokens), (3, 3));
+
+        // From 0 the ranged query matches the whole-document one.
+        assert_eq!(
+            db.document_status_counts_from(doc, 0).unwrap(),
+            db.document_status_counts(doc).unwrap()
+        );
+
+        // Characters, not bytes: sentence 1 is 7 characters.
+        assert_eq!(db.remaining_chars(doc, 1).unwrap(), 7);
+        assert_eq!(db.remaining_chars(doc, 0).unwrap(), 6 + 7);
+        assert_eq!(db.remaining_chars(doc, 99).unwrap(), 0);
     }
 
     #[test]

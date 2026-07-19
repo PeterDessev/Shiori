@@ -102,28 +102,36 @@ impl Db {
         Ok(rows.collect::<std::result::Result<_, _>>()?)
     }
 
-    /// Cards due at `now`, most overdue first.
-    pub fn due_cards(&self, now: DateTime<Utc>, limit: u32) -> Result<Vec<CardRow>> {
+    /// One language's cards due at `now`, most overdue first.
+    pub fn due_cards(&self, lang: &str, now: DateTime<Utc>, limit: u32) -> Result<Vec<CardRow>> {
         let mut stmt = self.conn().prepare(&format!(
-            "SELECT {CARD_COLS} FROM cards WHERE due <= ?1 ORDER BY due LIMIT ?2"
+            "SELECT {CARD_COLS} FROM cards
+             JOIN words w ON w.id = cards.word_id
+             WHERE w.lang = ?1 AND due <= ?2 ORDER BY due LIMIT ?3"
         ))?;
-        let rows = stmt.query_map(params![now, limit as i64], row_to_card)?;
+        let rows = stmt.query_map(params![lang, now, limit as i64], row_to_card)?;
         Ok(rows.collect::<std::result::Result<_, _>>()?)
     }
 
-    pub fn due_count(&self, now: DateTime<Utc>) -> Result<u64> {
+    pub fn due_count(&self, lang: &str, now: DateTime<Utc>) -> Result<u64> {
         let n: i64 = self.conn().query_row(
-            "SELECT COUNT(*) FROM cards WHERE due <= ?1",
-            params![now],
+            "SELECT COUNT(*) FROM cards
+             JOIN words w ON w.id = cards.word_id
+             WHERE w.lang = ?1 AND due <= ?2",
+            params![lang, now],
             |r| r.get(0),
         )?;
         Ok(n as u64)
     }
 
-    pub fn card_count(&self) -> Result<u64> {
-        let n: i64 = self
-            .conn()
-            .query_row("SELECT COUNT(*) FROM cards", [], |r| r.get(0))?;
+    pub fn card_count(&self, lang: &str) -> Result<u64> {
+        let n: i64 = self.conn().query_row(
+            "SELECT COUNT(*) FROM cards
+             JOIN words w ON w.id = cards.word_id
+             WHERE w.lang = ?1",
+            [lang],
+            |r| r.get(0),
+        )?;
         Ok(n as u64)
     }
 
@@ -144,20 +152,39 @@ impl Db {
         Ok(())
     }
 
-    pub fn review_count(&self) -> Result<u64> {
-        let n: i64 = self
-            .conn()
-            .query_row("SELECT COUNT(*) FROM review_log", [], |r| r.get(0))?;
+    pub fn review_count(&self, lang: &str) -> Result<u64> {
+        let n: i64 = self.conn().query_row(
+            "SELECT COUNT(*) FROM review_log
+             JOIN words w ON w.id = review_log.word_id
+             WHERE w.lang = ?1",
+            [lang],
+            |r| r.get(0),
+        )?;
         Ok(n as u64)
     }
 
-    /// Number of reviews done on the calendar day containing `now` (UTC).
-    pub fn reviews_on_day(&self, now: DateTime<Utc>) -> Result<u64> {
+    /// The most recent review timestamps, newest first (for estimating
+    /// the user's seconds-per-card pace from inter-review gaps).
+    /// Deliberately not language-scoped: pace is a trait of the user,
+    /// and all languages' reviews inform it.
+    pub fn recent_review_times(&self, limit: u32) -> Result<Vec<DateTime<Utc>>> {
+        let mut stmt = self
+            .conn()
+            .prepare("SELECT reviewed_at FROM review_log ORDER BY reviewed_at DESC LIMIT ?1")?;
+        let rows = stmt.query_map([limit], |r| r.get(0))?;
+        Ok(rows.collect::<std::result::Result<_, _>>()?)
+    }
+
+    /// Number of one language's reviews done on the calendar day
+    /// containing `now` (UTC).
+    pub fn reviews_on_day(&self, lang: &str, now: DateTime<Utc>) -> Result<u64> {
         let day_start = now.date_naive().and_hms_opt(0, 0, 0).unwrap().and_utc();
         let day_end = day_start + chrono::Duration::days(1);
         let n: i64 = self.conn().query_row(
-            "SELECT COUNT(*) FROM review_log WHERE reviewed_at >= ?1 AND reviewed_at < ?2",
-            params![day_start, day_end],
+            "SELECT COUNT(*) FROM review_log
+             JOIN words w ON w.id = review_log.word_id
+             WHERE w.lang = ?1 AND reviewed_at >= ?2 AND reviewed_at < ?3",
+            params![lang, day_start, day_end],
             |r| r.get(0),
         )?;
         Ok(n as u64)
@@ -206,17 +233,17 @@ mod tests {
 
         // Only the Again-card is due within 5 minutes.
         let soon = now + chrono::Duration::minutes(5);
-        let due = db.due_cards(soon, 10).unwrap();
+        let due = db.due_cards("ja", soon, 10).unwrap();
         assert_eq!(due.len(), 1);
         assert_eq!(due[0].word_id, cat);
-        assert_eq!(db.due_count(soon).unwrap(), 1);
-        assert_eq!(db.card_count().unwrap(), 2);
+        assert_eq!(db.due_count("ja", soon).unwrap(), 1);
+        assert_eq!(db.card_count("ja").unwrap(), 2);
 
         // Upsert updates in place.
         let updated = scheduler.review(&card_due, shiori_srs::Rating::Good, soon);
         db.upsert_card(cat, Some(sentences[0].id), &updated)
             .unwrap();
-        assert_eq!(db.card_count().unwrap(), 2);
+        assert_eq!(db.card_count("ja").unwrap(), 2);
         assert_eq!(db.card(cat).unwrap().unwrap().card, updated);
     }
 
@@ -232,8 +259,57 @@ mod tests {
         db.log_review(cat, Rating::Good, now - chrono::Duration::days(2), 2.0, 5.0)
             .unwrap();
 
-        assert_eq!(db.review_count().unwrap(), 3);
-        assert_eq!(db.reviews_on_day(now).unwrap(), 2);
+        assert_eq!(db.review_count("ja").unwrap(), 3);
+        assert_eq!(db.reviews_on_day("ja", now).unwrap(), 2);
+    }
+
+    #[test]
+    fn card_and_review_queries_are_language_scoped() {
+        let db = Db::open_in_memory().unwrap();
+        import_fixture(&db);
+        let now = Utc::now();
+        let ja = word_id(&db, "猫", "ねこ", PartOfSpeech::Noun);
+        let grc = db
+            .ensure_word("grc", &WordKey::new("λόγος", "", PartOfSpeech::Noun))
+            .unwrap()
+            .id;
+        db.upsert_card(ja, None, &Card::new(now)).unwrap();
+        db.upsert_card(grc, None, &Card::new(now)).unwrap();
+        db.log_review(ja, Rating::Good, now, 3.0, 5.0).unwrap();
+        db.log_review(grc, Rating::Good, now, 3.0, 5.0).unwrap();
+
+        // Each language sees exactly its own cards and history.
+        let soon = now + chrono::Duration::minutes(1);
+        assert_eq!(db.due_count("ja", soon).unwrap(), 1);
+        assert_eq!(db.due_count("grc", soon).unwrap(), 1);
+        assert_eq!(db.card_count("ja").unwrap(), 1);
+        assert_eq!(db.due_cards("grc", soon, 10).unwrap()[0].word_id, grc);
+        assert_eq!(db.review_count("ja").unwrap(), 1);
+        assert_eq!(db.reviews_on_day("grc", now).unwrap(), 1);
+        assert_eq!(db.retention_counts("ja", 30).unwrap(), (1, 1));
+        assert_eq!(db.due_forecast("ja", 14).unwrap().len(), 1);
+        assert_eq!(db.learning_starts_by_day("grc").unwrap().len(), 1);
+        assert_eq!(db.matured_by_day("ja", 1.0).unwrap().len(), 1);
+        // Pace stays deliberately global: both reviews count.
+        assert_eq!(db.recent_review_times(10).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn recent_review_times_come_newest_first() {
+        let db = Db::open_in_memory().unwrap();
+        import_fixture(&db);
+        let now = Utc::now();
+        let cat = word_id(&db, "猫", "ねこ", PartOfSpeech::Noun);
+
+        for minutes_ago in [10, 0, 5] {
+            let at = now - chrono::Duration::minutes(minutes_ago);
+            db.log_review(cat, Rating::Good, at, 3.0, 5.0).unwrap();
+        }
+
+        let times = db.recent_review_times(2).unwrap();
+        assert_eq!(times.len(), 2);
+        assert!(times[0] > times[1]);
+        assert_eq!(times[0], now);
     }
 
     #[test]

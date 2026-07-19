@@ -43,13 +43,15 @@ impl Db {
         Ok(())
     }
 
-    /// Total credited reading across all documents.
-    pub fn reading_totals(&self) -> Result<ReadingTotals> {
+    /// Total credited reading across one language's documents.
+    pub fn reading_totals(&self, lang: &str) -> Result<ReadingTotals> {
         self.conn()
             .query_row(
-                "SELECT COALESCE(SUM(seconds), 0), COALESCE(SUM(chars), 0)
-                 FROM reading_sessions",
-                [],
+                "SELECT COALESCE(SUM(rs.seconds), 0), COALESCE(SUM(rs.chars), 0)
+                 FROM reading_sessions rs
+                 JOIN documents d ON d.id = rs.document_id
+                 WHERE d.lang = ?1",
+                [lang],
                 |r| {
                     Ok(ReadingTotals {
                         seconds: r.get(0)?,
@@ -77,13 +79,39 @@ impl Db {
             .map_err(Into::into)
     }
 
-    /// Credited seconds per calendar day (UTC), oldest first.
-    pub fn reading_seconds_by_day(&self) -> Result<Vec<(String, f64)>> {
+    /// One language's credited seconds per calendar day (UTC), oldest
+    /// first.
+    pub fn reading_seconds_by_day(&self, lang: &str) -> Result<Vec<(String, f64)>> {
         let mut stmt = self.conn().prepare(
-            "SELECT date(started_at), SUM(seconds) FROM reading_sessions
-             GROUP BY date(started_at) ORDER BY date(started_at)",
+            "SELECT date(rs.started_at), SUM(rs.seconds)
+             FROM reading_sessions rs
+             JOIN documents d ON d.id = rs.document_id
+             WHERE d.lang = ?1
+             GROUP BY date(rs.started_at) ORDER BY date(rs.started_at)",
         )?;
-        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        let rows = stmt.query_map([lang], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        Ok(rows.collect::<std::result::Result<_, _>>()?)
+    }
+
+    /// Documents of one language with recorded reading, most recently
+    /// read first: (document, end of its latest session).
+    pub fn recently_read_documents(
+        &self,
+        lang: &str,
+        limit: u32,
+    ) -> Result<Vec<(DocumentId, DateTime<Utc>)>> {
+        let mut stmt = self.conn().prepare(
+            "SELECT rs.document_id, MAX(rs.ended_at) AS last_read
+             FROM reading_sessions rs
+             JOIN documents d ON d.id = rs.document_id
+             WHERE d.lang = ?1
+             GROUP BY rs.document_id
+             ORDER BY last_read DESC
+             LIMIT ?2",
+        )?;
+        let rows = stmt.query_map(params![lang, limit], |r| {
+            Ok((DocumentId(r.get(0)?), r.get(1)?))
+        })?;
         Ok(rows.collect::<std::result::Result<_, _>>()?)
     }
 }
@@ -105,14 +133,14 @@ mod tests {
         let s2 = db.start_reading_session(doc, now).unwrap();
         db.add_reading_time(s2, 30.0, 200, now).unwrap();
 
-        let totals = db.reading_totals().unwrap();
+        let totals = db.reading_totals("ja").unwrap();
         assert_eq!(totals.seconds, 210.0);
         assert_eq!(totals.chars, 1400);
 
         let doc_totals = db.document_reading_totals(doc).unwrap();
         assert_eq!(doc_totals.seconds, 210.0);
 
-        let by_day = db.reading_seconds_by_day().unwrap();
+        let by_day = db.reading_seconds_by_day("ja").unwrap();
         assert_eq!(by_day.len(), 1);
         assert_eq!(by_day[0].1, 210.0);
     }
@@ -120,9 +148,45 @@ mod tests {
     #[test]
     fn empty_totals_are_zero() {
         let db = Db::open_in_memory().unwrap();
-        let totals = db.reading_totals().unwrap();
+        let totals = db.reading_totals("ja").unwrap();
         assert_eq!(totals.seconds, 0.0);
         assert_eq!(totals.chars, 0);
+    }
+
+    #[test]
+    fn recently_read_documents_are_language_scoped_and_ordered() {
+        let db = Db::open_in_memory().unwrap();
+        let ja_doc = import_fixture(&db);
+        let grc_doc = db
+            .import_document(
+                "grc",
+                &shiori_core::DocumentMeta::titled("greek"),
+                "hash-grc",
+                Utc::now(),
+                &[],
+            )
+            .unwrap();
+        let now = Utc::now();
+
+        // Nothing read yet.
+        assert!(db.recently_read_documents("ja", 5).unwrap().is_empty());
+
+        db.start_reading_session(ja_doc, now - chrono::Duration::hours(2))
+            .unwrap();
+        db.start_reading_session(grc_doc, now).unwrap();
+
+        // Only the Japanese document shows under 'ja', with its latest
+        // session end.
+        let recent = db.recently_read_documents("ja", 5).unwrap();
+        assert_eq!(recent.len(), 1);
+        assert_eq!(recent[0].0, ja_doc);
+
+        // A newer sitting moves the timestamp forward.
+        let s = db.start_reading_session(ja_doc, now).unwrap();
+        db.add_reading_time(s, 60.0, 300, now + chrono::Duration::minutes(1))
+            .unwrap();
+        let recent = db.recently_read_documents("ja", 5).unwrap();
+        assert_eq!(recent[0].1, now + chrono::Duration::minutes(1));
     }
 
     #[test]
@@ -132,6 +196,6 @@ mod tests {
         let s = db.start_reading_session(doc, Utc::now()).unwrap();
         db.add_reading_time(s, 10.0, 50, Utc::now()).unwrap();
         db.delete_document(doc).unwrap();
-        assert_eq!(db.reading_totals().unwrap().seconds, 0.0);
+        assert_eq!(db.reading_totals("ja").unwrap().seconds, 0.0);
     }
 }

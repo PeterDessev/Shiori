@@ -58,6 +58,22 @@ impl Db {
         Ok(n as u64)
     }
 
+    /// Drop one language pack's imported reference data — dictionary
+    /// (forms cascade), tag decodings, frequency list, full-form table,
+    /// and graded vocabulary — so a reinstalled or replaced pack imports
+    /// fresh on its next activation. User state (words, cards, review
+    /// history, documents) lives in other tables and is untouched.
+    pub fn purge_reference_data(&self, lang: &str, source: &str) -> Result<()> {
+        let tx = self.conn().unchecked_transaction()?;
+        tx.execute("DELETE FROM dict_entries WHERE source = ?1", [source])?;
+        tx.execute("DELETE FROM dict_tags WHERE source = ?1", [source])?;
+        tx.execute("DELETE FROM frequency WHERE lang = ?1", [lang])?;
+        tx.execute("DELETE FROM morph_forms WHERE lang = ?1", [lang])?;
+        tx.execute("DELETE FROM graded_vocab WHERE lang = ?1", [lang])?;
+        tx.commit()?;
+        Ok(())
+    }
+
     /// Bulk-import one source's dictionary entries in one transaction,
     /// replacing any previous copy of *that source* (idempotent
     /// re-import; other sources are untouched).
