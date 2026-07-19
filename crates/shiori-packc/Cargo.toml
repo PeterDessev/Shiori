@@ -9,3 +9,5 @@ authors.workspace = true
 [dependencies]
 shiori-pack.workspace = true
 serde_json.workspace = true
+zip = { version = "2", default-features = false, features = ["deflate"] }
+sha2 = "0.10"

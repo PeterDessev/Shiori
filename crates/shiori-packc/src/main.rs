@@ -19,21 +19,26 @@
 use std::collections::HashMap;
 use std::path::Path;
 
+mod catalog;
 mod grc;
-mod kaikki;
+
+use shiori_pack::kaikki;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let result = match args.first().map(String::as_str) {
         Some("build-grc") => build_grc(&args[1..]),
         Some("build-kaikki") => build_kaikki(&args[1..]),
+        Some("catalog") => catalog_cmd(&args[1..]),
         _ => {
             eprintln!(
                 "usage:\n  shiori-packc build-grc --morphgnt <dir> --glosses <tsv> \
                  --out <dir> --license <spdx-ish>\n  \
                  shiori-packc build-kaikki --input <kaikki-jsonl> --lang <code> \
                  --name <English name> --out <dir> --license <spdx-ish> \
-                 [--frequency <hermitdave-txt>]"
+                 [--frequency <hermitdave-txt>] [--description <text>]\n  \
+                 shiori-packc catalog --packs <dir-of-pack-dirs> \
+                 --base-url <https://…> --out <dir> [--version <string>]"
             );
             std::process::exit(2);
         }
@@ -42,6 +47,24 @@ fn main() {
         eprintln!("error: {e}");
         std::process::exit(1);
     }
+}
+
+/// `catalog`: zip finished packs and emit the hosted catalog.json.
+fn catalog_cmd(args: &[String]) -> Result<(), String> {
+    let opts = parse_flags(args)?;
+    let packs = opts.required("packs")?;
+    let base_url = opts.required("base-url")?;
+    let out = opts.required("out")?;
+    let version = opts.get("version").unwrap_or("");
+
+    let report = catalog::build_catalog(Path::new(&packs), &base_url, version, Path::new(&out))?;
+    println!(
+        "catalog written to {}: {} pack{}",
+        report.catalog_path.display(),
+        report.packs,
+        if report.packs == 1 { "" } else { "s" }
+    );
+    Ok(())
 }
 
 fn build_kaikki(args: &[String]) -> Result<(), String> {
@@ -54,11 +77,18 @@ fn build_kaikki(args: &[String]) -> Result<(), String> {
     reject_non_commercial(&license)?;
 
     let dict_source = format!("{lang}-pack");
+    let default_description = format!(
+        "{name} dictionary, inflection tables, and frequency list, \
+         built from Wiktionary (kaikki.org) data."
+    );
     let spec = kaikki::LangSpec {
         lang: &lang,
         name: &name,
         dict_source: &dict_source,
         license: &license,
+        description: opts.get("description").unwrap_or(&default_description),
+        script_ranges: &[],
+        elisions: &[],
     };
     let report = kaikki::build_pack(
         Path::new(&input),
@@ -68,8 +98,9 @@ fn build_kaikki(args: &[String]) -> Result<(), String> {
     )
     .map_err(|e| e.to_string())?;
     println!(
-        "pack written to {out}: {} entries, {} forms, {} frequency rows",
-        report.entries, report.forms, report.frequency
+        "pack written to {out}: {} entries, {} forms, {} tag rows, \
+         {} frequency rows, {} graded lemmas",
+        report.entries, report.forms, report.tags, report.frequency, report.graded
     );
     Ok(())
 }
