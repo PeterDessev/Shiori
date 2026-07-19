@@ -24,6 +24,10 @@ pub struct Manifest {
     pub name: String,
     /// Dictionary source key for `dict_entries` (e.g. "grc-pack").
     pub dict_source: String,
+    /// One or two sentences about the pack's contents and sources,
+    /// shown when browsing the hosted catalog.
+    #[serde(default)]
+    pub description: String,
     /// SPDX-ish license summary for the pack data, shown in the UI.
     #[serde(default)]
     pub license: String,
@@ -33,6 +37,11 @@ pub struct Manifest {
     /// Sentence-ending characters for the rule tokenizer.
     #[serde(default)]
     pub sentence_enders: Vec<String>,
+    /// Elidable prefixes for apostrophe splitting, folded ("l", "d",
+    /// "qu" for French): "l’eau" tokenizes as "l’" + "eau" — both are
+    /// words — while "aujourd’hui" (prefix not listed) stays whole.
+    #[serde(default)]
+    pub elisions: Vec<String>,
     /// Unicode codepoint ranges (inclusive) counting as target-language
     /// script, e.g. `[[0x0370, 0x03FF], [0x1F00, 0x1FFF]]`.
     #[serde(default)]
@@ -171,6 +180,7 @@ schema = 1
 lang = "grc"
 name = "Koine Greek"
 dict_source = "grc-pack"
+description = "The Greek New Testament (SBLGNT) with hand-verified MorphGNT parses and Dodson glosses on every word, graded against GNT frequency tiers."
 license = "Texts and annotations CC BY / CC BY-SA / public domain; see SOURCES.md"
 joiner = " "
 sentence_enders = [".", ";", "·", "?", "!"]
