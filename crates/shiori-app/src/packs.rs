@@ -567,7 +567,8 @@ impl App {
             self.active_lang(),
             &shiori_core::WordKey::new(lemma, "", pos),
         )?;
-        self.db.reassign_token(sentence, idx as u32, word.id, morph)?;
+        self.db
+            .reassign_token(sentence, idx as u32, word.id, morph)?;
         Ok(word.id)
     }
 
@@ -635,6 +636,7 @@ impl App {
 
         /// Depth-first cover of `folded[bounds[from]..]` by dictionary
         /// words (longest part first), memoizing dead starts.
+        #[allow(clippy::too_many_arguments)] // recursion context, not an API
         fn parts_from(
             db: &shiori_db::Db,
             source: &str,

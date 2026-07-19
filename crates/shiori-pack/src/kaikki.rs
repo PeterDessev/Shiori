@@ -680,7 +680,10 @@ mod tests {
         // (count 2); one-off pairs stay out.
         let rules = std::fs::read_to_string(out.join("suffix_rules.tsv")).unwrap();
         assert!(rules.contains("o\tar\t2"), "{rules}");
-        assert!(!rules.contains("a\to"), "single-pair rules are dropped: {rules}");
+        assert!(
+            !rules.contains("a\to"),
+            "single-pair rules are dropped: {rules}"
+        );
         assert_eq!(report.suffix_rules, 1);
 
         // The pack loads; the manifest is sound, carries the escaped

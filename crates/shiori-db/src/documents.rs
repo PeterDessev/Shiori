@@ -619,7 +619,9 @@ pub(crate) mod tests {
         assert_eq!(cat.morph, None);
 
         // A non-existent occurrence errors instead of silently no-oping.
-        assert!(db.reassign_token(sentences[0].id, 99, target.id, None).is_err());
+        assert!(db
+            .reassign_token(sentences[0].id, 99, target.id, None)
+            .is_err());
     }
 
     #[test]
