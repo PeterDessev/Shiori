@@ -101,6 +101,20 @@ impl DictEntry {
             .unwrap_or("")
     }
 
+    /// The reading to *display*: language packs store IPA pronunciation
+    /// as a kana form tagged "ipa", which only shows when the user has
+    /// opted in. Japanese kana carry no such tag and always show.
+    pub fn display_reading(&self, include_ipa: bool) -> &str {
+        let visible = |f: &&Form| include_ipa || !f.tags.iter().any(|t| t == "ipa");
+        self.kana
+            .iter()
+            .filter(visible)
+            .find(|f| f.common)
+            .or_else(|| self.kana.iter().find(visible))
+            .map(|f| f.text.as_str())
+            .unwrap_or("")
+    }
+
     /// Whether any form is marked common.
     pub fn is_common(&self) -> bool {
         self.kanji.iter().chain(self.kana.iter()).any(|f| f.common)
