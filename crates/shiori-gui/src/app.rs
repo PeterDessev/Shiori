@@ -34,8 +34,17 @@ pub enum Msg {
     OllamaPullDone(Result<(), String>),
     AozoraCatalog(Result<Vec<shiori_app::AozoraWork>, String>),
     WikisourceResults(Result<Vec<shiori_app::WikisourceHit>, String>),
+    /// The hosted pack catalog arrived (or failed to).
+    PackCatalog(Result<Vec<shiori_app::PackCatalogEntry>, String>),
     /// Export/import/backup finished: Ok(summary) or Err(reason).
     TransferDone(Result<String, String>),
+    /// A pack install/download/removal finished. Separate from
+    /// [`Msg::TransferDone`] so unrelated transfers can never clear the
+    /// installing flag while a pack job is still running.
+    PackJobDone(Result<String, String>),
+    /// Status line from a long pack job (web builds report download and
+    /// scan progress).
+    PackJobProgress(String),
 }
 
 /// Startup/data lifecycle.
@@ -50,6 +59,7 @@ pub enum Phase {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum View {
     Welcome,
+    Home,
     Library,
     Reader,
     Review,
@@ -58,6 +68,20 @@ pub enum View {
     Stats,
     Production,
     Settings,
+}
+
+/// Cached contents of the home page. Recomputed when the page is
+/// (re)entered and dropped whenever the caches refresh, so it always
+/// reflects the latest imports, reviews, and language switches.
+pub struct HomeData {
+    /// Credited reading seconds per day, for the activity heatmap.
+    pub reading_by_day: Vec<(String, f64)>,
+    /// Cards due by the end of today (includes overdue).
+    pub due_today: u64,
+    /// Measured seconds per review card, when enough history exists.
+    pub pace_seconds: Option<f64>,
+    /// The book to pick back up, if one is in progress.
+    pub cont: Option<shiori_app::ContinueReading>,
 }
 
 /// One sentence of the open document, with its tokens.
@@ -391,6 +415,12 @@ pub struct ShioriGui {
     pub library: Vec<DocumentSummary>,
     pub doc_stats: HashMap<i64, DocStats>,
     pub due_count: u64,
+    /// Home-page aggregates; `None` = stale, recomputed on next show.
+    pub home: Option<HomeData>,
+    /// Cached language registry for per-frame UI (language combos and
+    /// the Languages settings page) — reading it live would take the
+    /// app lock and scan pack directories every frame.
+    pub lang_infos: Vec<shiori_app::LanguageInfo>,
 
     pub meta_edit: Option<MetaEdit>,
     pub book_info: Option<BookInfo>,
@@ -432,6 +462,23 @@ pub struct ShioriGui {
     pub ollama_pull_input: String,
     /// In-flight pull: (status line, completed fraction).
     pub ollama_pull: Option<(String, Option<f32>)>,
+    /// URL typed into the pack-download box (Settings → Languages).
+    pub pack_url_input: String,
+    /// Optional SHA-256 typed next to the pack URL.
+    pub pack_sha_input: String,
+    /// Language code awaiting removal confirmation, with its name.
+    pub pack_remove_confirm: Option<(String, String)>,
+    /// A pack install/download is running in the background.
+    pub pack_installing: bool,
+    /// Latest status line of the running pack job (web builds).
+    pub pack_job_status: Option<String>,
+    /// Filter box over the build-from-Wiktionary language list.
+    pub web_pack_filter: String,
+    /// Browsable hosted pack catalog, once fetched.
+    pub pack_catalog: Option<Vec<shiori_app::PackCatalogEntry>>,
+    pub pack_catalog_loading: bool,
+    /// Why the catalog is unavailable, when it is.
+    pub pack_catalog_error: Option<String>,
 }
 
 pub fn default_data_dir() -> PathBuf {
@@ -495,13 +542,15 @@ impl ShioriGui {
             notice: None,
             import_jobs: 0,
             view: if settings.onboarded {
-                View::Library
+                View::Home
             } else {
                 View::Welcome
             },
             library: Vec::new(),
             doc_stats: HashMap::new(),
             due_count: 0,
+            home: None,
+            lang_infos: Vec::new(),
             meta_edit: None,
             book_info: None,
             sweep: None,
@@ -529,6 +578,15 @@ impl ShioriGui {
             ollama_probing: false,
             ollama_pull_input: String::new(),
             ollama_pull: None,
+            pack_url_input: String::new(),
+            pack_sha_input: String::new(),
+            pack_remove_confirm: None,
+            pack_installing: false,
+            pack_job_status: None,
+            web_pack_filter: String::new(),
+            pack_catalog: None,
+            pack_catalog_loading: false,
+            pack_catalog_error: None,
         }
     }
 
@@ -621,7 +679,7 @@ impl ShioriGui {
         if let Err(e) = self.settings.save(&self.data_dir) {
             self.error = Some(format!("could not save settings: {e}"));
         }
-        self.view = self.welcome_return.take().unwrap_or(View::Library);
+        self.view = self.welcome_return.take().unwrap_or(View::Home);
     }
 
     /// Open the getting-started page, remembering where to come back to.
@@ -725,6 +783,31 @@ impl ShioriGui {
         }) {
             (self.library, self.doc_stats, self.due_count) = recs;
         }
+        self.lang_infos = self
+            .with_app(|app| Ok(app.language_infos()))
+            .unwrap_or_default();
+        // Anything that moves these caches also moves the home page.
+        self.home = None;
+    }
+
+    /// Recompute the home-page aggregates. Always fills `home` — a
+    /// failed query shows an empty page (with its error toast) instead
+    /// of being retried every frame.
+    pub fn refresh_home(&mut self) {
+        let data = self.with_app(|app| {
+            Ok(HomeData {
+                reading_by_day: app.db().reading_seconds_by_day(app.active_lang())?,
+                due_today: app.due_today()?,
+                pace_seconds: app.review_pace_seconds()?,
+                cont: app.continue_reading()?,
+            })
+        });
+        self.home = Some(data.unwrap_or(HomeData {
+            reading_by_day: Vec::new(),
+            due_today: 0,
+            pace_seconds: None,
+            cont: None,
+        }));
     }
 
     fn handle_messages(&mut self, ctx: &egui::Context) {
@@ -814,6 +897,19 @@ impl ShioriGui {
                         Err(e) => self.error = Some(e),
                     }
                 }
+                Msg::PackCatalog(result) => {
+                    self.pack_catalog_loading = false;
+                    match result {
+                        Ok(packs) => {
+                            self.pack_catalog = Some(packs);
+                            self.pack_catalog_error = None;
+                        }
+                        // Not an error toast: the browse section itself
+                        // explains and offers a retry, and a previously
+                        // fetched list keeps showing.
+                        Err(e) => self.pack_catalog_error = Some(e),
+                    }
+                }
                 Msg::TransferDone(result) => match result {
                     Ok(summary) => {
                         self.notice = Some(summary);
@@ -821,6 +917,20 @@ impl ShioriGui {
                     }
                     Err(e) => self.error = Some(e),
                 },
+                Msg::PackJobDone(result) => {
+                    self.pack_installing = false;
+                    self.pack_job_status = None;
+                    match result {
+                        Ok(summary) => {
+                            self.notice = Some(summary);
+                            self.refresh_caches();
+                        }
+                        Err(e) => self.error = Some(e),
+                    }
+                }
+                Msg::PackJobProgress(line) => {
+                    self.pack_job_status = Some(line);
+                }
                 Msg::OllamaPullProgress(status, frac) => {
                     self.ollama_pull = Some((status, frac));
                 }
@@ -1118,6 +1228,149 @@ impl ShioriGui {
                 Err(_) => Err("app lock poisoned".into()),
             };
             let _ = tx.send(Msg::TransferDone(result));
+            ctx.request_repaint();
+        });
+    }
+
+    /// Run a pack install/removal against the app mutably on a worker
+    /// thread. Owns the busy flag: refuses to start while another pack
+    /// job runs, and only [`Msg::PackJobDone`] clears it.
+    pub fn run_pack_job<F>(&mut self, ctx: &egui::Context, job: F)
+    where
+        F: FnOnce(&mut App) -> Result<String, shiori_app::AppError> + Send + 'static,
+    {
+        if self.pack_installing {
+            return;
+        }
+        let Some(app) = self.app.clone() else { return };
+        self.pack_installing = true;
+        let tx = self.tx.clone();
+        let ctx = ctx.clone();
+        std::thread::spawn(move || {
+            let result = match app.lock() {
+                Ok(mut guard) => job(&mut guard).map_err(|e| e.to_string()),
+                Err(_) => Err("app lock poisoned".into()),
+            };
+            let _ = tx.send(Msg::PackJobDone(result));
+            ctx.request_repaint();
+        });
+    }
+
+    /// Download and install a language pack in the background. The
+    /// download itself runs without the app lock, so a slow network
+    /// never freezes the interface; only the quick unpack-and-register
+    /// step locks the app.
+    pub fn start_pack_download(&mut self, ctx: &egui::Context, url: String, sha256: String) {
+        if self.pack_installing {
+            return;
+        }
+        let Some(app) = self.app.clone() else { return };
+        self.pack_installing = true;
+        let tx = self.tx.clone();
+        let ctx = ctx.clone();
+        std::thread::spawn(move || {
+            let expected = (!sha256.trim().is_empty()).then_some(sha256.as_str());
+            let result = shiori_app::download_pack_zip(&url, expected)
+                .map_err(|e| e.to_string())
+                .and_then(|bytes| match app.lock() {
+                    Ok(mut guard) => guard
+                        .install_pack_from_zip_bytes(&bytes)
+                        .map(|lang| format!("language pack '{lang}' downloaded and installed"))
+                        .map_err(|e| e.to_string()),
+                    Err(_) => Err("app lock poisoned".into()),
+                });
+            let _ = tx.send(Msg::PackJobDone(result));
+            ctx.request_repaint();
+        });
+    }
+
+    /// Build a language pack from public web sources (kaikki.org +
+    /// hermitdave) in the background: download and build run without
+    /// the app lock; only the final install step locks. Progress lands
+    /// in [`Msg::PackJobProgress`].
+    pub fn start_web_pack_build(&mut self, ctx: &egui::Context, lang: String) {
+        if self.pack_installing {
+            return;
+        }
+        let Some(source) = shiori_app::web_pack_source(&lang).copied() else {
+            return;
+        };
+        let Some(app) = self.app.clone() else { return };
+        self.pack_installing = true;
+        self.pack_job_status = Some(format!("preparing {}…", source.name));
+        let data_dir = self.data_dir.clone();
+        let tx = self.tx.clone();
+        let ctx = ctx.clone();
+        std::thread::spawn(move || {
+            let progress_tx = tx.clone();
+            let progress_ctx = ctx.clone();
+            let mut on_progress = move |line: &str| {
+                let _ = progress_tx.send(Msg::PackJobProgress(line.to_string()));
+                progress_ctx.request_repaint();
+            };
+            let staging = data_dir.join(format!(".pack-build-{}", std::process::id()));
+            let result = (|| {
+                let (kaikki, freq) =
+                    shiori_app::download_web_pack_inputs(&data_dir, &source, &mut on_progress)
+                        .map_err(|e| e.to_string())?;
+                let report = shiori_app::build_web_pack(
+                    &source,
+                    &kaikki,
+                    freq.as_deref(),
+                    &staging,
+                    &mut on_progress,
+                )
+                .map_err(|e| e.to_string())?;
+                on_progress("installing…");
+                match app.lock() {
+                    Ok(mut guard) => {
+                        guard
+                            .install_pack_from_dir(&staging)
+                            .map_err(|e| e.to_string())?;
+                    }
+                    Err(_) => return Err("app lock poisoned".to_string()),
+                }
+                // Reclaim the gigabyte-class download once the pack is in;
+                // a failed run keeps it so a retry needn't re-download.
+                std::fs::remove_file(&kaikki).ok();
+                let mut summary = format!(
+                    "{} pack built and installed: {} words, {} inflected forms",
+                    source.name, report.entries, report.forms
+                );
+                if report.frequency > 0 {
+                    summary.push_str(&format!(", {}-word frequency list", report.frequency));
+                }
+                Ok(summary)
+            })();
+            std::fs::remove_dir_all(&staging).ok();
+            let _ = tx.send(Msg::PackJobDone(result));
+            ctx.request_repaint();
+        });
+    }
+
+    /// Fetch the browsable pack catalog in the background (no app lock:
+    /// only the data directory and the configured URL are needed).
+    /// `force` re-downloads; otherwise a cached copy serves.
+    ///
+    /// Currently dormant: the Browse-packs UI was removed until a
+    /// hosted catalog exists (build-from-Wiktionary covers discovery).
+    /// The full pipeline — this loader, [`Msg::PackCatalog`], the
+    /// app-layer fetch/parse, and `shiori-packc catalog` — stays wired
+    /// and tested so the section can come back with one UI call.
+    #[allow(dead_code)]
+    pub fn start_pack_catalog_load(&mut self, ctx: &egui::Context, force: bool) {
+        if self.pack_catalog_loading {
+            return;
+        }
+        self.pack_catalog_loading = true;
+        let data_dir = self.data_dir.clone();
+        let url = self.settings_draft.pack_catalog_url.clone();
+        let tx = self.tx.clone();
+        let ctx = ctx.clone();
+        std::thread::spawn(move || {
+            let result =
+                shiori_app::fetch_pack_catalog(&data_dir, &url, force).map_err(|e| e.to_string());
+            let _ = tx.send(Msg::PackCatalog(result));
             ctx.request_repaint();
         });
     }
@@ -1519,6 +1772,7 @@ impl eframe::App for ShioriGui {
 
         match self.view {
             View::Welcome => self.show_welcome(ctx),
+            View::Home => self.show_home(ctx),
             View::Library => self.show_library(ctx),
             View::Reader => self.show_reader(ctx),
             View::Review => self.show_review(ctx),
@@ -1614,6 +1868,9 @@ impl ShioriGui {
             .show(ctx, |ui| {
                 ui.add_space(6.0);
                 ui.vertical_centered(|ui| {
+                    if item(ui, self.view == View::Home, "🏠", "Home".into(), true) {
+                        nav = Some(View::Home);
+                    }
                     if item(ui, self.view == View::Library, "📚", "Library".into(), true) {
                         nav = Some(View::Library);
                     }
@@ -1722,6 +1979,18 @@ impl ShioriGui {
                 View::Welcome => self.open_welcome(),
                 View::Review => {
                     self.load_review_queue();
+                    self.view = view;
+                }
+                // Due counts and reading progress move while away, so
+                // returning to the home page re-reads everything.
+                View::Home => {
+                    self.refresh_caches();
+                    self.view = view;
+                }
+                // Picks up packs dropped into the data dir by hand while
+                // the app runs (the page itself reads the cached list).
+                View::Settings => {
+                    self.refresh_caches();
                     self.view = view;
                 }
                 // The progress column reflects reading done since the last

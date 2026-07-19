@@ -214,11 +214,17 @@ pub struct Settings {
     pub furigana_first_x: u32,
     /// Show example sentences from other books on review cards.
     pub review_examples: bool,
+    /// Show IPA pronunciation with dictionary entries (built packs
+    /// carry it; off by default).
+    pub show_ipa: bool,
     /// How hard the chat partner's Japanese pushes the user.
     pub chat_challenge: ChatChallenge,
     /// Language the app operates in ("ja", "grc", …); languages beyond
     /// Japanese come from packs in `<data>/packs/`.
     pub active_language: String,
+    /// Where the browsable pack catalog is fetched from; empty means
+    /// the default hosted catalog.
+    pub pack_catalog_url: String,
     /// Per-language LLM model overrides: a local model that handles
     /// Japanese fine may write terrible Koine, so each language can pin
     /// its own model. Empty = use the provider's configured model.
@@ -273,8 +279,10 @@ impl Default for Settings {
             furigana: FuriganaMode::None,
             furigana_first_x: 3,
             review_examples: true,
+            show_ipa: false,
             chat_challenge: ChatChallenge::Push,
             active_language: "ja".to_string(),
+            pack_catalog_url: String::new(),
             language_models: Default::default(),
             shortcuts: Shortcuts::default(),
         }

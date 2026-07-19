@@ -1,7 +1,7 @@
 //! Stats view: vocabulary, level grading, review forecast and health,
 //! reading time, and per-document difficulty.
 
-use chrono::{Datelike, Utc};
+use chrono::Utc;
 use eframe::egui;
 use shiori_core::KnowledgeStatus;
 
@@ -13,9 +13,9 @@ impl ShioriGui {
         // Cheap aggregate queries; fine to run per frame shown.
         let data = self.with_app(|app| {
             let words = app.db().word_status_counts(app.active_lang())?;
-            let total_reviews = app.db().review_count()?;
-            let today = app.db().reviews_on_day(Utc::now())?;
-            let cards = app.db().card_count()?;
+            let total_reviews = app.db().review_count(app.active_lang())?;
+            let today = app.db().reviews_on_day(app.active_lang(), Utc::now())?;
+            let cards = app.db().card_count(app.active_lang())?;
             let overview = app.stats_overview()?;
             Ok((words, total_reviews, today, cards, overview))
         });
@@ -155,7 +155,7 @@ impl ShioriGui {
                         }
                         ui.label(line);
                         ui.add_space(4.0);
-                        reading_heatmap(ui, &overview.reading_by_day);
+                        crate::views::reading_heatmap(ui, &overview.reading_by_day);
                     } else {
                         ui.weak(
                             "No reading time recorded yet — the clock runs while \
@@ -247,58 +247,5 @@ fn due_forecast_bars(ui: &mut egui::Ui, forecast: &[(String, u32)]) {
             egui::FontId::proportional(9.0),
             ui.visuals().weak_text_color(),
         );
-    }
-}
-
-/// GitHub-style calendar of credited reading time, last ~18 weeks.
-fn reading_heatmap(ui: &mut egui::Ui, by_day: &[(String, f64)]) {
-    use std::collections::HashMap;
-    let minutes: HashMap<&str, f64> = by_day.iter().map(|(d, s)| (d.as_str(), s / 60.0)).collect();
-
-    const WEEKS: i64 = 18;
-    let cell = 11.0;
-    let gap = 2.0;
-    let today = Utc::now().date_naive();
-    // Grid starts on the Monday WEEKS-1 weeks back.
-    let start = today
-        - chrono::Duration::days((WEEKS - 1) * 7 + today.weekday().num_days_from_monday() as i64);
-
-    let (rect, _) = ui.allocate_exact_size(
-        egui::vec2(WEEKS as f32 * (cell + gap), 7.0 * (cell + gap)),
-        egui::Sense::hover(),
-    );
-    let painter = ui.painter();
-    let empty = ui.visuals().faint_bg_color;
-    for week in 0..WEEKS {
-        for dow in 0..7 {
-            let date = start + chrono::Duration::days(week * 7 + dow);
-            if date > today {
-                continue;
-            }
-            let mins = minutes
-                .get(date.format("%Y-%m-%d").to_string().as_str())
-                .copied()
-                .unwrap_or(0.0);
-            // 0 → faint, 60+ minutes → full green.
-            let t = (mins / 60.0).clamp(0.0, 1.0) as f32;
-            let color = if mins <= 0.0 {
-                empty
-            } else {
-                egui::Color32::from_rgb(
-                    (40.0 + 20.0 * t) as u8,
-                    (120.0 + 90.0 * t) as u8,
-                    (60.0 + 20.0 * t) as u8,
-                )
-            };
-            let min = egui::pos2(
-                rect.left() + week as f32 * (cell + gap),
-                rect.top() + dow as f32 * (cell + gap),
-            );
-            painter.rect_filled(
-                egui::Rect::from_min_size(min, egui::vec2(cell, cell)),
-                2.0,
-                color,
-            );
-        }
     }
 }
