@@ -10,6 +10,7 @@ mod data;
 mod dictionary;
 pub mod extract;
 mod finish;
+mod home;
 mod ingest;
 mod mining;
 mod packs;
@@ -18,15 +19,24 @@ mod sessions;
 mod sources;
 mod stats;
 mod transfer;
+mod web_packs;
 
 pub use chat::{ChatSentence, ChatTokenRow};
 pub use data::DataStatus;
 pub use dictionary::{DictExample, DictSearchHit, DictSearchResults, QueryAnalysis};
 pub use finish::{SweepCandidate, SweepPlan};
+pub use home::ContinueReading;
 pub use mining::MiningCandidate;
+pub use packs::{
+    download_pack_zip, fetch_pack_catalog, parse_pack_catalog, LanguageInfo, PackCatalogEntry,
+    PackDetails, DEFAULT_PACK_CATALOG_URL,
+};
 pub use review::ReviewItem;
 pub use sources::{AozoraWork, WikisourceHit};
 pub use stats::{DifficultyBand, DocStats, Recommendation, StatsOverview};
+pub use web_packs::{
+    build_web_pack, download_web_pack_inputs, web_pack_source, WebPackSource, WEB_PACK_SOURCES,
+};
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -111,6 +121,10 @@ impl App {
         let japanese: Arc<dyn LanguageService> = Arc::new(shiori_nlp::Japanese::new()?);
         let mut services: HashMap<String, Arc<dyn LanguageService>> = HashMap::new();
         services.insert(japanese.lang().to_string(), japanese);
+
+        // Clean up anything an interrupted pack install/build/removal
+        // left behind before discovery can trip over it.
+        packs::sweep_pack_leftovers(&data_dir);
 
         // Every pack under <data_dir>/packs/ becomes a language, no
         // recompile needed.
