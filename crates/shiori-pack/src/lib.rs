@@ -20,10 +20,13 @@
 //! rule-based tokenizer driven by the manifest.
 
 pub mod betacode;
+pub mod catalog;
+pub mod kaikki;
 mod language;
 pub mod manifest;
 pub mod siat;
 
+pub use catalog::is_safe_lang_code;
 pub use language::{fold_lookup, normalize_nfc, PackLanguage};
 pub use manifest::Manifest;
 
