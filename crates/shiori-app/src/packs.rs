@@ -278,6 +278,7 @@ impl App {
         if replacing {
             self.db
                 .purge_reference_data(&lang, &pack.manifest.dict_source)?;
+            self.suffix_rules.remove(&lang);
         }
         self.services.insert(
             lang.clone(),
@@ -388,6 +389,7 @@ impl App {
         self.db.purge_reference_data(lang, &dict_source)?;
         self.packs.remove(lang);
         self.services.remove(lang);
+        self.suffix_rules.remove(lang);
         Ok(())
     }
 
@@ -497,7 +499,8 @@ impl App {
         lemmas.dedup();
 
         let chosen: &str = match lemmas.as_slice() {
-            [] => return Ok(None),
+            // Not in the table at all: try the learned suffix rules.
+            [] => return self.suffix_guess(&folded),
             [single] => single,
             many => {
                 let mut best: Option<(u32, &str)> = None;
@@ -532,6 +535,36 @@ impl App {
         // row for the form.
         let morph = if morphs.next().is_none() { first } else { None };
         Ok(Some((chosen.to_string(), morph)))
+    }
+
+    /// Last-resort Tier-1 for a form absent from the full-form table:
+    /// apply the pack's learned suffix rules ("-o" rewrites to "-ar"),
+    /// accepting a guess only when the rewritten lemma exists in the
+    /// dictionary unambiguously. No parse is claimed for guesses.
+    fn suffix_guess(&self, folded: &str) -> Result<Option<(String, Option<String>)>> {
+        let Some(rules) = self.suffix_rules.get(self.active_lang()) else {
+            return Ok(None);
+        };
+        let source = self.active_dict_source();
+        let mut tried = 0;
+        for (form_suffix, lemma_suffix) in rules {
+            if !folded.ends_with(form_suffix.as_str()) {
+                continue;
+            }
+            let stem = &folded[..folded.len() - form_suffix.len()];
+            if stem.chars().count() < 3 {
+                continue;
+            }
+            tried += 1;
+            if tried > 30 {
+                break;
+            }
+            let candidate = format!("{stem}{lemma_suffix}");
+            if let [single] = self.db.dict_form_entry_keys(source, &candidate)?.as_slice() {
+                return Ok(Some((single.clone(), None)));
+            }
+        }
+        Ok(None)
     }
 
     /// Split an unknown word into known dictionary words, for packs
@@ -807,6 +840,32 @@ pub(crate) fn sweep_pack_leftovers(data_dir: &Path) {
     sweep(&data_dir.join("packs"), ".trash-");
 }
 
+/// Load a pack's learned suffix rules, longest form-suffix first (so
+/// the most specific rewrite wins), capped to keep guessing cheap.
+pub(crate) fn load_suffix_rules(path: &Path) -> Vec<(String, String)> {
+    let Ok(raw) = std::fs::read_to_string(path) else {
+        return Vec::new();
+    };
+    let mut rules: Vec<(String, String, u32)> = raw
+        .lines()
+        .filter_map(|line| {
+            let mut fields = line.split('\t');
+            let form_suffix = fields.next()?.trim();
+            let lemma_suffix = fields.next()?.trim().to_string();
+            let count: u32 = fields.next().unwrap_or("0").trim().parse().ok()?;
+            (!form_suffix.is_empty()).then(|| (form_suffix.to_string(), lemma_suffix, count))
+        })
+        .collect();
+    rules.sort_by(|a, b| {
+        b.0.chars()
+            .count()
+            .cmp(&a.0.chars().count())
+            .then_with(|| b.2.cmp(&a.2))
+    });
+    rules.truncate(2000);
+    rules.into_iter().map(|(f, l, _)| (f, l)).collect()
+}
+
 /// Recursively copy a directory tree.
 fn copy_dir(src: &Path, dest: &Path) -> std::io::Result<()> {
     std::fs::create_dir_all(dest)?;
@@ -911,6 +970,8 @@ mod tests {
             "1\tCore 50×+\tλογοσ\t\n2\tCore 20×+\tαρχη\t\n",
         )
         .unwrap();
+        // Learned suffix rule: accusative -ον rewrites to nominative -οσ.
+        std::fs::write(pack_dir.join("suffix_rules.tsv"), "ον\tοσ\t5\n").unwrap();
     }
 
     /// Build an app whose data dir contains the sample Greek pack.
@@ -1055,7 +1116,10 @@ mod tests {
 
         // No annotations here: a pasted plain-text fragment.
         let doc = app
-            .import_text("fragment", "ὁ λόγος ἦν καλός. ἀμφὶ δὲ ἦν. ξὺν δὲ ἦν.")
+            .import_text(
+                "fragment",
+                "ὁ λόγος ἦν καλός. ἀμφὶ δὲ ἦν. ξὺν δὲ ἦν. λόγον δὲ ἦν.",
+            )
             .unwrap();
         let sentences = app.db().sentences(doc).unwrap();
         let rows = app.db().sentence_tokens(sentences[0].id).unwrap();
@@ -1084,6 +1148,15 @@ mod tests {
         let xyn = rows3.iter().find(|r| r.token.surface == "ξὺν").unwrap();
         assert_eq!(xyn.token.lemma, "ξύνα");
         assert_eq!(xyn.morph.as_deref(), Some("P"));
+
+        // A form absent from the table entirely resolves through the
+        // learned suffix rules: λόγον rewrites -ον → -οσ, and the
+        // dictionary confirms λογοσ → λόγος unambiguously. No parse is
+        // claimed for a guess.
+        let rows4 = app.db().sentence_tokens(sentences[3].id).unwrap();
+        let logon = rows4.iter().find(|r| r.token.surface == "λόγον").unwrap();
+        assert_eq!(logon.token.lemma, "λόγος");
+        assert_eq!(logon.morph, None);
     }
 
     #[test]

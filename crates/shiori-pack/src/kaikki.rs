@@ -23,6 +23,8 @@ pub struct Report {
     pub frequency: usize,
     /// Lemmas placed into graded frequency tiers.
     pub graded: usize,
+    /// Learned suffix rewrite rules for lemma guessing.
+    pub suffix_rules: usize,
 }
 
 pub struct LangSpec<'a> {
@@ -364,6 +366,46 @@ pub fn build_pack_with_progress(
         .flatten()
         .map(|id| (*id, fold_lookup(strings.get(*id))))
         .collect();
+
+    // Suffix rewrite rules learned from the same pairs: "form ending
+    // -o rewrites to lemma ending -ar" and the like, so the runtime
+    // can guess lemmas for regular inflections missing from the
+    // tables (validated against the dictionary before use).
+    let mut rule_counts: HashMap<(String, String), u32> = HashMap::new();
+    let mut counted: BTreeSet<(&str, u32)> = BTreeSet::new();
+    for (form, lemma_id, _) in &form_rows {
+        // One vote per distinct (form, lemma) pair.
+        if !counted.insert((form.as_str(), *lemma_id)) {
+            continue;
+        }
+        let lemma = &folded_of_lemma[lemma_id];
+        let stem = common_prefix_bytes(form, lemma);
+        if form[..stem].chars().count() < 3 {
+            continue;
+        }
+        let (form_suffix, lemma_suffix) = (&form[stem..], &lemma[stem..]);
+        if form_suffix.is_empty()
+            || form_suffix == lemma_suffix
+            || form_suffix.chars().count() > 5
+            || lemma_suffix.chars().count() > 5
+        {
+            continue;
+        }
+        *rule_counts
+            .entry((form_suffix.to_string(), lemma_suffix.to_string()))
+            .or_insert(0) += 1;
+    }
+    let mut rules: Vec<((String, String), u32)> = rule_counts
+        .into_iter()
+        .filter(|(_, count)| *count >= 2)
+        .collect();
+    rules.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    rules.truncate(5000);
+    let mut rules_tsv = String::new();
+    for ((form_suffix, lemma_suffix), count) in &rules {
+        rules_tsv.push_str(&format!("{form_suffix}\t{lemma_suffix}\t{count}\n"));
+    }
+    std::fs::write(out.join("suffix_rules.tsv"), rules_tsv)?;
     // Folded spellings of real dictionary lemmas, for the direct case.
     let lemma_by_folded: HashMap<String, &str> = lemmas
         .keys()
@@ -446,7 +488,20 @@ pub fn build_pack_with_progress(
         tags: tag_count,
         frequency: ranked.len(),
         graded: graded_count,
+        suffix_rules: rules.len(),
     })
+}
+
+/// Byte length of the longest common prefix ending on a char boundary.
+fn common_prefix_bytes(a: &str, b: &str) -> usize {
+    let mut p = 0;
+    for (ca, cb) in a.chars().zip(b.chars()) {
+        if ca != cb {
+            break;
+        }
+        p += ca.len_utf8();
+    }
+    p
 }
 
 /// Map a Wiktionary sense tag to the JMdict register code the app's
@@ -581,6 +636,7 @@ mod tests {
 {"word":"gato","pos":"noun","lang_code":"es","senses":[{"glosses":["cat"],"examples":[{"text":"El gato duerme.","english":"The cat sleeps."}]},{"glosses":["sly person"],"tags":["colloquial","derogatory"]}],"sounds":[{"ipa":"/ˈɡa.to/"}],"forms":[{"form":"gatos","tags":["plural"]},{"form":"gata","tags":["feminine"]}]}
 {"word":"gatos","pos":"noun","lang_code":"es","senses":[{"glosses":["plural of gato"],"tags":["form-of","plural"],"form_of":[{"word":"gato"}]}]}
 {"word":"hablar","pos":"verb","lang_code":"es","senses":[{"glosses":["to speak, to talk"],"tags":["intransitive"]}],"forms":[{"form":"hablo","tags":["first-person","singular","present"]},{"form":"habló","tags":["third-person","singular","preterite"]}]}
+{"word":"cantar","pos":"verb","lang_code":"es","senses":[{"glosses":["to sing"]}],"forms":[{"form":"canto","tags":["first-person","singular","present"]}]}
 "#;
 
     fn spec() -> LangSpec<'static> {
@@ -616,9 +672,16 @@ mod tests {
             progress.push(line.to_string())
         })
         .unwrap();
-        assert_eq!(report.entries, 2, "gato and hablar are lemmas");
-        assert!(report.forms >= 4, "plural, feminine, and verb forms");
+        assert_eq!(report.entries, 3, "gato, hablar, and cantar are lemmas");
+        assert!(report.forms >= 5, "plural, feminine, and verb forms");
         assert!(progress.iter().any(|l| l.contains("grammar")));
+
+        // Suffix rules: "-o → -ar" is attested by two distinct verbs
+        // (count 2); one-off pairs stay out.
+        let rules = std::fs::read_to_string(out.join("suffix_rules.tsv")).unwrap();
+        assert!(rules.contains("o\tar\t2"), "{rules}");
+        assert!(!rules.contains("a\to"), "single-pair rules are dropped: {rules}");
+        assert_eq!(report.suffix_rules, 1);
 
         // The pack loads; the manifest is sound, carries the escaped
         // description, and declares the generated tier scheme.

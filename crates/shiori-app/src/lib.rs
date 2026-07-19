@@ -77,6 +77,10 @@ pub struct App {
     services: HashMap<String, Arc<dyn LanguageService>>,
     /// Discovered language packs, by language code.
     packs: HashMap<String, shiori_pack::Pack>,
+    /// Per-language suffix rewrite rules (loaded from a pack's
+    /// `suffix_rules.tsv` on activation) for guessing lemmas of
+    /// regular inflections missing from the full-form table.
+    suffix_rules: HashMap<String, Vec<(String, String)>>,
     /// Language the whole app currently operates in.
     active: String,
     scheduler: Scheduler,
@@ -143,6 +147,7 @@ impl App {
             services,
             packs,
             active: "ja".to_string(),
+            suffix_rules: HashMap::new(),
             scheduler: Scheduler::default(),
             data_dir,
         })
@@ -169,6 +174,13 @@ impl App {
             )));
         }
         self.ensure_pack_data(lang)?;
+        // Suffix rules live in memory, loaded once per pack activation.
+        if let Some(pack) = self.packs.get(lang) {
+            if !self.suffix_rules.contains_key(lang) {
+                let rules = packs::load_suffix_rules(&pack.dir.join("suffix_rules.tsv"));
+                self.suffix_rules.insert(lang.to_string(), rules);
+            }
+        }
         self.active = lang.to_string();
         Ok(())
     }
