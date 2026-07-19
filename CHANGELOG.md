@@ -63,6 +63,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   clearly dominates; French/Italian elision tokenizes l'eau as l' +
   eau while leaving aujourd'hui whole; and the gigabyte-class
   downloads resume with HTTP ranges instead of restarting.
+- **Smarter analysis without an engine**: contractions are pack data —
+  au/im/della stay one token but count as function words and expand in
+  the reader (au = à + le, components clickable); Germanic packs split
+  unknown compounds against their own dictionary (Arbeitsmaschine →
+  arbeit + maschine, linking elements understood); forms missing from
+  the grammar tables resolve through suffix rules the builder learns
+  from its own data, accepted only when the dictionary confirms the
+  guess; and a candidate picker in the reader lists every analysis of
+  an ambiguous form — one click re-points that occurrence, the manual
+  override above the frequency vote.
 - **`shiori-packc`**, the CI pack compiler: builds the Greek pack from
   MorphGNT and modern-language packs from kaikki.org Wiktextract dumps
   (+ hermitdave frequency lists), with a machine-enforced gate refusing

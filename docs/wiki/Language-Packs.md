@@ -61,6 +61,7 @@ packs/grc/
 ├── frequency.tsv       # folded form → corpus rank
 ├── tags.tsv            # parse-code segment → human label
 ├── graded.tsv          # level ordinal, label, form  (level scheme)
+├── suffix_rules.tsv    # learned "-o → -ar" lemma-guess rewrites
 └── texts/*.siat.jsonl  # pre-annotated texts (the primary reading path)
 ```
 
@@ -73,8 +74,12 @@ Analysis runs in **tiers**, declared by what the pack ships:
   runtime analyzer).
 - **Tier 1 — full-form lookup.** Plain-text imports and chat messages
   resolve tokens through `morph_forms.tsv`: unambiguous forms get their
-  lemma and parse; ambiguous or unknown forms keep the surface as lemma
-  (safe, never wrong).
+  lemma and parse. Ambiguous forms resolve by corpus frequency when
+  one candidate clearly outranks the rest, and the reader's candidate
+  picker lists the alternatives for a one-click per-occurrence fix;
+  forms missing from the table try learned suffix rules (validated
+  against the dictionary); anything still unresolved keeps the surface
+  as lemma (safe, never wrong).
 - **Tier 2 — compiled analyzers.** Japanese/Lindera only. New engines
   (RTL layout, no-whitespace segmentation, sandhi) require a Shiori
   release; new *languages within existing engines* need only a pack.
@@ -132,7 +137,12 @@ there is no catalog, registry, or repository to maintain.
   frequent one; with no signal it safely stays as itself.
 - **Elision** is language-aware: French and Italian packs declare their
   elidable words, so *l'eau* tokenizes as *l'* + *eau* (both real
-  words) while *aujourd'hui* stays whole.
+  words) while *aujourd'hui* stays whole. **Contractions** (*au*,
+  *im*, *della*) stay one token but count as function words, and the
+  reader shows their expansion (*au* = *à* + *le*) with each component
+  clickable. Germanic packs **split unknown compounds** against their
+  own dictionary (*Arbeitsmaschine* → *arbeit* + *maschine*, linking
+  elements included) for display and lookup.
 
 Dumps are large (hundreds of MB up to ~1 GB); the download streams to
 disk with progress, resumes interrupted transfers with HTTP ranges, is

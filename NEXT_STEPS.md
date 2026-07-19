@@ -35,8 +35,10 @@ each unblocks the next. See `docs/wiki/Language-Packs.md` for context.
 - [ ] Full ~900k-form Greek `morph_forms` table via Morpheus (MPL-2.0)
       in Docker CI, merged with kaikki grc. Today the table covers only
       GNT-attested forms, so non-GNT Greek under-lemmatizes.
-- [ ] Candidate-parse picker UI for ambiguous Tier-1 forms (today
-      ambiguity safely keeps the surface as lemma — no user resolution).
+- [x] Candidate-parse picker UI for ambiguous Tier-1 forms (today
+      resolved: ambiguous forms first try the corpus-frequency vote,
+      then the reader lists every candidate analysis and one click
+      re-points that occurrence).
 - [ ] Add Swete LXX (Tier-1) and machine-tagged Apostolic Fathers
       texts; surface the stored `quality: gold|machine` flag in the
       reader.
