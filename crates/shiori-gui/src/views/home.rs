@@ -222,7 +222,7 @@ impl ShioriGui {
         });
 
         if let Some(code) = switch_to {
-            self.switch_language(&code);
+            self.switch_language(ctx, &code);
         }
         if open_languages {
             self.settings_category = crate::views::SettingsCategory::Languages;

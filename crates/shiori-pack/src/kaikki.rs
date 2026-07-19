@@ -367,6 +367,7 @@ pub fn build_pack_with_progress(
         .map(|id| (*id, fold_lookup(strings.get(*id))))
         .collect();
 
+    on_progress("learning suffix rules…");
     // Suffix rewrite rules learned from the same pairs: "form ending
     // -o rewrites to lemma ending -ar" and the like, so the runtime
     // can guess lemmas for regular inflections missing from the

@@ -60,7 +60,7 @@ impl App {
         // download pipeline below is Japanese's reference bundle.
         if self.active_lang() != "ja" {
             on_progress("Installing language pack data…");
-            self.ensure_pack_data(self.active_lang())?;
+            self.ensure_pack_data_with_progress(self.active_lang(), &mut on_progress)?;
             on_progress("Reference data ready.");
             return self.data_status();
         }

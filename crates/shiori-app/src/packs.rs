@@ -84,8 +84,18 @@ impl App {
     /// Import a pack's reference data into the database if it isn't
     /// there yet: dictionary, frequency list, tag decodings, graded
     /// vocabulary. Idempotent and scoped — never touches other
-    /// languages' data.
+    /// languages' data. Heavy for a full-size pack (hundreds of
+    /// thousands of rows): run on a worker thread, not the frame loop.
     pub fn ensure_pack_data(&self, lang: &str) -> Result<()> {
+        self.ensure_pack_data_with_progress(lang, &mut |_| {})
+    }
+
+    /// Like [`Self::ensure_pack_data`], reporting a line per stage.
+    pub fn ensure_pack_data_with_progress(
+        &self,
+        lang: &str,
+        on_progress: &mut dyn FnMut(&str),
+    ) -> Result<()> {
         let Some(pack) = self.packs.get(lang) else {
             return Ok(()); // built-in language (Japanese); nothing to do
         };
@@ -94,6 +104,7 @@ impl App {
         if self.db.dict_entry_count(&source)? == 0 {
             let path = pack.dictionary_path();
             if path.exists() {
+                on_progress("Importing dictionary…");
                 let raw = std::fs::read_to_string(&path)?;
                 let entries = raw.lines().filter(|l| !l.trim().is_empty()).map(|line| {
                     let parsed: PackDictLine = serde_json::from_str(line).unwrap_or(PackDictLine {
@@ -130,6 +141,7 @@ impl App {
         if self.db.frequency_count(lang)? == 0 {
             let path = pack.frequency_path();
             if path.exists() {
+                on_progress("Importing frequency list…");
                 let raw = std::fs::read_to_string(&path)?;
                 let ranks = raw.lines().filter_map(|line| {
                     let (word, rank) = line.split_once('\t')?;
@@ -142,6 +154,7 @@ impl App {
         if self.db.morph_form_count(lang)? == 0 {
             let path = pack.dir.join("morph_forms.tsv");
             if path.exists() {
+                on_progress("Importing grammar tables…");
                 let raw = std::fs::read_to_string(&path)?;
                 let rows = raw.lines().filter_map(|line| {
                     let mut fields = line.split('\t');
@@ -1066,6 +1079,7 @@ mod tests {
         );
 
         app.set_active_lang("grc").unwrap();
+        app.ensure_pack_data("grc").unwrap();
         assert_eq!(app.active_lang(), "grc");
         assert_eq!(app.active_dict_source(), "grc-pack");
 
@@ -1082,6 +1096,7 @@ mod tests {
     fn siat_import_needs_no_analyzer_and_survives_reload() {
         let mut app = app_with_greek_pack();
         app.set_active_lang("grc").unwrap();
+        app.ensure_pack_data("grc").unwrap();
 
         // Sample from the shiori-pack tests: John 1:1 with parse codes.
         let jsonl = sample_siat_jsonl();
@@ -1149,6 +1164,7 @@ mod tests {
     fn plain_greek_text_resolves_through_the_full_form_table() {
         let mut app = app_with_greek_pack();
         app.set_active_lang("grc").unwrap();
+        app.ensure_pack_data("grc").unwrap();
 
         // No annotations here: a pasted plain-text fragment.
         let doc = app
@@ -1229,6 +1245,7 @@ mod tests {
             .join("manifest.toml")
             .exists());
         app.set_active_lang("grc").unwrap();
+        app.ensure_pack_data("grc").unwrap();
         assert_eq!(app.db().dict_entry_count("grc-pack").unwrap(), 2);
 
         // language_infos reports what the pack ships.
@@ -1261,6 +1278,7 @@ mod tests {
             App::with_db(shiori_db::Db::open_in_memory().unwrap(), data_dir.clone()).unwrap();
         app.install_pack_from_dir(&src).unwrap();
         app.set_active_lang("grc").unwrap();
+        app.ensure_pack_data("grc").unwrap();
         assert_eq!(app.db().dict_entry_count("grc-pack").unwrap(), 2);
         assert_eq!(app.db().frequency_count("grc").unwrap(), 3);
 
@@ -1283,6 +1301,7 @@ mod tests {
 
         // Re-activation imports the new pack's data, not the old one's.
         app.set_active_lang("grc").unwrap();
+        app.ensure_pack_data("grc").unwrap();
         assert_eq!(app.db().dict_entry_count("grc-pack").unwrap(), 1);
     }
 
@@ -1387,6 +1406,7 @@ mod tests {
             App::with_db(shiori_db::Db::open_in_memory().unwrap(), data_dir.clone()).unwrap();
         assert_eq!(app.install_pack_from_zip(&zip_path).unwrap(), "grc");
         app.set_active_lang("grc").unwrap();
+        app.ensure_pack_data("grc").unwrap();
         assert_eq!(app.active_dict_source(), "grc-pack");
 
         // A garbage zip is rejected cleanly.
@@ -1402,6 +1422,7 @@ mod tests {
         std::fs::write(texts.join("john.siat.jsonl"), sample_siat_jsonl()).unwrap();
 
         app.set_active_lang("grc").unwrap();
+        app.ensure_pack_data("grc").unwrap();
         assert_eq!(app.import_pack_texts().unwrap(), (1, 0));
         // Re-importing dedupes by content hash.
         assert_eq!(app.import_pack_texts().unwrap(), (0, 1));
@@ -1549,6 +1570,7 @@ immerse_instruction = "Write German."
         let mut app =
             App::with_db(shiori_db::Db::open_in_memory().unwrap(), data_dir.clone()).unwrap();
         app.set_active_lang("de").unwrap();
+        app.ensure_pack_data("de").unwrap();
 
         // Straight concatenation and a linking element both split.
         assert_eq!(

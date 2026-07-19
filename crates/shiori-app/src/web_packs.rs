@@ -478,6 +478,7 @@ mod tests {
             crate::App::with_db(shiori_db::Db::open_in_memory().unwrap(), dir.clone()).unwrap();
         assert_eq!(app.install_pack_from_dir(&staging).unwrap(), "es");
         app.set_active_lang("es").unwrap();
+        app.ensure_pack_data("es").unwrap();
         let doc = app.import_text("prueba", "hablo gatos.").unwrap();
         let sentences = app.db().sentences(doc).unwrap();
         let rows = app.db().sentence_tokens(sentences[0].id).unwrap();

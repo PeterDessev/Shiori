@@ -165,17 +165,32 @@ impl App {
         out
     }
 
-    /// Switch the active language, installing the pack's reference data
-    /// on first use.
+    /// Switch the active language. Deliberately cheap — a pack whose
+    /// reference data isn't imported yet reports not-ready through
+    /// [`Self::data_status`], and the heavy import runs through
+    /// [`Self::download_and_import_data`] on a worker thread with
+    /// progress, exactly like the Japanese first-run bundle. Importing
+    /// here would freeze whichever thread switches languages (a
+    /// full-size pack imports hundreds of thousands of rows).
     pub fn set_active_lang(&mut self, lang: &str) -> Result<()> {
         if !self.services.contains_key(lang) {
             return Err(AppError::Invalid(format!(
                 "no language '{lang}' is installed"
             )));
         }
-        self.ensure_pack_data(lang)?;
-        // Suffix rules live in memory, loaded once per pack activation.
         if let Some(pack) = self.packs.get(lang) {
+            // A gutted pack (files deleted out from under a registered
+            // language) must fail here rather than masquerade as merely
+            // needing a download.
+            let source = pack.manifest.dict_source.clone();
+            if self.db.dict_entry_count(&source)? == 0 && !pack.dictionary_path().exists() {
+                return Err(AppError::Invalid(format!(
+                    "the '{lang}' pack's data files are missing ({}); \
+                     reinstall or rebuild the pack",
+                    pack.dictionary_path().display()
+                )));
+            }
+            // Suffix rules live in memory, loaded once per activation.
             if !self.suffix_rules.contains_key(lang) {
                 let rules = packs::load_suffix_rules(&pack.dir.join("suffix_rules.tsv"));
                 self.suffix_rules.insert(lang.to_string(), rules);

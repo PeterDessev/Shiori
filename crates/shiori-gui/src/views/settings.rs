@@ -171,7 +171,8 @@ impl ShioriGui {
         );
         if let Some(code) = selected {
             if code != active {
-                self.switch_language(&code);
+                let ctx = ui.ctx().clone();
+                self.switch_language(&ctx, &code);
             }
         }
 
@@ -275,7 +276,8 @@ impl ShioriGui {
             ui.add_space(6.0);
         }
         if let Some(code) = activate {
-            self.switch_language(&code);
+            let ctx = ui.ctx().clone();
+            self.switch_language(&ctx, &code);
         }
         if import_texts {
             self.run_transfer(ui.ctx(), |app| {

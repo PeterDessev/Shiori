@@ -745,8 +745,10 @@ impl ShioriGui {
     }
 
     /// Switch the active language: everything scoped — library, stats,
-    /// dictionary, chat — re-reads under the new language.
-    pub fn switch_language(&mut self, code: &str) {
+    /// dictionary, chat — re-reads under the new language. A pack whose
+    /// reference data isn't imported yet (first activation, or after a
+    /// rebuild replaced it) imports on a worker thread with progress.
+    pub fn switch_language(&mut self, ctx: &egui::Context, code: &str) {
         let code = code.to_string();
         if self
             .with_app_mut(|app| app.set_active_lang(&code))
@@ -776,6 +778,16 @@ impl ShioriGui {
         };
         self.refresh_caches();
         self.load_conversations();
+        // Pack data lives in local files — no network, no reason to
+        // wait for a button click: import it right away with progress.
+        // (Japanese's bundle needs real downloads; it keeps its button.)
+        if self.phase == Phase::NeedsData
+            && self
+                .with_app(|app| Ok(app.active_pack().is_some()))
+                .unwrap_or(false)
+        {
+            self.start_download(ctx);
+        }
     }
 
     /// Refresh the library/stat caches from the database (active
