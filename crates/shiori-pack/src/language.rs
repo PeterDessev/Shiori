@@ -21,6 +21,9 @@ pub struct PackLanguage {
     dict_source: String,
     joiner: String,
     sentence_enders: Vec<char>,
+    /// Folded elidable prefixes; a token like "l’eau" splits after the
+    /// apostrophe when its prefix is listed.
+    elisions: std::collections::HashSet<String>,
     script_ranges: Vec<(u32, u32)>,
     transliteration: Option<String>,
     graded_scheme: Option<(String, String)>,
@@ -39,6 +42,7 @@ impl PackLanguage {
                 .iter()
                 .filter_map(|s| s.chars().next())
                 .collect(),
+            elisions: manifest.elisions.iter().map(|e| fold_lookup(e)).collect(),
             script_ranges: manifest.script_ranges.clone(),
             transliteration: manifest.transliteration.clone(),
             graded_scheme: manifest
@@ -48,6 +52,29 @@ impl PackLanguage {
             prompt: manifest.prompt_profile(),
             extract: manifest.extract_profile(),
         }
+    }
+
+    /// Where to split an elided token: the byte range of the apostrophe
+    /// whose prefix is a listed elidable word ("l’|eau"), when both
+    /// sides are non-empty. `None` leaves the token whole — so
+    /// "aujourd’hui" survives intact while "l’eau" splits into two real
+    /// words.
+    fn elision_split(&self, surface: &str) -> Option<(usize, usize)> {
+        if self.elisions.is_empty() {
+            return None;
+        }
+        for (i, c) in surface.char_indices() {
+            if matches!(c, '\'' | '\u{2019}' | '᾽') {
+                let end = i + c.len_utf8();
+                if i > 0
+                    && end < surface.len()
+                    && self.elisions.contains(&fold_lookup(&surface[..i]))
+                {
+                    return Some((i, end));
+                }
+            }
+        }
+        None
     }
 
     fn in_script(&self, c: char) -> bool {
@@ -83,7 +110,9 @@ impl PackLanguage {
 }
 
 /// Fold text for lookups: NFC → lowercase → strip combining marks
-/// (accents, breathings, iota subscript) → final sigma to medial.
+/// (accents, breathings, iota subscript) → final sigma to medial →
+/// typographic apostrophe (U+2019) to ASCII (Wiktionary headwords like
+/// "l'" use ASCII; real French text uses ’).
 ///
 /// Pack dictionaries index their forms pre-folded with this same
 /// function (via `shiori-packc`), so the tokenizer, the search box, and
@@ -94,7 +123,11 @@ pub fn fold_lookup(text: &str) -> String {
         .to_lowercase()
         .nfd()
         .filter(|c| !is_combining_mark(*c))
-        .map(|c| if c == 'ς' { 'σ' } else { c })
+        .map(|c| match c {
+            'ς' => 'σ',
+            '\u{2019}' => '\'',
+            other => other,
+        })
         .collect::<String>()
         .nfc()
         .collect()
@@ -144,7 +177,7 @@ impl LanguageService for PackLanguage {
     fn tokenize_sentence(&self, sentence: &str) -> Result<Vec<Token>, LangError> {
         let mut out = Vec::new();
         let mut word_start: Option<usize> = None;
-        let flush = |out: &mut Vec<Token>, start: usize, end: usize, sentence: &str| {
+        let push_tok = |out: &mut Vec<Token>, start: usize, end: usize, sentence: &str| {
             let surface = &sentence[start..end];
             out.push(Token {
                 surface: surface.to_string(),
@@ -159,8 +192,23 @@ impl LanguageService for PackLanguage {
                 end,
             });
         };
+        let flush = |out: &mut Vec<Token>, start: usize, end: usize, sentence: &str| {
+            // An elided prefix is its own word ("l’" is the article in
+            // "l’eau"): split after the apostrophe into two tokens.
+            if let Some((_, apo_end)) = self.elision_split(&sentence[start..end]) {
+                let mid = start + apo_end;
+                push_tok(out, start, mid, sentence);
+                push_tok(out, mid, end, sentence);
+            } else {
+                push_tok(out, start, end, sentence);
+            }
+        };
         for (i, c) in sentence.char_indices() {
-            let is_word = self.in_script(c) || c.is_alphanumeric() || c == '\u{2019}' || c == '᾽';
+            let is_word = self.in_script(c)
+                || c.is_alphanumeric()
+                || c == '\''
+                || c == '\u{2019}'
+                || c == '᾽';
             match (is_word, word_start) {
                 (true, None) => word_start = Some(i),
                 (false, Some(start)) => {
@@ -281,6 +329,54 @@ mod tests {
             .flat_map(|c| c.to_string().chars().collect::<Vec<_>>())
             .collect();
         assert_eq!(fold_lookup(&nfd), fold_lookup("λόγος"));
+    }
+
+    #[test]
+    fn elision_splits_listed_prefixes_only() {
+        let manifest = Manifest::parse(
+            r#"
+schema = 1
+lang = "fr"
+name = "French"
+dict_source = "fr-pack"
+elisions = ["l", "d", "j", "qu"]
+
+[prompt]
+language_name = "French"
+chat_persona = "a speaker"
+immerse_instruction = "Write French."
+"#,
+        )
+        .unwrap();
+        let svc = PackLanguage::new(&manifest);
+
+        // Typographic and ASCII apostrophes both split; offsets tile.
+        let sentence = "J’aime l’eau d'une source, mais aujourd’hui non.";
+        let tokens = svc.tokenize_sentence(sentence).unwrap();
+        for t in &tokens {
+            assert_eq!(&sentence[t.start..t.end], t.surface);
+        }
+        let words: Vec<&str> = tokens.iter().map(|t| t.surface.as_str()).collect();
+        assert!(words.contains(&"J’"), "{words:?}");
+        assert!(words.contains(&"aime"), "{words:?}");
+        assert!(words.contains(&"l’"), "{words:?}");
+        assert!(words.contains(&"eau"), "{words:?}");
+        assert!(words.contains(&"d'"), "{words:?}");
+        assert!(words.contains(&"une"), "{words:?}");
+        // "aujourd" is not a listed elidable, so the word stays whole.
+        assert!(words.contains(&"aujourd’hui"), "{words:?}");
+
+        // The elided article folds to Wiktionary's ASCII headword form.
+        assert_eq!(fold_lookup("l’"), "l'");
+        assert_eq!(fold_lookup("L’"), "l'");
+    }
+
+    #[test]
+    fn no_elisions_configured_means_no_splitting() {
+        let svc = grc();
+        let tokens = svc.tokenize_sentence("δι᾽ αὐτοῦ").unwrap();
+        // Greek lists no elisions: δι᾽ stays a single token as before.
+        assert_eq!(tokens[0].surface, "δι᾽");
     }
 
     #[test]
