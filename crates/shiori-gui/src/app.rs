@@ -108,6 +108,13 @@ pub struct WordPanel {
     /// Known dictionary words an unknown compound splits into
     /// (Germanic packs): Kaffeemaschine → kaffee + maschine.
     pub split_parts: Option<Vec<String>>,
+    /// Candidate analyses of the clicked surface — (lemma, parse code,
+    /// decoded parse) — when the form table is ambiguous; the picker
+    /// offers them.
+    pub candidates: Vec<(String, String, String)>,
+    /// (sentence, token index) of the clicked occurrence, for applying
+    /// a picked candidate to exactly this spot.
+    pub occurrence: Option<(shiori_core::SentenceId, usize)>,
 }
 
 /// One wrapped display line of the reader: the (sentence, token) cells laid
@@ -1114,6 +1121,8 @@ impl ShioriGui {
                 compound,
                 morph: None,
                 split_parts: None,
+                candidates: Vec::new(),
+                occurrence: None,
             })
         })
     }

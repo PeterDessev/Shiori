@@ -28,6 +28,9 @@ enum WordAction {
     Ignore(WordId),
     Reset(WordId),
     Forgot(WordId, Option<shiori_core::SentenceId>),
+    /// Apply a picked candidate analysis to one token occurrence:
+    /// (sentence, token index, lemma, parse code).
+    Pick(shiori_core::SentenceId, usize, String, Option<String>),
 }
 
 impl ShioriGui {
@@ -743,6 +746,7 @@ impl ShioriGui {
         // Pre-annotated texts carry this occurrence's parse code.
         let morph_code = view.tokens[t_idx].morph.clone();
         let surface = view.tokens[t_idx].token.surface.clone();
+        let sentence_id = view.sentence.id;
         // Nominal multi-token groups (低＋声, 日本語＋版) may exist in the
         // dictionary as one word; verb chains never do.
         let try_compound = group_tokens.len() > 1 && lang.compound_lookup_pos(group_tokens[0].pos);
@@ -760,6 +764,26 @@ impl ShioriGui {
                     .flatten();
             }
         }
+        // Ambiguous Tier-1 forms carry their alternatives so the user
+        // can pick the analysis this occurrence actually is.
+        if let Some(panel) = panel.as_mut() {
+            panel.occurrence = Some((sentence_id, t_idx));
+            let candidates = self
+                .with_app(|app| {
+                    Ok(app
+                        .tier1_candidates(&surface)?
+                        .into_iter()
+                        .map(|(lemma, code)| {
+                            let decoded = app.describe_morph(&code);
+                            (lemma, code, decoded)
+                        })
+                        .collect::<Vec<_>>())
+                })
+                .unwrap_or_default();
+            if candidates.len() >= 2 {
+                panel.candidates = candidates;
+            }
+        }
         if let Some(reader) = self.reader.as_mut() {
             reader.selected = Some((s_idx, g_idx));
             reader.panel = panel;
@@ -769,6 +793,22 @@ impl ShioriGui {
     }
 
     fn apply_word_action(&mut self, action: WordAction) {
+        // Picking a candidate changes the panel's word identity, so it
+        // re-selects the token instead of reloading the old word.
+        if let WordAction::Pick(sentence, idx, lemma, morph) = action {
+            let applied = self.with_app(|app| {
+                app.reassign_occurrence(sentence, idx, &lemma, morph.as_deref())
+                    .map(|_| ())
+            });
+            if applied.is_some() {
+                self.refresh_reader_tokens();
+                self.refresh_caches();
+                if let Some((s_idx, _)) = self.reader.as_ref().and_then(|r| r.selected) {
+                    self.select_token(s_idx, idx);
+                }
+            }
+            return;
+        }
         let result = match action {
             WordAction::Learn(word, sentence) => {
                 self.with_app(|app| app.start_learning(word, sentence))
@@ -779,6 +819,7 @@ impl ShioriGui {
             WordAction::Forgot(word, sentence) => {
                 self.with_app(|app| app.mark_forgotten(word, sentence))
             }
+            WordAction::Pick(..) => unreachable!("handled above"),
         };
         if result.is_some() {
             self.refresh_reader_tokens();
@@ -911,6 +952,35 @@ impl ShioriGui {
                 }
                 if let Some(rank) = panel.rank {
                     ui.label(format!("corpus frequency rank: #{rank}"));
+                }
+
+                // The candidate picker: an ambiguous form lists its
+                // alternatives; one click fixes this occurrence.
+                if !panel.candidates.is_empty() {
+                    ui.add_space(6.0);
+                    ui.group(|ui| {
+                        ui.label(egui::RichText::new("Ambiguous form").strong());
+                        ui.weak("Pick what this occurrence actually is:");
+                        for (lemma, code, decoded) in &panel.candidates {
+                            let label = if decoded.is_empty() {
+                                lemma.clone()
+                            } else {
+                                format!("{lemma} — {decoded}")
+                            };
+                            if *lemma == panel.word.key.lemma {
+                                ui.weak(format!("• {label} (current)"));
+                            } else if ui.small_button(&label).clicked() {
+                                if let Some((sid, idx)) = panel.occurrence {
+                                    action = Some(WordAction::Pick(
+                                        sid,
+                                        idx,
+                                        lemma.clone(),
+                                        (!code.is_empty()).then(|| code.clone()),
+                                    ));
+                                }
+                            }
+                        }
+                    });
                 }
 
                 // Character chips (kanji for Japanese): expand any into

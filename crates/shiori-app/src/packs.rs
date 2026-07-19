@@ -537,6 +537,40 @@ impl App {
         Ok(Some((chosen.to_string(), morph)))
     }
 
+    /// Every candidate analysis the full-form table holds for a surface
+    /// form, as (lemma, parse code) pairs — the reader's picker offers
+    /// these when a form is ambiguous.
+    pub fn tier1_candidates(&self, surface: &str) -> Result<Vec<(String, String)>> {
+        if !self.packs.contains_key(self.active_lang()) {
+            return Ok(Vec::new());
+        }
+        let folded = self.service().normalize_lookup(surface);
+        let mut hits = self.db.morph_lookup(self.active_lang(), &folded)?;
+        hits.sort();
+        hits.dedup();
+        Ok(hits)
+    }
+
+    /// Apply a picked candidate to one token occurrence: the token's
+    /// word association (created if needed) and stored parse become the
+    /// chosen analysis, so tracking, mining, and statistics follow the
+    /// corrected identity from here on.
+    pub fn reassign_occurrence(
+        &self,
+        sentence: shiori_core::SentenceId,
+        idx: usize,
+        lemma: &str,
+        morph: Option<&str>,
+    ) -> Result<shiori_core::WordId> {
+        let pos = shiori_pack::siat::pos_from_morph(morph.unwrap_or(""));
+        let word = self.db.ensure_word(
+            self.active_lang(),
+            &shiori_core::WordKey::new(lemma, "", pos),
+        )?;
+        self.db.reassign_token(sentence, idx as u32, word.id, morph)?;
+        Ok(word.id)
+    }
+
     /// Last-resort Tier-1 for a form absent from the full-form table:
     /// apply the pack's learned suffix rules ("-o" rewrites to "-ar"),
     /// accepting a guess only when the rewritten lemma exists in the
@@ -1157,6 +1191,21 @@ mod tests {
         let logon = rows4.iter().find(|r| r.token.surface == "λόγον").unwrap();
         assert_eq!(logon.token.lemma, "λόγος");
         assert_eq!(logon.morph, None);
+
+        // The candidate picker: the unresolved ἀμφὶ lists both
+        // analyses, and applying one fixes exactly that occurrence.
+        let candidates = app.tier1_candidates("ἀμφὶ").unwrap();
+        assert_eq!(candidates.len(), 2);
+        let amphi_idx = rows2
+            .iter()
+            .position(|r| r.token.surface == "ἀμφὶ")
+            .unwrap();
+        app.reassign_occurrence(sentences[1].id, amphi_idx, "ἀμφί-β", Some("X"))
+            .unwrap();
+        let rows2b = app.db().sentence_tokens(sentences[1].id).unwrap();
+        let amphi = rows2b.iter().find(|r| r.token.surface == "ἀμφὶ").unwrap();
+        assert_eq!(amphi.token.lemma, "ἀμφί-β");
+        assert_eq!(amphi.morph.as_deref(), Some("X"));
     }
 
     #[test]

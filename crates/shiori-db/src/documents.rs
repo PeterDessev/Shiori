@@ -368,6 +368,28 @@ impl Db {
         }
     }
 
+    /// Re-point one token occurrence at a different word (the reader's
+    /// candidate picker): the word association and stored parse of
+    /// exactly that occurrence change; every other occurrence keeps its
+    /// own analysis.
+    pub fn reassign_token(
+        &self,
+        sentence: SentenceId,
+        idx: u32,
+        word: WordId,
+        morph: Option<&str>,
+    ) -> Result<()> {
+        let n = self.conn().execute(
+            "UPDATE tokens SET word_id = ?3, morph = ?4
+             WHERE sentence_id = ?1 AND idx = ?2",
+            params![sentence.0, idx as i64, word.0, morph],
+        )?;
+        if n == 0 {
+            return Err(DbError::NotFound("token"));
+        }
+        Ok(())
+    }
+
     /// Tokens of a sentence in order, joined with word status.
     pub fn sentence_tokens(&self, sentence: SentenceId) -> Result<Vec<TokenRow>> {
         let mut stmt = self.conn().prepare(
@@ -569,6 +591,35 @@ pub(crate) mod tests {
         assert_eq!(s.text, "その猫は走る。");
         assert!(db.sentence_at(doc_id, -1).unwrap().is_none());
         assert!(db.sentence_at(doc_id, 99).unwrap().is_none());
+    }
+
+    #[test]
+    fn reassign_token_moves_one_occurrence_only() {
+        let db = Db::open_in_memory().unwrap();
+        let doc_id = import_fixture(&db);
+        let sentences = db.sentences(doc_id).unwrap();
+        // Re-point sentence 0's 猫 at 走る with a parse code.
+        let target = db
+            .find_word(
+                "ja",
+                &shiori_core::WordKey::new("走る", "はしる", PartOfSpeech::Verb),
+            )
+            .unwrap()
+            .unwrap();
+        db.reassign_token(sentences[0].id, 0, target.id, Some("X-1"))
+            .unwrap();
+
+        let t0 = db.sentence_tokens(sentences[0].id).unwrap();
+        assert_eq!(t0[0].word_id, target.id);
+        assert_eq!(t0[0].morph.as_deref(), Some("X-1"));
+        // The other occurrence of 猫 (sentence 1) is untouched.
+        let t1 = db.sentence_tokens(sentences[1].id).unwrap();
+        let cat = t1.iter().find(|t| t.token.surface == "猫").unwrap();
+        assert_ne!(cat.word_id, target.id);
+        assert_eq!(cat.morph, None);
+
+        // A non-existent occurrence errors instead of silently no-oping.
+        assert!(db.reassign_token(sentences[0].id, 99, target.id, None).is_err());
     }
 
     #[test]
