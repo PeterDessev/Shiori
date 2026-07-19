@@ -10,13 +10,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 #### Languages beyond Japanese
-- **Data-driven language packs**: drop a pack directory into
-  `<data>/packs/<code>/`, pick the language under Settings → General, and the
-  whole app — library, reader, dictionary, mining, reviews, statistics,
-  chat — operates in it. Nothing mixes across languages, and installing a
+- **Data-driven language packs**: install a pack under Settings →
+  Languages (or drop its directory into `<data>/packs/<code>/`), activate
+  the language, and the whole app — library, reader, dictionary, mining,
+  reviews, statistics, chat — operates in it. Nothing mixes across languages, and installing a
   second language can never wipe or collide with Japanese data (schema v8
   adds language/source scoping everywhere, with an automatic pre-migration
   backup and in-place cache migration — no re-download).
+- **Settings → Languages**, every installed language in one place:
+  activate a language, see what its pack ships (license, dictionary,
+  morphology, frequency, graded levels, fonts), import its bundled texts
+  into the library with one click, remove a pack (its library and review
+  history stay in the database), and install new packs from a folder, a
+  zip, or a download URL with optional SHA-256 verification — all live,
+  no restart. (A hosted-catalog browser — offline-cached catalog.json
+  with one-click verified installs — is fully plumbed and tested but
+  not shown in the UI until a catalog is actually published;
+  build-from-Wiktionary covers discovery meanwhile.)
+- **Home page**: the app now opens on a home view — the active language
+  with a quick switcher and a shortcut to the Languages page, cards due
+  today (by your local midnight) with a time estimate from your measured
+  review pace, a pick-up-where-you-left-off card (progress, estimated
+  time left at your reading speed, unknown words ahead, difficulty
+  verdict), and the reading-activity calendar.
+- **Review and reading statistics are language-scoped**: due counts, the
+  review queue, forecasts, retention, intake and matured curves, reading
+  time, and reading velocity all follow the active language instead of
+  mixing languages (the seconds-per-card pace estimate deliberately
+  stays global). Closes the known P3 limitation.
 - **Koine Greek as the first pack language**, corpus-first: pre-annotated
   texts (SIAT format, converted from MorphGNT) carry a hand-verified lemma,
   parse, and gloss on every token, so no runtime analyzer exists or is
@@ -26,10 +47,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   accepts betacode/Greeklish.
 - **Tier-1 analysis** for plain-text imports and chat in pack languages:
   tokens resolve through the pack's full-form table when unambiguous.
+- **Build from Wiktionary** (Settings → Languages): pick from ~19
+  languages and the app downloads public upstream data — kaikki.org's
+  Wiktextract dump and hermitdave's frequency list — and compiles the
+  pack locally, the same first-run model as the Japanese reference
+  bundle; nothing hosted, no catalog to maintain. Wiktionary's
+  inflection tables become the grammar: every conjugated form resolves
+  to its lemma and its parse decodes to prose in the reader, via a
+  generated tag table. Built packs carry per-sense register labels
+  (colloquial, archaic…) wired into the usage display, usage examples,
+  and IPA pronunciation behind a default-off setting; frequency ranks
+  are lemmatized (a verb's conjugations all count toward it) and
+  generate Top-500/1k/2k/5k graded tiers for the statistics page;
+  ambiguous forms resolve by corpus frequency when one candidate
+  clearly dominates; French/Italian elision tokenizes l'eau as l' +
+  eau while leaving aujourd'hui whole; and the gigabyte-class
+  downloads resume with HTTP ranges instead of restarting.
 - **`shiori-packc`**, the CI pack compiler: builds the Greek pack from
   MorphGNT and modern-language packs from kaikki.org Wiktextract dumps
   (+ hermitdave frequency lists), with a machine-enforced gate refusing
-  NonCommercial sources.
+  NonCommercial sources. Its `catalog` subcommand zips finished packs
+  and emits the hosted `catalog.json` (real SHA-256s and sizes,
+  validated against the app's own parser) that the browse section
+  consumes.
 - **Per-language production practice**: pack-defined personas (dead
   languages disclose the synthetic persona and judge against attested
   usage), composition exercises, translation drills over sentences from

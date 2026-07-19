@@ -22,8 +22,13 @@ each unblocks the next. See `docs/wiki/Language-Packs.md` for context.
       `.ttf`; the Gentium URL is a zip. Add zip extraction + read the
       manifest `[[fonts]]` list + install ahead of the system fallback.
       (Greek renders today only via a Greek-covering system font.)
-- [ ] Hosted packs + onboarding language picker: one hash-verified zip
-      per language, downloaded on first use, instead of folder-drop.
+- [ ] (Deferred by choice — build-from-Wiktionary covers discovery.)
+      Publish a pack catalog + onboarding language picker. The whole
+      client pipeline exists and is tested (offline-cached fetch,
+      SHA-256-verified installs, `shiori-packc catalog` generator); the
+      browse UI was removed from the Languages page until a catalog is
+      actually hosted — restoring it is one call (see the wiki's
+      hosted-catalog section).
 
 ## P2 — Deepen coverage
 
@@ -38,10 +43,11 @@ each unblocks the next. See `docs/wiki/Language-Packs.md` for context.
 
 ## P3 — Finish the Japanese-coupling cleanup
 
-- [ ] Scope review-history stats by language: `due_forecast`,
-      `retention_counts`, `learning_starts_by_day`, `matured_by_day`
-      still query `review_log`/`cards` globally, mixing languages for a
-      multi-language user (single-language users unaffected).
+- [x] Scope review-history stats by language: `due_forecast`,
+      `retention_counts`, `learning_starts_by_day`, `matured_by_day`,
+      due/card/review counts, and reading time/velocity now join on the
+      words/documents language. Only the seconds-per-card pace estimate
+      stays global on purpose (pace is a trait of the user).
 - [ ] Anki export: map the parse code + citation into card fields for
       pack languages (guids are already namespaced; fields are still the
       four Japanese-shaped ones).
@@ -51,5 +57,9 @@ each unblocks the next. See `docs/wiki/Language-Packs.md` for context.
 - [ ] Validate SIAT's reserved fields (`sub`, `layers`, `dir`) against a
       Biblical Hebrew prototype (RTL + prefix/suffix decomposition)
       before freezing the format for community authors.
-- [ ] Ship a modern-language pack (es/fr/de) from `build-kaikki` as the
-      reference community pack.
+- [x] Modern-language packs without shipping anything: Settings →
+      Languages → Build from Wiktionary downloads kaikki.org dumps +
+      hermitdave frequency lists and builds the pack locally (~19
+      languages, dictionary + inflection grammar + tag decoding).
+      Remains: run one big build (es or fr) end-to-end on real data and
+      fix what the full dump surfaces that the fixtures didn't.

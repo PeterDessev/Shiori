@@ -8,16 +8,25 @@ runtime, no recompile needed.
 
 ## Using a pack
 
-1. Drop the pack directory into `<data>/packs/<code>/` (e.g.
-   `packs/grc/`) and restart Shiori.
-2. Pick the language under **Settings → General → Active language**.
-   The pack's reference data imports on first activation, scoped so it
-   can never touch another language's data.
+1. Install it under **Settings → Languages**: build one from public
+   web sources (see below), pick a pack folder or zip, or paste a
+   download URL (optionally with a SHA-256 checksum the download is
+   verified against). The language appears immediately — no restart.
+   Dropping a pack directory into `<data>/packs/<code>/` by hand and
+   restarting works too.
+2. Activate the language on the same page (or switch from the home
+   page). The pack's reference data imports on first activation, scoped
+   so it can never touch another language's data; bundled pre-annotated
+   texts import into the library with one click.
 3. Everything follows the switch: library, reader, dictionary, mining,
    reviews, statistics, and conversation practice all operate in the
    active language. Nothing mixes — a Greek λόγος and a Spanish `sol`
    can never collide with Japanese words, and difficulty statistics
    never average across languages.
+
+Removing a pack (Settings → Languages) deletes its files but keeps the
+language's library, vocabulary, and review history in the database;
+everything comes back if the pack is reinstalled.
 
 ### What changes in the app, per language
 
@@ -95,6 +104,43 @@ The format stays **draft** until it has been validated against an RTL
 and a sub-token prototype (Biblical Hebrew is the natural test); treat
 it as stable for LTR, word-per-token languages.
 
+## Building packs in the app: from Wiktionary, no hosting
+
+**Settings → Languages → Build from Wiktionary** generalizes the
+Japanese first-run model to ~19 languages: the app downloads public
+data from its stable upstream URLs and compiles the pack locally —
+there is no catalog, registry, or repository to maintain.
+
+- **Dictionary and grammar** come from kaikki.org's per-language
+  Wiktextract dumps (CC BY-SA 4.0 & GFDL). Wiktionary's inflection
+  tables (the `forms` arrays) are inverted into the Tier-1 full-form
+  table, so every conjugated or declined form resolves to its lemma,
+  and each form's Wiktionary tags become a parse the reader decodes to
+  prose ("hablaba → hablar · first person · singular · imperfect").
+  The tag-decoding table is generated from the same data. Senses keep
+  their register labels (colloquial, archaic, vulgar…) mapped onto the
+  app's usage-register display, plus usage examples, and IPA
+  pronunciation (shown only when enabled under Settings → Reading).
+- **Frequency ranks** come from hermitdave's FrequencyWords
+  OpenSubtitles lists (CC BY-SA 4.0), where one exists — *lemmatized*:
+  each surface form's subtitle mass folds onto its lemma through the
+  form table, so *hablar* is ranked by all its conjugations. Graded
+  tiers (Top 500 / 1k / 2k / 5k lemmas) are derived from the same
+  ranking, lighting up the statistics page's Level section.
+- **Ambiguity** in plain-text analysis falls back to those ranks: a
+  form with several candidate lemmas resolves to the clearly most
+  frequent one; with no signal it safely stays as itself.
+- **Elision** is language-aware: French and Italian packs declare their
+  elidable words, so *l'eau* tokenizes as *l'* + *eau* (both real
+  words) while *aujourd'hui* stays whole.
+
+Dumps are large (hundreds of MB up to ~1 GB); the download streams to
+disk with progress, resumes interrupted transfers with HTTP ranges, is
+kept for retry if a build fails, and is deleted once the pack installs.
+The list covers whitespace-tokenized scripts with rich Wiktionary
+inflection data; no-whitespace scripts (Chinese) need a segmentation
+engine — a Shiori release, not a pack.
+
 ## Building packs: `shiori-packc`
 
 The pack compiler is a CI/developer tool — never shipped in the app,
@@ -119,6 +165,56 @@ every attested form. `build-kaikki` inverts Wiktextract `forms` arrays
 and `form_of` senses into the lemma table and keeps up to six glosses
 per lemma.
 
+### The hosted catalog (machinery ready, UI dormant)
+
+The full hosted-catalog pipeline exists and is tested — fetch with
+offline caching, SHA-256-verified one-click installs, and the
+`shiori-packc catalog` generator below — but no catalog is published
+and build-from-Wiktionary covers discovery, so the browse section is
+currently not shown in the app. To bring it back once a catalog is
+hosted: call `browse_packs_section` (see git history for the section's
+UI) from the Languages page and point `DEFAULT_PACK_CATALOG_URL` at
+the published document. Format:
+
+```json
+{
+  "catalog": 1,
+  "packs": [
+    {
+      "lang": "grc",
+      "name": "Koine Greek",
+      "description": "SBLGNT with MorphGNT annotations, Dodson glosses.",
+      "license": "CC BY-SA 4.0",
+      "url": "https://example.com/packs/grc.zip",
+      "sha256": "…hex digest of the zip…",
+      "size_bytes": 23456789,
+      "version": "2026.07"
+    }
+  ]
+}
+```
+
+`lang`, `name`, and `url` are required (entries missing them are
+skipped); `sha256` should always be published — installs verify the
+download against it. Entries claiming the built-in language are
+ignored. `description` comes from the manifest's optional
+`description` field.
+
+Don't write the catalog by hand — generate it from finished packs:
+
+```sh
+shiori-packc catalog --packs packs/ --base-url https://example.com/packs \
+    --out dist/ --version 2026.07
+```
+
+This zips every pack under `packs/` into `dist/<lang>.zip`, computes
+each zip's real SHA-256 and size, and writes `dist/catalog.json` whose
+entries point at `<base-url>/<lang>.zip`. The generated document is
+re-parsed with the app's own catalog parser before it is written, so it
+can never drift from what the app accepts; the NonCommercial license
+gate applies to every pack it touches. Publish by uploading the whole
+`dist/` directory to the base URL.
+
 ### License policy
 
 packc refuses NonCommercial sources outright (machine-enforced). Known
@@ -132,8 +228,9 @@ attribution and share-alike on the data.
 
 ## Roadmap for packs
 
-- Hosted pack downloads (one hash-verified zip per language) and an
-  onboarding language picker — today packs install by folder drop.
+- A hosted pack catalog and an onboarding language picker — the app
+  already installs hash-verified zips from any URL (Settings →
+  Languages); what's missing is a published registry to point it at.
 - The full ~900k-form Greek table from Morpheus (regenerated under
   MPL-2.0 in Docker CI) merged with the kaikki grc extract; today the
   full-form table covers every form attested in the GNT.
