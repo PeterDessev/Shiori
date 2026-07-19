@@ -23,10 +23,11 @@ impl App {
             .add_reading_time(session, seconds, chars, Utc::now())?)
     }
 
-    /// The user's reading velocity in characters per second, if enough
-    /// reading has been recorded to make it meaningful.
+    /// The user's reading velocity in the active language, in characters
+    /// per second, if enough reading has been recorded in that language
+    /// to make it meaningful (velocity differs wildly across scripts).
     pub fn reading_velocity_cps(&self) -> Result<Option<f64>> {
-        let totals = self.db().reading_totals()?;
+        let totals = self.db().reading_totals(self.active_lang())?;
         if totals.seconds >= MIN_VELOCITY_SECONDS && totals.chars > 0 {
             Ok(Some(totals.chars as f64 / totals.seconds))
         } else {

@@ -155,7 +155,7 @@ fn full_srs_cycle_updates_knowledge() {
 
     // Starting again is a no-op.
     app.start_learning(neko.word.id, neko.sentence.id).unwrap();
-    assert_eq!(app.db().card_count().unwrap(), 1);
+    assert_eq!(app.db().card_count("ja").unwrap(), 1);
 
     // The queue item carries the context sentence and the gloss.
     let queue = app.due_reviews(10).unwrap();
@@ -169,7 +169,7 @@ fn full_srs_cycle_updates_knowledge() {
     // Answer Good: card schedules into a learning step, review is logged.
     let card = app.answer_review(neko.word.id, Rating::Good).unwrap();
     assert_eq!(card.state, CardState::Learning);
-    assert_eq!(app.db().review_count().unwrap(), 1);
+    assert_eq!(app.db().review_count("ja").unwrap(), 1);
     assert_eq!(app.due_count().unwrap(), 0, "card moved into the future");
 
     // Mining no longer offers the word.

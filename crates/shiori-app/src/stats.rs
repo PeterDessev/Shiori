@@ -121,10 +121,10 @@ pub struct StatsOverview {
 impl App {
     /// Aggregate the expanded statistics page in one call.
     pub fn stats_overview(&self) -> Result<StatsOverview> {
-        let totals = self.db().reading_totals()?;
+        let totals = self.db().reading_totals(self.active_lang())?;
         let velocity_cpm = self.reading_velocity_cps()?.map(|cps| cps * 60.0);
 
-        let starts = self.db().learning_starts_by_day()?;
+        let starts = self.db().learning_starts_by_day(self.active_lang())?;
         let today = chrono::Utc::now().date_naive();
         let recent: u32 = starts
             .iter()
@@ -136,7 +136,7 @@ impl App {
             .map(|(_, n)| n)
             .sum();
 
-        let (correct, total) = self.db().retention_counts(30)?;
+        let (correct, total) = self.db().retention_counts(self.active_lang(), 30)?;
         let (levels, level_scheme) = match self.service().graded_scheme() {
             Some((key, display)) => (
                 self.db().graded_known_shares(self.active_lang(), &key)?,
@@ -159,11 +159,11 @@ impl App {
             velocity_cpm,
             total_reading_seconds: totals.seconds,
             total_reading_chars: totals.chars,
-            reading_by_day: self.db().reading_seconds_by_day()?,
-            due_forecast: self.db().due_forecast(14)?,
+            reading_by_day: self.db().reading_seconds_by_day(self.active_lang())?,
+            due_forecast: self.db().due_forecast(self.active_lang(), 14)?,
             learning_rate_30d: f64::from(recent) / 30.0,
             retention_30d: (total > 0).then(|| f64::from(correct) / f64::from(total)),
-            matured_by_day: self.db().matured_by_day(60.0)?,
+            matured_by_day: self.db().matured_by_day(self.active_lang(), 60.0)?,
             levels,
             level_scheme,
             comfortable_level,

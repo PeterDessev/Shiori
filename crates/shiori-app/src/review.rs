@@ -83,7 +83,7 @@ impl App {
     pub fn due_reviews(&self, limit: u32) -> Result<Vec<ReviewItem>> {
         let now = Utc::now();
         let mut items = Vec::new();
-        for row in self.db.due_cards(now, limit)? {
+        for row in self.db.due_cards(self.active_lang(), now, limit)? {
             let word = self.db.word(row.word_id)?;
             let sentence = match row.sentence_id {
                 Some(id) => self.db.sentence(id).ok(),
@@ -125,7 +125,7 @@ impl App {
     }
 
     pub fn due_count(&self) -> Result<u64> {
-        Ok(self.db.due_count(Utc::now())?)
+        Ok(self.db.due_count(self.active_lang(), Utc::now())?)
     }
 
     /// Answer the current review for `word_id` and persist the outcome.
