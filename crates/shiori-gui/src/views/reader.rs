@@ -742,6 +742,7 @@ impl ShioriGui {
         let word_id = view.tokens[t_idx].word_id;
         // Pre-annotated texts carry this occurrence's parse code.
         let morph_code = view.tokens[t_idx].morph.clone();
+        let surface = view.tokens[t_idx].token.surface.clone();
         // Nominal multi-token groups (低＋声, 日本語＋版) may exist in the
         // dictionary as one word; verb chains never do.
         let try_compound = group_tokens.len() > 1 && lang.compound_lookup_pos(group_tokens[0].pos);
@@ -749,6 +750,15 @@ impl ShioriGui {
         let mut panel = self.load_word_panel(word_id, phrase, inflection, try_compound);
         if let (Some(panel), Some(code)) = (panel.as_mut(), morph_code) {
             panel.morph = self.with_app(|app| Ok(app.describe_morph(&code)));
+        }
+        // A word without an entry may still be a compound of known
+        // dictionary words (Germanic packs).
+        if let Some(panel) = panel.as_mut() {
+            if panel.entry.is_none() && panel.compound.is_none() {
+                panel.split_parts = self
+                    .with_app(|app| app.decompose_compound(&surface))
+                    .flatten();
+            }
         }
         if let Some(reader) = self.reader.as_mut() {
             reader.selected = Some((s_idx, g_idx));
@@ -989,7 +999,24 @@ impl ShioriGui {
                         }
                     }
                     None => {
-                        if self.dict_ready() {
+                        if let Some(parts) = &panel.split_parts {
+                            ui.horizontal_wrapped(|ui| {
+                                ui.label("compound of:");
+                                for part in parts {
+                                    if ui
+                                        .small_button(part)
+                                        .on_hover_text("Look up in the dictionary")
+                                        .clicked()
+                                    {
+                                        *open_kanji = Some(part.clone());
+                                    }
+                                }
+                            });
+                            ui.weak(
+                                "No entry for the whole word, but its parts are \
+                                 in the dictionary.",
+                            );
+                        } else if self.dict_ready() {
                             ui.weak("No dictionary entry found for this word.");
                         } else {
                             ui.weak(

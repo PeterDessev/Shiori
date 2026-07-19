@@ -48,6 +48,13 @@ pub struct Manifest {
     /// expansion and the word counts as a function word.
     #[serde(default)]
     pub contractions: std::collections::BTreeMap<String, String>,
+    /// Whether unknown words should be split into known dictionary
+    /// words for display (Germanic compounds: Kaffeemaschine).
+    #[serde(default)]
+    pub compounds: bool,
+    /// Linking elements allowed between compound parts ("s", "en").
+    #[serde(default)]
+    pub compound_linkers: Vec<String>,
     /// Unicode codepoint ranges (inclusive) counting as target-language
     /// script, e.g. `[[0x0370, 0x03FF], [0x1F00, 0x1FFF]]`.
     #[serde(default)]

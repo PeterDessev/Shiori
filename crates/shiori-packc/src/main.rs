@@ -90,6 +90,7 @@ fn build_kaikki(args: &[String]) -> Result<(), String> {
         script_ranges: &[],
         elisions: &[],
         contractions: &[],
+        compound_linkers: None,
     };
     let report = kaikki::build_pack(
         Path::new(&input),

@@ -43,6 +43,8 @@ pub struct WebPackSource {
     pub elisions: &'static [&'static str],
     /// Fused function words and their expansions ("au" = "a le").
     pub contractions: &'static [(&'static str, &'static str)],
+    /// `Some(linkers)` enables compound splitting (Germanic packs).
+    pub compound_linkers: Option<&'static [&'static str]>,
 }
 
 const GREEK: &[(u32, u32)] = &[(0x0370, 0x03FF), (0x1F00, 0x1FFF)];
@@ -58,6 +60,13 @@ const IT_ELISIONS: &[&str] = &[
     "l", "un", "d", "c", "s", "m", "t", "v", "n", "gl", "dell", "nell", "all", "dall", "sull",
     "coll", "quest", "quell", "sant", "anch", "senz", "dov",
 ];
+
+/// Compound linking elements (Fugenelemente and friends) for the
+/// Germanic packs that split unknown compounds against the dictionary.
+const DE_LINKERS: &[&str] = &["s", "es", "n", "en", "er", "e"];
+const NL_LINKERS: &[&str] = &["s", "en", "e"];
+const SV_LINKERS: &[&str] = &["s"];
+const DA_LINKERS: &[&str] = &["s", "e"];
 
 /// Fused preposition+article portmanteaus per language: the reader
 /// shows the expansion and the token counts as a function word.
@@ -140,25 +149,25 @@ const IT_CONTRACTIONS: &[(&str, &str)] = &[
 /// Shiori release, not a pack.)
 #[rustfmt::skip]
 pub const WEB_PACK_SOURCES: &[WebPackSource] = &[
-    src("cs", "Czech", "Czech", "Czech", Some("cs"), 197, &[], &[], &[]),
-    src("da", "Danish", "Danish", "Danish", Some("da"), 105, &[], &[], &[]),
-    src("de", "German", "German", "German", Some("de"), 901, &[], &[], DE_CONTRACTIONS),
-    src("es", "Spanish", "Spanish", "Spanish", Some("es"), 966, &[], &[], ES_CONTRACTIONS),
-    src("fi", "Finnish", "Finnish", "Finnish", Some("fi"), 419, &[], &[], &[]),
-    src("fr", "French", "French", "French", Some("fr"), 544, &[], FR_ELISIONS, FR_CONTRACTIONS),
-    src("grc", "Ancient Greek", "Ancient Greek", "AncientGreek", None, 373, GREEK, &[], &[]),
-    src("hu", "Hungarian", "Hungarian", "Hungarian", Some("hu"), 176, &[], &[], &[]),
-    src("id", "Indonesian", "Indonesian", "Indonesian", Some("id"), 56, &[], &[], &[]),
-    src("it", "Italian", "Italian", "Italian", Some("it"), 550, &[], IT_ELISIONS, IT_CONTRACTIONS),
-    src("ko", "Korean", "Korean", "Korean", Some("ko"), 186, HANGUL, &[], &[]),
-    src("la", "Latin", "Latin", "Latin", None, 1156, &[], &[], &[]),
-    src("nl", "Dutch", "Dutch", "Dutch", Some("nl"), 232, &[], &[], &[]),
-    src("pl", "Polish", "Polish", "Polish", Some("pl"), 383, &[], &[], &[]),
-    src("pt", "Portuguese", "Portuguese", "Portuguese", Some("pt"), 331, &[], &[], PT_CONTRACTIONS),
-    src("ro", "Romanian", "Romanian", "Romanian", Some("ro"), 175, &[], &[], &[]),
-    src("ru", "Russian", "Russian", "Russian", Some("ru"), 741, CYRILLIC, &[], &[]),
-    src("sv", "Swedish", "Swedish", "Swedish", Some("sv"), 175, &[], &[], &[]),
-    src("tr", "Turkish", "Turkish", "Turkish", Some("tr"), 121, &[], &[], &[]),
+    src("cs", "Czech", "Czech", "Czech", Some("cs"), 197, &[], &[], &[], None),
+    src("da", "Danish", "Danish", "Danish", Some("da"), 105, &[], &[], &[], Some(DA_LINKERS)),
+    src("de", "German", "German", "German", Some("de"), 901, &[], &[], DE_CONTRACTIONS, Some(DE_LINKERS)),
+    src("es", "Spanish", "Spanish", "Spanish", Some("es"), 966, &[], &[], ES_CONTRACTIONS, None),
+    src("fi", "Finnish", "Finnish", "Finnish", Some("fi"), 419, &[], &[], &[], None),
+    src("fr", "French", "French", "French", Some("fr"), 544, &[], FR_ELISIONS, FR_CONTRACTIONS, None),
+    src("grc", "Ancient Greek", "Ancient Greek", "AncientGreek", None, 373, GREEK, &[], &[], None),
+    src("hu", "Hungarian", "Hungarian", "Hungarian", Some("hu"), 176, &[], &[], &[], None),
+    src("id", "Indonesian", "Indonesian", "Indonesian", Some("id"), 56, &[], &[], &[], None),
+    src("it", "Italian", "Italian", "Italian", Some("it"), 550, &[], IT_ELISIONS, IT_CONTRACTIONS, None),
+    src("ko", "Korean", "Korean", "Korean", Some("ko"), 186, HANGUL, &[], &[], None),
+    src("la", "Latin", "Latin", "Latin", None, 1156, &[], &[], &[], None),
+    src("nl", "Dutch", "Dutch", "Dutch", Some("nl"), 232, &[], &[], &[], Some(NL_LINKERS)),
+    src("pl", "Polish", "Polish", "Polish", Some("pl"), 383, &[], &[], &[], None),
+    src("pt", "Portuguese", "Portuguese", "Portuguese", Some("pt"), 331, &[], &[], PT_CONTRACTIONS, None),
+    src("ro", "Romanian", "Romanian", "Romanian", Some("ro"), 175, &[], &[], &[], None),
+    src("ru", "Russian", "Russian", "Russian", Some("ru"), 741, CYRILLIC, &[], &[], None),
+    src("sv", "Swedish", "Swedish", "Swedish", Some("sv"), 175, &[], &[], &[], Some(SV_LINKERS)),
+    src("tr", "Turkish", "Turkish", "Turkish", Some("tr"), 121, &[], &[], &[], None),
 ];
 
 #[allow(clippy::too_many_arguments)] // a table-row constructor, not an API
@@ -172,6 +181,7 @@ const fn src(
     script_ranges: &'static [(u32, u32)],
     elisions: &'static [&'static str],
     contractions: &'static [(&'static str, &'static str)],
+    compound_linkers: Option<&'static [&'static str]>,
 ) -> WebPackSource {
     WebPackSource {
         lang,
@@ -183,6 +193,7 @@ const fn src(
         script_ranges,
         elisions,
         contractions,
+        compound_linkers,
     }
 }
 
@@ -380,6 +391,7 @@ pub fn build_web_pack(
         script_ranges: source.script_ranges,
         elisions: source.elisions,
         contractions: source.contractions,
+        compound_linkers: source.compound_linkers,
     };
     if staging.exists() {
         std::fs::remove_dir_all(staging)?;

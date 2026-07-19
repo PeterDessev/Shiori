@@ -105,6 +105,9 @@ pub struct WordPanel {
     /// Decoded parse of *this occurrence* for pre-annotated texts
     /// ("verb · present active indicative · 3rd person singular").
     pub morph: Option<String>,
+    /// Known dictionary words an unknown compound splits into
+    /// (Germanic packs): Kaffeemaschine → kaffee + maschine.
+    pub split_parts: Option<Vec<String>>,
 }
 
 /// One wrapped display line of the reader: the (sentence, token) cells laid
@@ -1110,6 +1113,7 @@ impl ShioriGui {
                 inflection,
                 compound,
                 morph: None,
+                split_parts: None,
             })
         })
     }

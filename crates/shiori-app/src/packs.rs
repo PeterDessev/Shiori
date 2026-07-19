@@ -534,6 +534,102 @@ impl App {
         Ok(Some((chosen.to_string(), morph)))
     }
 
+    /// Split an unknown word into known dictionary words, for packs
+    /// that enable it (Germanic compounds): "Kaffeemaschine" → kaffee +
+    /// maschine, with the manifest's linking elements ("s" in
+    /// "Arbeitsmaschine") allowed between parts. Display-level only —
+    /// the compound itself stays the tracked word. `None` when the
+    /// language doesn't split, the word is too short/long, or no full
+    /// cover into ≥2 known parts exists.
+    pub fn decompose_compound(&self, surface: &str) -> Result<Option<Vec<String>>> {
+        let Some(pack) = self.packs.get(self.active_lang()) else {
+            return Ok(None);
+        };
+        if !pack.manifest.compounds {
+            return Ok(None);
+        }
+        let folded = self.service().normalize_lookup(surface);
+        let n_chars = folded.chars().count();
+        if !(7..=48).contains(&n_chars) {
+            return Ok(None);
+        }
+        let source = self.active_dict_source();
+        let linkers: Vec<&str> = pack
+            .manifest
+            .compound_linkers
+            .iter()
+            .map(String::as_str)
+            .collect();
+        let bounds: Vec<usize> = folded
+            .char_indices()
+            .map(|(i, _)| i)
+            .chain([folded.len()])
+            .collect();
+
+        /// Depth-first cover of `folded[bounds[from]..]` by dictionary
+        /// words (longest part first), memoizing dead starts.
+        fn parts_from(
+            db: &shiori_db::Db,
+            source: &str,
+            folded: &str,
+            bounds: &[usize],
+            from: usize,
+            linkers: &[&str],
+            dead: &mut std::collections::HashSet<usize>,
+            out: &mut Vec<String>,
+        ) -> Result<bool> {
+            let last = bounds.len() - 1;
+            if from == last {
+                return Ok(true);
+            }
+            if dead.contains(&from) {
+                return Ok(false);
+            }
+            for j in ((from + 3)..=last).rev() {
+                // The degenerate "whole word is one part" case is the
+                // caller's normal lookup, not a compound.
+                if from == 0 && j == last {
+                    continue;
+                }
+                let part = &folded[bounds[from]..bounds[j]];
+                if db.dict_form_entry_keys(source, part)?.is_empty() {
+                    continue;
+                }
+                let mut nexts = vec![j];
+                for linker in linkers {
+                    let l_chars = linker.chars().count();
+                    let next = j + l_chars;
+                    // A linker must be followed by another part.
+                    if next < last && &folded[bounds[j]..bounds[next]] == *linker {
+                        nexts.push(next);
+                    }
+                }
+                for next in nexts {
+                    out.push(part.to_string());
+                    if parts_from(db, source, folded, bounds, next, linkers, dead, out)? {
+                        return Ok(true);
+                    }
+                    out.pop();
+                }
+            }
+            dead.insert(from);
+            Ok(false)
+        }
+
+        let mut out = Vec::new();
+        let ok = parts_from(
+            &self.db,
+            source,
+            &folded,
+            &bounds,
+            0,
+            &linkers,
+            &mut std::collections::HashSet::new(),
+            &mut out,
+        )?;
+        Ok((ok && out.len() >= 2).then_some(out))
+    }
+
     /// Decode a stored parse code ("V-PAI-3S") into prose using the
     /// active dictionary source's tag table; unknown segments stay
     /// verbatim so nothing is ever hidden.
@@ -1285,6 +1381,66 @@ mod tests {
         let packs = fetch_pack_catalog(&dir, &url, true).unwrap();
         assert_eq!(packs.len(), 1);
         server.join().unwrap();
+    }
+
+    #[test]
+    fn compounds_split_into_known_dictionary_words() {
+        let data_dir = unique_dir("pack-compound");
+        std::fs::remove_dir_all(&data_dir).ok();
+        let pack_dir = data_dir.join("packs").join("de");
+        std::fs::create_dir_all(pack_dir.join("texts")).unwrap();
+        std::fs::write(
+            pack_dir.join("manifest.toml"),
+            r#"
+schema = 1
+lang = "de"
+name = "German"
+dict_source = "de-pack"
+compounds = true
+compound_linkers = ["s", "n"]
+
+[prompt]
+language_name = "German"
+chat_persona = "a speaker"
+immerse_instruction = "Write German."
+"#,
+        )
+        .unwrap();
+        let entry = |word: &str, gloss: &str| {
+            format!(
+                r#"{{"key":"{word}","forms":[{{"text":"{word}","role":"canonical","common":true}}],"entry":{{"id":"{word}","kanji":[{{"common":true,"text":"{word}","tags":[]}}],"kana":[],"sense":[{{"partOfSpeech":["noun"],"gloss":[{{"lang":"eng","text":"{gloss}"}}],"related":[],"antonym":[],"field":[],"dialect":[],"misc":[],"info":[]}}]}}}}"#
+            )
+        };
+        std::fs::write(
+            pack_dir.join("dictionary.jsonl"),
+            format!(
+                "{}\n{}\n{}\n",
+                entry("kaffee", "coffee"),
+                entry("maschine", "machine"),
+                entry("arbeit", "work"),
+            ),
+        )
+        .unwrap();
+
+        let mut app =
+            App::with_db(shiori_db::Db::open_in_memory().unwrap(), data_dir.clone()).unwrap();
+        app.set_active_lang("de").unwrap();
+
+        // Straight concatenation and a linking element both split.
+        assert_eq!(
+            app.decompose_compound("Kaffeemaschine").unwrap(),
+            Some(vec!["kaffee".to_string(), "maschine".to_string()])
+        );
+        assert_eq!(
+            app.decompose_compound("Arbeitsmaschine").unwrap(),
+            Some(vec!["arbeit".to_string(), "maschine".to_string()])
+        );
+
+        // Unknown material, short words, and known single words do not.
+        assert_eq!(app.decompose_compound("Xyzqmaschine").unwrap(), None);
+        assert_eq!(app.decompose_compound("kaffee").unwrap(), None);
+        // A trailing linker cannot be swallowed to fake a split.
+        assert_eq!(app.decompose_compound("maschines").unwrap(), None);
     }
 
     #[test]

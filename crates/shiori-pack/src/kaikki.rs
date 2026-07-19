@@ -39,6 +39,10 @@ pub struct LangSpec<'a> {
     pub elisions: &'a [&'a str],
     /// Portmanteau function words and their expansions ("au" = "à le").
     pub contractions: &'a [(&'a str, &'a str)],
+    /// `Some(linkers)` enables compound splitting with these linking
+    /// elements between parts ("s" in Arbeitsmaschine); `None` for
+    /// non-compounding languages.
+    pub compound_linkers: Option<&'a [&'a str]>,
 }
 
 /// Basic Latin + Latin-1 Supplement + Latin Extended-A/B.
@@ -522,6 +526,17 @@ fn manifest_toml(spec: &LangSpec<'_>, has_tiers: bool) -> String {
                 .join(", ")
         )
     };
+    let compounds = match spec.compound_linkers {
+        None => String::new(),
+        Some(linkers) => format!(
+            "compounds = true\ncompound_linkers = [{}]\n",
+            linkers
+                .iter()
+                .map(|l| format!("\"{}\"", toml_escape(l)))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+    };
     let graded_scheme = if has_tiers {
         "\n[graded_scheme]\nkey = \"frequency-tier\"\ndisplay = \"frequency tier\"\n"
     } else {
@@ -537,7 +552,7 @@ license = "{license}"
 joiner = " "
 sentence_enders = [".", "?", "!", "…"]
 script_ranges = [{ranges}]
-{elisions}{contractions}{graded_scheme}
+{elisions}{contractions}{compounds}{graded_scheme}
 [prompt]
 language_name = "{name}"
 chat_persona = "a friendly native {name} speaker"
@@ -578,6 +593,7 @@ mod tests {
             script_ranges: &[],
             elisions: &[],
             contractions: &[("au", "à le")],
+            compound_linkers: None,
         }
     }
 
@@ -693,6 +709,7 @@ mod tests {
             script_ranges: &[(0x0400, 0x04FF)],
             elisions: &["l", "d"],
             contractions: &[("im", "in dem")],
+            compound_linkers: Some(&["s"]),
         };
         build_pack(&input, None, &spec, &out).unwrap();
         let pack = crate::Pack::load(&out).unwrap();

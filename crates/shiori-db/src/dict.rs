@@ -58,6 +58,18 @@ impl Db {
         Ok(n as u64)
     }
 
+    /// Entry keys a written form belongs to within one source (empty =
+    /// the form is not in the dictionary; one = unambiguous). Feeds
+    /// compound splitting and suffix-rule lemma guessing.
+    pub fn dict_form_entry_keys(&self, source: &str, text: &str) -> Result<Vec<String>> {
+        let mut stmt = self.conn().prepare(
+            "SELECT DISTINCT entry_key FROM dict_forms
+             WHERE source = ?1 AND text = ?2",
+        )?;
+        let rows = stmt.query_map([source, text], |r| r.get(0))?;
+        Ok(rows.collect::<std::result::Result<_, _>>()?)
+    }
+
     /// Drop one language pack's imported reference data — dictionary
     /// (forms cascade), tag decodings, frequency list, full-form table,
     /// and graded vocabulary — so a reinstalled or replaced pack imports
