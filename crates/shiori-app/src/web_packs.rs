@@ -41,6 +41,8 @@ pub struct WebPackSource {
     /// Elidable prefixes for the tokenizer ("l" so l'eau splits into
     /// the article and the noun); empty for most languages.
     pub elisions: &'static [&'static str],
+    /// Fused function words and their expansions ("au" = "a le").
+    pub contractions: &'static [(&'static str, &'static str)],
 }
 
 const GREEK: &[(u32, u32)] = &[(0x0370, 0x03FF), (0x1F00, 0x1FFF)];
@@ -57,31 +59,106 @@ const IT_ELISIONS: &[&str] = &[
     "coll", "quest", "quell", "sant", "anch", "senz", "dov",
 ];
 
+/// Fused preposition+article portmanteaus per language: the reader
+/// shows the expansion and the token counts as a function word.
+const FR_CONTRACTIONS: &[(&str, &str)] = &[
+    ("au", "à le"),
+    ("aux", "à les"),
+    ("du", "de le"),
+    ("des", "de les"),
+];
+const ES_CONTRACTIONS: &[(&str, &str)] = &[("al", "a el"), ("del", "de el")];
+const DE_CONTRACTIONS: &[(&str, &str)] = &[
+    ("am", "an dem"),
+    ("ans", "an das"),
+    ("aufs", "auf das"),
+    ("beim", "bei dem"),
+    ("im", "in dem"),
+    ("ins", "in das"),
+    ("vom", "von dem"),
+    ("zum", "zu dem"),
+    ("zur", "zu der"),
+];
+const PT_CONTRACTIONS: &[(&str, &str)] = &[
+    ("ao", "a o"),
+    ("aos", "a os"),
+    ("do", "de o"),
+    ("da", "de a"),
+    ("dos", "de os"),
+    ("das", "de as"),
+    ("no", "em o"),
+    ("na", "em a"),
+    ("nos", "em os"),
+    ("nas", "em as"),
+    ("pelo", "por o"),
+    ("pela", "por a"),
+    ("pelos", "por os"),
+    ("pelas", "por as"),
+    ("num", "em um"),
+    ("numa", "em uma"),
+    ("dum", "de um"),
+    ("duma", "de uma"),
+];
+const IT_CONTRACTIONS: &[(&str, &str)] = &[
+    ("al", "a il"),
+    ("allo", "a lo"),
+    ("alla", "a la"),
+    ("ai", "a i"),
+    ("agli", "a gli"),
+    ("alle", "a le"),
+    ("dal", "da il"),
+    ("dallo", "da lo"),
+    ("dalla", "da la"),
+    ("dai", "da i"),
+    ("dagli", "da gli"),
+    ("dalle", "da le"),
+    ("del", "di il"),
+    ("dello", "di lo"),
+    ("della", "di la"),
+    ("dei", "di i"),
+    ("degli", "di gli"),
+    ("delle", "di le"),
+    ("nel", "in il"),
+    ("nello", "in lo"),
+    ("nella", "in la"),
+    ("nei", "in i"),
+    ("negli", "in gli"),
+    ("nelle", "in le"),
+    ("sul", "su il"),
+    ("sullo", "su lo"),
+    ("sulla", "su la"),
+    ("sui", "su i"),
+    ("sugli", "su gli"),
+    ("sulle", "su le"),
+    ("col", "con il"),
+    ("coi", "con i"),
+];
+
 /// Languages the kaikki builder is known to produce a sound pack for:
 /// whitespace-tokenized scripts with rich Wiktionary inflection data.
 /// (No-whitespace scripts like Chinese need a segmentation engine — a
 /// Shiori release, not a pack.)
 #[rustfmt::skip]
 pub const WEB_PACK_SOURCES: &[WebPackSource] = &[
-    src("cs", "Czech", "Czech", "Czech", Some("cs"), 197, &[], &[]),
-    src("da", "Danish", "Danish", "Danish", Some("da"), 105, &[], &[]),
-    src("de", "German", "German", "German", Some("de"), 901, &[], &[]),
-    src("es", "Spanish", "Spanish", "Spanish", Some("es"), 966, &[], &[]),
-    src("fi", "Finnish", "Finnish", "Finnish", Some("fi"), 419, &[], &[]),
-    src("fr", "French", "French", "French", Some("fr"), 544, &[], FR_ELISIONS),
-    src("grc", "Ancient Greek", "Ancient Greek", "AncientGreek", None, 373, GREEK, &[]),
-    src("hu", "Hungarian", "Hungarian", "Hungarian", Some("hu"), 176, &[], &[]),
-    src("id", "Indonesian", "Indonesian", "Indonesian", Some("id"), 56, &[], &[]),
-    src("it", "Italian", "Italian", "Italian", Some("it"), 550, &[], IT_ELISIONS),
-    src("ko", "Korean", "Korean", "Korean", Some("ko"), 186, HANGUL, &[]),
-    src("la", "Latin", "Latin", "Latin", None, 1156, &[], &[]),
-    src("nl", "Dutch", "Dutch", "Dutch", Some("nl"), 232, &[], &[]),
-    src("pl", "Polish", "Polish", "Polish", Some("pl"), 383, &[], &[]),
-    src("pt", "Portuguese", "Portuguese", "Portuguese", Some("pt"), 331, &[], &[]),
-    src("ro", "Romanian", "Romanian", "Romanian", Some("ro"), 175, &[], &[]),
-    src("ru", "Russian", "Russian", "Russian", Some("ru"), 741, CYRILLIC, &[]),
-    src("sv", "Swedish", "Swedish", "Swedish", Some("sv"), 175, &[], &[]),
-    src("tr", "Turkish", "Turkish", "Turkish", Some("tr"), 121, &[], &[]),
+    src("cs", "Czech", "Czech", "Czech", Some("cs"), 197, &[], &[], &[]),
+    src("da", "Danish", "Danish", "Danish", Some("da"), 105, &[], &[], &[]),
+    src("de", "German", "German", "German", Some("de"), 901, &[], &[], DE_CONTRACTIONS),
+    src("es", "Spanish", "Spanish", "Spanish", Some("es"), 966, &[], &[], ES_CONTRACTIONS),
+    src("fi", "Finnish", "Finnish", "Finnish", Some("fi"), 419, &[], &[], &[]),
+    src("fr", "French", "French", "French", Some("fr"), 544, &[], FR_ELISIONS, FR_CONTRACTIONS),
+    src("grc", "Ancient Greek", "Ancient Greek", "AncientGreek", None, 373, GREEK, &[], &[]),
+    src("hu", "Hungarian", "Hungarian", "Hungarian", Some("hu"), 176, &[], &[], &[]),
+    src("id", "Indonesian", "Indonesian", "Indonesian", Some("id"), 56, &[], &[], &[]),
+    src("it", "Italian", "Italian", "Italian", Some("it"), 550, &[], IT_ELISIONS, IT_CONTRACTIONS),
+    src("ko", "Korean", "Korean", "Korean", Some("ko"), 186, HANGUL, &[], &[]),
+    src("la", "Latin", "Latin", "Latin", None, 1156, &[], &[], &[]),
+    src("nl", "Dutch", "Dutch", "Dutch", Some("nl"), 232, &[], &[], &[]),
+    src("pl", "Polish", "Polish", "Polish", Some("pl"), 383, &[], &[], &[]),
+    src("pt", "Portuguese", "Portuguese", "Portuguese", Some("pt"), 331, &[], &[], PT_CONTRACTIONS),
+    src("ro", "Romanian", "Romanian", "Romanian", Some("ro"), 175, &[], &[], &[]),
+    src("ru", "Russian", "Russian", "Russian", Some("ru"), 741, CYRILLIC, &[], &[]),
+    src("sv", "Swedish", "Swedish", "Swedish", Some("sv"), 175, &[], &[], &[]),
+    src("tr", "Turkish", "Turkish", "Turkish", Some("tr"), 121, &[], &[], &[]),
 ];
 
 #[allow(clippy::too_many_arguments)] // a table-row constructor, not an API
@@ -94,6 +171,7 @@ const fn src(
     approx_mb: u32,
     script_ranges: &'static [(u32, u32)],
     elisions: &'static [&'static str],
+    contractions: &'static [(&'static str, &'static str)],
 ) -> WebPackSource {
     WebPackSource {
         lang,
@@ -104,6 +182,7 @@ const fn src(
         approx_mb,
         script_ranges,
         elisions,
+        contractions,
     }
 }
 
@@ -300,6 +379,7 @@ pub fn build_web_pack(
         description: &description,
         script_ranges: source.script_ranges,
         elisions: source.elisions,
+        contractions: source.contractions,
     };
     if staging.exists() {
         std::fs::remove_dir_all(staging)?;

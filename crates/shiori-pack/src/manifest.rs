@@ -42,6 +42,12 @@ pub struct Manifest {
     /// words — while "aujourd’hui" (prefix not listed) stays whole.
     #[serde(default)]
     pub elisions: Vec<String>,
+    /// Portmanteau words that fuse two function words, mapped to their
+    /// space-separated expansion: `au = "à le"`. Unlike elision the
+    /// letters overlap, so the token stays whole; the reader shows the
+    /// expansion and the word counts as a function word.
+    #[serde(default)]
+    pub contractions: std::collections::BTreeMap<String, String>,
     /// Unicode codepoint ranges (inclusive) counting as target-language
     /// script, e.g. `[[0x0370, 0x03FF], [0x1F00, 0x1FFF]]`.
     #[serde(default)]

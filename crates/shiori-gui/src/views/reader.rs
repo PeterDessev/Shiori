@@ -866,6 +866,25 @@ impl ShioriGui {
                         ui.label(format!("in text: {}", panel.phrase));
                     }
                 }
+                // A fused function word ("au" = à + le): show the
+                // components, each clickable for lookup.
+                if let Some(parts) = lang.contraction_of(&panel.word.key.lemma) {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.weak("=");
+                        for (i, part) in parts.iter().enumerate() {
+                            if i > 0 {
+                                ui.weak("+");
+                            }
+                            if ui
+                                .small_button(part)
+                                .on_hover_text("Look up in the dictionary")
+                                .clicked()
+                            {
+                                *open_kanji = Some(part.clone());
+                            }
+                        }
+                    });
+                }
                 ui.horizontal(|ui| {
                     ui.label(panel.word.key.pos.as_str());
                     ui.label("·");

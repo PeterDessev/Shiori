@@ -37,6 +37,8 @@ pub struct LangSpec<'a> {
     pub script_ranges: &'a [(u32, u32)],
     /// Elidable prefixes for the tokenizer ("l", "d", "qu" for French).
     pub elisions: &'a [&'a str],
+    /// Portmanteau function words and their expansions ("au" = "à le").
+    pub contractions: &'a [(&'a str, &'a str)],
 }
 
 /// Basic Latin + Latin-1 Supplement + Latin Extended-A/B.
@@ -508,6 +510,18 @@ fn manifest_toml(spec: &LangSpec<'_>, has_tiers: bool) -> String {
                 .join(", ")
         )
     };
+    let contractions = if spec.contractions.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "contractions = {{ {} }}\n",
+            spec.contractions
+                .iter()
+                .map(|(s, e)| format!("\"{}\" = \"{}\"", toml_escape(s), toml_escape(e)))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    };
     let graded_scheme = if has_tiers {
         "\n[graded_scheme]\nkey = \"frequency-tier\"\ndisplay = \"frequency tier\"\n"
     } else {
@@ -523,7 +537,7 @@ license = "{license}"
 joiner = " "
 sentence_enders = [".", "?", "!", "…"]
 script_ranges = [{ranges}]
-{elisions}{graded_scheme}
+{elisions}{contractions}{graded_scheme}
 [prompt]
 language_name = "{name}"
 chat_persona = "a friendly native {name} speaker"
@@ -563,6 +577,7 @@ mod tests {
             description: "A \"test\" build.",
             script_ranges: &[],
             elisions: &[],
+            contractions: &[("au", "à le")],
         }
     }
 
@@ -677,11 +692,16 @@ mod tests {
             description: "",
             script_ranges: &[(0x0400, 0x04FF)],
             elisions: &["l", "d"],
+            contractions: &[("im", "in dem")],
         };
         build_pack(&input, None, &spec, &out).unwrap();
         let pack = crate::Pack::load(&out).unwrap();
         assert_eq!(pack.manifest.script_ranges, vec![(0x0400, 0x04FF)]);
         assert_eq!(pack.manifest.elisions, vec!["l", "d"]);
+        assert_eq!(
+            pack.manifest.contractions.get("im").map(String::as_str),
+            Some("in dem")
+        );
         // No frequency list → no tier scheme claimed.
         assert!(pack.manifest.graded_scheme.is_none());
         std::fs::remove_dir_all(&dir).ok();

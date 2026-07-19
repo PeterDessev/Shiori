@@ -53,6 +53,13 @@ pub trait LanguageService: Send + Sync {
         None
     }
 
+    /// The function words a portmanteau surface fuses ("au" → ["à",
+    /// "le"] in French), for display and lookup of the components.
+    /// Default: the language has no contractions table.
+    fn contraction_of(&self, _surface: &str) -> Option<Vec<String>> {
+        None
+    }
+
     /// Fold text into the language's dictionary lookup key (Greek:
     /// strip accents/breathings, lowercase, final sigma → medial).
     /// Pack dictionaries index their forms pre-folded with the same

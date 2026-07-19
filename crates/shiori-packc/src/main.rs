@@ -89,6 +89,7 @@ fn build_kaikki(args: &[String]) -> Result<(), String> {
         description: opts.get("description").unwrap_or(&default_description),
         script_ranges: &[],
         elisions: &[],
+        contractions: &[],
     };
     let report = kaikki::build_pack(
         Path::new(&input),

@@ -24,6 +24,8 @@ pub struct PackLanguage {
     /// Folded elidable prefixes; a token like "l’eau" splits after the
     /// apostrophe when its prefix is listed.
     elisions: std::collections::HashSet<String>,
+    /// Folded portmanteau surface → its component words ("au" → à, le).
+    contractions: std::collections::HashMap<String, Vec<String>>,
     script_ranges: Vec<(u32, u32)>,
     transliteration: Option<String>,
     graded_scheme: Option<(String, String)>,
@@ -43,6 +45,16 @@ impl PackLanguage {
                 .filter_map(|s| s.chars().next())
                 .collect(),
             elisions: manifest.elisions.iter().map(|e| fold_lookup(e)).collect(),
+            contractions: manifest
+                .contractions
+                .iter()
+                .map(|(surface, expansion)| {
+                    (
+                        fold_lookup(surface),
+                        expansion.split_whitespace().map(str::to_string).collect(),
+                    )
+                })
+                .collect(),
             script_ranges: manifest.script_ranges.clone(),
             transliteration: manifest.transliteration.clone(),
             graded_scheme: manifest
@@ -179,15 +191,22 @@ impl LanguageService for PackLanguage {
         let mut word_start: Option<usize> = None;
         let push_tok = |out: &mut Vec<Token>, start: usize, end: usize, sentence: &str| {
             let surface = &sentence[start..end];
+            let pos = if surface.chars().all(|c| !c.is_alphabetic()) {
+                PartOfSpeech::Symbol
+            } else if !self.contractions.is_empty()
+                && self.contractions.contains_key(&fold_lookup(surface))
+            {
+                // A fused preposition+article ("au", "im", "del") is a
+                // function word, not vocabulary to learn.
+                PartOfSpeech::Preposition
+            } else {
+                PartOfSpeech::Unknown
+            };
             out.push(Token {
                 surface: surface.to_string(),
                 lemma: surface.to_string(),
                 reading: String::new(),
-                pos: if surface.chars().all(|c| !c.is_alphabetic()) {
-                    PartOfSpeech::Symbol
-                } else {
-                    PartOfSpeech::Unknown
-                },
+                pos,
                 start,
                 end,
             });
@@ -245,6 +264,10 @@ impl LanguageService for PackLanguage {
             Some("betacode") => crate::betacode::betacode_to_greek(query),
             _ => None,
         }
+    }
+
+    fn contraction_of(&self, surface: &str) -> Option<Vec<String>> {
+        self.contractions.get(&fold_lookup(surface)).cloned()
     }
 
     fn normalize_lookup(&self, text: &str) -> String {
@@ -369,6 +392,41 @@ immerse_instruction = "Write French."
         // The elided article folds to Wiktionary's ASCII headword form.
         assert_eq!(fold_lookup("l’"), "l'");
         assert_eq!(fold_lookup("L’"), "l'");
+    }
+
+    #[test]
+    fn contractions_expand_and_count_as_function_words() {
+        let manifest = Manifest::parse(
+            r#"
+schema = 1
+lang = "fr"
+name = "French"
+dict_source = "fr-pack"
+contractions = { "au" = "à le", "des" = "de les" }
+
+[prompt]
+language_name = "French"
+chat_persona = "a speaker"
+immerse_instruction = "Write French."
+"#,
+        )
+        .unwrap();
+        let svc = PackLanguage::new(&manifest);
+
+        // The token stays whole (the letters fuse), but it is a
+        // function word and its components are exposed for display.
+        let tokens = svc.tokenize_sentence("Il va au marché.").unwrap();
+        let au = tokens.iter().find(|t| t.surface == "au").unwrap();
+        assert_eq!(au.pos, PartOfSpeech::Preposition);
+        assert!(!au.pos.is_content_word());
+        let marche = tokens.iter().find(|t| t.surface == "marché").unwrap();
+        assert_eq!(marche.pos, PartOfSpeech::Unknown);
+
+        assert_eq!(
+            svc.contraction_of("Au"),
+            Some(vec!["à".to_string(), "le".to_string()])
+        );
+        assert_eq!(svc.contraction_of("marché"), None);
     }
 
     #[test]
