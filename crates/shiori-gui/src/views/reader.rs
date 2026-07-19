@@ -822,9 +822,15 @@ impl ShioriGui {
                 // the analyzer split a dictionary word (低声), the compound
                 // takes the headline and the clicked token becomes a
                 // component below.
+                let show_ipa = self.settings.show_ipa;
                 ui.add_space(4.0);
                 if let Some(compound) = &panel.compound {
-                    ruby_headword(ui, lang.as_ref(), compound.headword(), compound.reading());
+                    ruby_headword(
+                        ui,
+                        lang.as_ref(),
+                        compound.headword(),
+                        compound.display_reading(show_ipa),
+                    );
                     ui.add_space(2.0);
                     for (i, sense) in compound.senses.iter().take(3).enumerate() {
                         let glosses: Vec<&str> =
@@ -846,6 +852,16 @@ impl ShioriGui {
                         &panel.word.key.lemma,
                         &panel.word.key.reading,
                     );
+                    // Pack entries carry IPA instead of a reading; show
+                    // it as its own line when opted in.
+                    if show_ipa && panel.word.key.reading.is_empty() {
+                        if let Some(entry) = &panel.entry {
+                            let ipa = entry.display_reading(true);
+                            if !ipa.is_empty() {
+                                ui.weak(ipa);
+                            }
+                        }
+                    }
                     if panel.phrase != panel.word.key.lemma {
                         ui.label(format!("in text: {}", panel.phrase));
                     }

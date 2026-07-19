@@ -33,6 +33,7 @@ impl ShioriGui {
         let mut learn_headword: Option<String> = None;
         let mut toggle_examples: Option<i64> = None;
         let mut open_info: Option<usize> = None;
+        let show_ipa = self.settings.show_ipa;
         // Trim the right padding so the results' vertical scroll bar sits at
         // the window edge instead of floating ~8px inside it.
         let dict_frame = egui::Frame::central_panel(&ctx.style()).inner_margin(egui::Margin {
@@ -121,12 +122,8 @@ impl ShioriGui {
                                                             .size(22.0)
                                                             .strong(),
                                                         );
-                                                        let kana = hit
-                                                            .entry
-                                                            .kana
-                                                            .first()
-                                                            .map(|k| k.text.as_str())
-                                                            .unwrap_or("");
+                                                        let kana =
+                                                            hit.entry.display_reading(show_ipa);
                                                         if !kana.is_empty()
                                                             && kana != hit.entry.headword()
                                                         {
@@ -262,10 +259,8 @@ impl ShioriGui {
             let headword = hit.entry.headword().to_string();
             let kana = hit
                 .entry
-                .kana
-                .first()
-                .map(|k| k.text.clone())
-                .unwrap_or_default();
+                .display_reading(self.settings.show_ipa)
+                .to_string();
             let reading = if !kana.is_empty() && kana != headword {
                 kana
             } else {
