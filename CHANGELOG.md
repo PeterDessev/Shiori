@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-19
+
+Shiori grows beyond Japanese: language support is now data-driven, with
+installable language packs, a corpus-first Koine Greek pack, a
+build-from-Wiktionary pipeline for ~19 modern languages, a home page,
+and per-language library, dictionary, reviews, statistics, and practice.
+
 ### Added
 
 #### Languages beyond Japanese
@@ -47,6 +54,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   accepts betacode/Greeklish.
 - **Tier-1 analysis** for plain-text imports and chat in pack languages:
   tokens resolve through the pack's full-form table when unambiguous.
+- **Dictionary search in pack languages resolves inflected forms**: a
+  query like *suis* resolves through the grammar table to every candidate
+  lemma (être and suivre), falling back to the learned suffix rules for
+  forms the table doesn't list. Results build in tiers of match closeness
+  — lemma-of-the-query, then exact, then prefix matches — with corpus
+  frequency ordering words within each tier, so the everyday word always
+  beats its rare homograph.
+- **Language-aware hints and a consolidated About section**: dictionary,
+  online-search, and library empty-state hints follow the active language,
+  and Settings → General gathers every data attribution (JMdict, KANJIDIC2,
+  KanjiVG, JLPT lists, Leeds frequency, Lindera/IPADIC, Noto fonts, Aozora,
+  Wikisource, Wiktextract/FrequencyWords) plus the license line of each
+  installed pack in one place.
 - **Build from Wiktionary** (Settings → Languages): pick from ~19
   languages and the app downloads public upstream data — kaikki.org's
   Wiktextract dump and hermitdave's frequency list — and compiles the
@@ -208,5 +228,6 @@ around comprehensible input.
   exit.
 - Japanese font baseline alignment and a crisp Latin font fallback.
 
-[Unreleased]: https://github.com/PeterDessev/Shiori/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/PeterDessev/Shiori/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/PeterDessev/Shiori/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/PeterDessev/Shiori/releases/tag/v0.1.0

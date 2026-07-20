@@ -18,7 +18,7 @@ jobs:
       - name: Build
         run: cargo build --release -p shiori-gui
       - name: Package
-        run: Compress-Archive -Path target/release/shiori.exe -DestinationPath shiori-${{ github.ref_name }}-windows-x86_64.zip
+        run: Compress-Archive -Path target/release/shiori.exe, LICENSE-MIT, LICENSE-APACHE, README.md, CHANGELOG.md -DestinationPath shiori-${{ github.ref_name }}-windows-x86_64.zip
       - name: Extract release notes from CHANGELOG
         shell: pwsh
         run: |
