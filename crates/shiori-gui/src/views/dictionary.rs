@@ -88,12 +88,12 @@ impl ShioriGui {
                     ui.add_space(8.0);
                 }
 
-                ui.columns(2, |columns| {
-                    // Left: word entries.
+                // The word list, shared by both layouts below.
+                let mut word_list = |ui: &mut egui::Ui| {
                     egui::ScrollArea::vertical()
                         .id_salt("dict-words")
                         .auto_shrink([false; 2])
-                        .show(&mut columns[0], |ui| {
+                        .show(ui, |ui| {
                             for (i, hit) in results.words.iter().enumerate() {
                                 egui::Frame::group(ui.style()).show(ui, |ui| {
                                     ui.set_width(ui.available_width());
@@ -198,18 +198,27 @@ impl ShioriGui {
                                 ui.add_space(6.0);
                             }
                         });
-
-                    // Right: kanji cards.
-                    egui::ScrollArea::vertical()
-                        .id_salt("dict-kanji")
-                        .auto_shrink([false; 2])
-                        .show(&mut columns[1], |ui| {
-                            for kanji in &results.kanji {
-                                kanji_card(ui, kanji, "");
-                                ui.add_space(8.0);
-                            }
-                        });
-                });
+                };
+                if results.kanji.is_empty() {
+                    // Languages without character cards (packs, or a
+                    // query that touched no kanji) get the full width
+                    // instead of an empty right column.
+                    word_list(ui);
+                } else {
+                    ui.columns(2, |columns| {
+                        word_list(&mut columns[0]);
+                        // Right: kanji cards.
+                        egui::ScrollArea::vertical()
+                            .id_salt("dict-kanji")
+                            .auto_shrink([false; 2])
+                            .show(&mut columns[1], |ui| {
+                                for kanji in &results.kanji {
+                                    kanji_card(ui, kanji, "");
+                                    ui.add_space(8.0);
+                                }
+                            });
+                    });
+                }
             });
 
         if let Some(word_id) = toggle_examples {
