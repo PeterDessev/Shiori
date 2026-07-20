@@ -858,7 +858,7 @@ fn draw_kanji_strokes(ui: &mut egui::Ui, strokes: &[String], size: f32, id_sourc
     painter.rect_stroke(
         rect,
         4.0,
-        egui::Stroke::new(1.0, ui.visuals().weak_text_color().gamma_multiply(0.4)),
+        egui::Stroke::new(1.0_f32, ui.visuals().weak_text_color().gamma_multiply(0.4)),
         egui::StrokeKind::Inside,
     );
     let scale = size / 109.0;

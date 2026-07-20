@@ -546,7 +546,7 @@ fn chat_message_body(
                             egui::pos2(rect.left(), rect.bottom() - 1.0),
                             egui::pos2(rect.right(), rect.bottom() - 1.0),
                         ],
-                        egui::Stroke::new(2.0, color),
+                        egui::Stroke::new(2.0_f32, color),
                     );
                     response.clone().on_hover_text(&annotation.note);
                 }

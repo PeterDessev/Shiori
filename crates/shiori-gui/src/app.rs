@@ -2065,24 +2065,24 @@ fn sepia_visuals() -> egui::Visuals {
     v.faint_bg_color = Color32::from_rgb(232, 218, 192);
     v.code_bg_color = Color32::from_rgb(232, 218, 192);
     v.selection.bg_fill = Color32::from_rgb(213, 178, 122);
-    v.selection.stroke = Stroke::new(1.0, Color32::from_rgb(120, 90, 50));
+    v.selection.stroke = Stroke::new(1.0_f32, Color32::from_rgb(120, 90, 50));
     v.hyperlink_color = Color32::from_rgb(140, 90, 40);
     v.warn_fg_color = Color32::from_rgb(160, 100, 20);
     v.error_fg_color = Color32::from_rgb(170, 50, 40);
     v.widgets.noninteractive.bg_fill = v.panel_fill;
-    v.widgets.noninteractive.fg_stroke = Stroke::new(1.0, text);
+    v.widgets.noninteractive.fg_stroke = Stroke::new(1.0_f32, text);
     v.widgets.inactive.bg_fill = Color32::from_rgb(228, 213, 185);
     v.widgets.inactive.weak_bg_fill = Color32::from_rgb(228, 213, 185);
-    v.widgets.inactive.fg_stroke = Stroke::new(1.0, text);
+    v.widgets.inactive.fg_stroke = Stroke::new(1.0_f32, text);
     v.widgets.hovered.bg_fill = Color32::from_rgb(219, 201, 168);
     v.widgets.hovered.weak_bg_fill = Color32::from_rgb(219, 201, 168);
-    v.widgets.hovered.fg_stroke = Stroke::new(1.5, text);
+    v.widgets.hovered.fg_stroke = Stroke::new(1.5_f32, text);
     v.widgets.active.bg_fill = Color32::from_rgb(208, 188, 152);
     v.widgets.active.weak_bg_fill = Color32::from_rgb(208, 188, 152);
-    v.widgets.active.fg_stroke = Stroke::new(1.5, text);
+    v.widgets.active.fg_stroke = Stroke::new(1.5_f32, text);
     v.widgets.open.bg_fill = Color32::from_rgb(228, 213, 185);
     v.widgets.open.weak_bg_fill = Color32::from_rgb(228, 213, 185);
-    v.widgets.open.fg_stroke = Stroke::new(1.0, text);
+    v.widgets.open.fg_stroke = Stroke::new(1.0_f32, text);
     v
 }
 

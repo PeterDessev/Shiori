@@ -83,7 +83,7 @@ impl ShioriGui {
                 painter.rect_stroke(
                     rect.shrink(4.0),
                     8.0,
-                    egui::Stroke::new(2.0, egui::Color32::from_rgb(90, 160, 240)),
+                    egui::Stroke::new(2.0_f32, egui::Color32::from_rgb(90, 160, 240)),
                     egui::StrokeKind::Inside,
                 );
                 let n = ctx.input(|i| i.raw.hovered_files.len());
