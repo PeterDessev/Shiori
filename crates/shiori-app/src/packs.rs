@@ -994,12 +994,19 @@ mod tests {
                 "\n",
                 r#"{"key":"ἀρχή","forms":[{"text":"αρχη","role":"canonical","common":true}],"entry":{"id":"ἀρχή","kanji":[{"common":true,"text":"ἀρχή","tags":[]}],"kana":[],"sense":[{"partOfSpeech":["noun (1st declension)"],"gloss":[{"lang":"eng","text":"beginning, origin"}],"related":[],"antonym":[],"field":[],"dialect":[],"misc":[],"info":[]}]}}"#,
                 "\n",
+                r#"{"key":"ξύνα","forms":[{"text":"ξυνα","role":"canonical","common":true}],"entry":{"id":"ξύνα","kanji":[{"common":true,"text":"ξύνα","tags":[]}],"kana":[],"sense":[{"partOfSpeech":["preposition"],"gloss":[{"lang":"eng","text":"rare homograph"}],"related":[],"antonym":[],"field":[],"dialect":[],"misc":[],"info":[]}]}}"#,
+                "\n",
+                r#"{"key":"ξύνβ","forms":[{"text":"ξυνβ","role":"canonical","common":true}],"entry":{"id":"ξύνβ","kanji":[{"common":true,"text":"ξύνβ","tags":[]}],"kana":[],"sense":[{"partOfSpeech":["preposition"],"gloss":[{"lang":"eng","text":"everyday homograph"}],"related":[],"antonym":[],"field":[],"dialect":[],"misc":[],"info":[]}]}}"#,
+                "\n",
             ),
         )
         .unwrap();
+        // ξύνβ is the everyday word, ξύνα the rare homograph — and ξύνβ
+        // sorts alphabetically last, so ordering by frequency is
+        // observable (the être-vs-archaic-estre shape).
         std::fs::write(
             pack_dir.join("frequency.tsv"),
-            "λογοσ\t5\nξυνα\t3\nαρχη\t40\n",
+            "λογοσ\t5\nξυνβ\t3\nαρχη\t40\n",
         )
         .unwrap();
         // Tier-1 full-form table: ἦν → εἰμί unambiguously; a fake
@@ -1084,7 +1091,7 @@ mod tests {
         assert_eq!(app.active_dict_source(), "grc-pack");
 
         // Pack data was installed, scoped to the pack's source/lang.
-        assert_eq!(app.db().dict_entry_count("grc-pack").unwrap(), 2);
+        assert_eq!(app.db().dict_entry_count("grc-pack").unwrap(), 4);
         assert_eq!(app.db().frequency_count("grc").unwrap(), 3);
         assert_eq!(app.db().frequency_rank("grc", "λογοσ").unwrap(), Some(5));
 
@@ -1194,12 +1201,19 @@ mod tests {
         assert_eq!(amphi.morph, None);
 
         // Ambiguous forms where one candidate is corpus-ranked resolve
-        // to it: ξυν → ξύνα (rank 3) beats the unranked ξύνβ, and the
+        // to it: ξυν → ξύνβ (rank 3) beats the unranked ξύνα, and the
         // winning lemma's single row supplies the parse.
         let rows3 = app.db().sentence_tokens(sentences[2].id).unwrap();
         let xyn = rows3.iter().find(|r| r.token.surface == "ξὺν").unwrap();
-        assert_eq!(xyn.token.lemma, "ξύνα");
-        assert_eq!(xyn.morph.as_deref(), Some("P"));
+        assert_eq!(xyn.token.lemma, "ξύνβ");
+        assert_eq!(xyn.morph.as_deref(), Some("X"));
+
+        // Dictionary search of the same ambiguous form lists every
+        // candidate, everyday word first: frequency ordering beats the
+        // alphabetical accident that put archaic homographs on top.
+        let results = app.search_dictionary("ξὺν").unwrap();
+        let heads: Vec<&str> = results.words.iter().map(|h| h.entry.headword()).collect();
+        assert_eq!(heads, vec!["ξύνβ", "ξύνα"], "ranked homograph leads");
 
         // A form absent from the table entirely resolves through the
         // learned suffix rules: λόγον rewrites -ον → -οσ, and the
@@ -1255,7 +1269,7 @@ mod tests {
             .exists());
         app.set_active_lang("grc").unwrap();
         app.ensure_pack_data("grc").unwrap();
-        assert_eq!(app.db().dict_entry_count("grc-pack").unwrap(), 2);
+        assert_eq!(app.db().dict_entry_count("grc-pack").unwrap(), 4);
 
         // language_infos reports what the pack ships.
         let infos = app.language_infos();
@@ -1288,7 +1302,7 @@ mod tests {
         app.install_pack_from_dir(&src).unwrap();
         app.set_active_lang("grc").unwrap();
         app.ensure_pack_data("grc").unwrap();
-        assert_eq!(app.db().dict_entry_count("grc-pack").unwrap(), 2);
+        assert_eq!(app.db().dict_entry_count("grc-pack").unwrap(), 4);
         assert_eq!(app.db().frequency_count("grc").unwrap(), 3);
 
         // A new version of the pack under the same code, with a

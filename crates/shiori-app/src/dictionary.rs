@@ -24,6 +24,9 @@ pub struct DictSearchHit {
     pub word: Option<WordRow>,
     /// JLPT level the word belongs to (5 = N5 easiest … 1 = N1), if listed.
     pub jlpt: Option<u8>,
+    /// Corpus frequency rank of the headword, when listed — everyday
+    /// words sort above archaic homographs within each match tier.
+    pub rank: Option<u32>,
 }
 
 /// What the typed form *is*, when it is a conjugated or compounded unit:
@@ -88,24 +91,24 @@ impl App {
         let mut seen = HashSet::new();
         let mut words = Vec::new();
 
-        // Root-form entries first, so a conjugated query leads with the
-        // word it is a form of.
+        // Results come in tiers of match closeness — the word the query
+        // is a *form of*, then exact matches, then prefix matches — and
+        // corpus frequency orders the words within each tier, so the
+        // everyday être beats the archaic estre without a prefix match
+        // ever outranking an exact one.
         let source = self.active_dict_source();
         let folded = self.service().normalize_lookup(&search);
+
+        // Tier 1a: the analyzed root of a conjugated query (Japanese).
         if let Some(a) = &analysis {
             let lookup = self.service().normalize_lookup(&a.lemma);
-            for key in self.db().dict_lookup_keys(source, &lookup)? {
-                if seen.insert(key.clone()) {
-                    if let Some(hit) = self.build_hit(&key)? {
-                        words.push(hit);
-                    }
-                }
-            }
+            let keys = self.db().dict_lookup_keys(source, &lookup)?;
+            self.push_hits_ranked(keys, &mut seen, &mut words)?;
         }
-        // Pack languages have no conjugation analyzer; an inflected
-        // query resolves through the grammar table instead — "suis"
-        // surfaces both être and suivre. Forms the table doesn't know
-        // fall back to the learned suffix rules.
+        // Tier 1b: pack languages have no conjugation analyzer; an
+        // inflected query resolves through the grammar table instead —
+        // "suis" surfaces both être and suivre. Forms the table doesn't
+        // know fall back to the learned suffix rules.
         if analysis.is_none() && self.active_pack().is_some() {
             let mut lemmas: Vec<String> = self
                 .tier1_candidates(&search)?
@@ -118,26 +121,20 @@ impl App {
                     lemmas.push(lemma);
                 }
             }
+            let mut keys = Vec::new();
             for lemma in lemmas {
                 let lookup = self.service().normalize_lookup(&lemma);
-                for key in self.db().dict_lookup_keys(source, &lookup)? {
-                    if seen.insert(key.clone()) {
-                        if let Some(hit) = self.build_hit(&key)? {
-                            words.push(hit);
-                        }
-                    }
-                }
+                keys.extend(self.db().dict_lookup_keys(source, &lookup)?);
             }
+            self.push_hits_ranked(keys, &mut seen, &mut words)?;
         }
-        // Literal exact/prefix matches on the typed form, folded into the
-        // language's lookup key (kana stays verbatim; Greek folds accents).
-        for key in self.db().dict_search_keys(source, &folded, 30)? {
-            if seen.insert(key.clone()) {
-                if let Some(hit) = self.build_hit(&key)? {
-                    words.push(hit);
-                }
-            }
-        }
+        // Tier 2: exact matches on the typed form, folded into the
+        // language's lookup key (kana stays verbatim; Greek folds
+        // accents). Tier 3: prefix matches.
+        let exact = self.db().dict_lookup_keys(source, &folded)?;
+        self.push_hits_ranked(exact, &mut seen, &mut words)?;
+        let prefix = self.db().dict_search_keys(source, &folded, 30)?;
+        self.push_hits_ranked(prefix, &mut seen, &mut words)?;
 
         // Character cards (kanji for Japanese): from the query itself,
         // then from top headwords. Empty for languages without the
@@ -198,6 +195,28 @@ impl App {
         Ok(out)
     }
 
+    /// Append one match tier's hits: entries build in key order, then
+    /// the whole batch sorts by corpus frequency (unranked words keep
+    /// their dictionary order at the back) before joining the results.
+    fn push_hits_ranked(
+        &self,
+        keys: Vec<String>,
+        seen: &mut HashSet<String>,
+        words: &mut Vec<DictSearchHit>,
+    ) -> Result<()> {
+        let mut batch = Vec::new();
+        for key in keys {
+            if seen.insert(key.clone()) {
+                if let Some(hit) = self.build_hit(&key)? {
+                    batch.push(hit);
+                }
+            }
+        }
+        batch.sort_by_key(|hit| hit.rank.unwrap_or(u32::MAX));
+        words.extend(batch);
+        Ok(())
+    }
+
     /// Build a search hit from a dictionary entry key, resolving its
     /// tracked word and JLPT level. Returns `None` for a missing or
     /// corrupt entry.
@@ -218,7 +237,22 @@ impl App {
             .next();
         let kanji = entry.kanji.first().map(|f| f.text.as_str()).unwrap_or("");
         let jlpt = self.db().jlpt_level(kanji, entry.reading())?;
-        Ok(Some(DictSearchHit { entry, word, jlpt }))
+        let mut rank = None;
+        for form in self
+            .service()
+            .frequency_forms(entry.headword(), entry.reading())
+        {
+            rank = self.db().frequency_rank(self.active_lang(), &form)?;
+            if rank.is_some() {
+                break;
+            }
+        }
+        Ok(Some(DictSearchHit {
+            entry,
+            word,
+            jlpt,
+            rank,
+        }))
     }
 
     /// If the query is a conjugated or compounded form, describe it: its
