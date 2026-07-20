@@ -34,6 +34,24 @@ impl ShioriGui {
         let mut toggle_examples: Option<i64> = None;
         let mut open_info: Option<usize> = None;
         let show_ipa = self.settings.show_ipa;
+        // Japanese keeps its script-specific examples; pack languages
+        // get wording that matches how their search works (folded
+        // lookup — case and accents ignored — plus form resolution).
+        let (search_hint, search_help) = if self.active_lang_is_japanese() {
+            (
+                "猫, ねこ, neko, 食べました, tabemashita…".to_string(),
+                "Search by kanji, kana, or rōmaji (Neko → ネコ). Conjugated forms \
+                 find their dictionary root. Prefix matches included."
+                    .to_string(),
+            )
+        } else {
+            (
+                format!("Search the {} dictionary…", self.active_lang_name()),
+                "Case and accents are ignored. Inflected forms find their \
+                 dictionary form. Prefix matches included."
+                    .to_string(),
+            )
+        };
         // Trim the right padding so the results' vertical scroll bar sits at
         // the window edge instead of floating ~8px inside it.
         let dict_frame = egui::Frame::central_panel(&ctx.style()).inner_margin(egui::Margin {
@@ -52,7 +70,7 @@ impl ShioriGui {
                     let response = ui.add_sized(
                         [(ui.available_width() - 80.0).clamp(220.0, 420.0), 24.0],
                         egui::TextEdit::singleline(&mut self.dictionary.query)
-                            .hint_text("猫, ねこ, neko, 食べました, tabemashita…"),
+                            .hint_text(&search_hint),
                     );
                     if ui.button("✕").clicked() {
                         self.dictionary.query.clear();
@@ -69,10 +87,7 @@ impl ShioriGui {
                     return;
                 }
                 if self.dictionary.query.trim().is_empty() {
-                    ui.weak(
-                        "Search by kanji, kana, or rōmaji (Neko → ネコ). Conjugated forms \
-                     find their dictionary root. Prefix matches included.",
-                    );
+                    ui.weak(&search_help);
                     return;
                 }
 

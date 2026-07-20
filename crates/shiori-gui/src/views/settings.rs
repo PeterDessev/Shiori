@@ -124,10 +124,46 @@ impl ShioriGui {
         ui.heading("About");
         ui.label(
             "Shiori（栞・bookmark） — comprehensible-input reading with \
-             FSRS spaced repetition.",
+             FSRS spaced repetition. Built in Rust with egui.",
         );
-        ui.label("Dictionary: JMdict © EDRDG (via jmdict-simplified).");
-        ui.label("Frequency list: Leeds corpus derived (CC BY).");
+
+        ui.add_space(8.0);
+        ui.label(egui::RichText::new("Japanese data").strong());
+        ui.weak(
+            "Dictionary: JMdict © EDRDG, used under the EDRDG licence (via jmdict-simplified).",
+        );
+        ui.weak("Kanji data: KANJIDIC2 © EDRDG (CC BY-SA 4.0).");
+        ui.weak("Stroke order: KanjiVG © Ulrich Apel (CC BY-SA 3.0).");
+        ui.weak(
+            "JLPT lists: stephenmk/yomitan-jlpt-vocab (CC BY-SA 4.0), over \
+             Jonathan Waller's CC BY data.",
+        );
+        ui.weak("Frequency list: Leeds corpus derived (CC BY).");
+        ui.weak("Morphological analysis: Lindera with the embedded IPADIC dictionary © NAIST.");
+        ui.weak("Fonts: Noto Sans JP / Noto Serif JP (SIL Open Font License 1.1).");
+
+        ui.add_space(8.0);
+        ui.label(egui::RichText::new("Book sources").strong());
+        ui.weak("Aozora Bunko — public-domain and freely licensed texts; rights per work.");
+        ui.weak("Japanese Wikisource — CC BY-SA / public domain; rights per work.");
+
+        ui.add_space(8.0);
+        ui.label(egui::RichText::new("Language packs").strong());
+        ui.weak(
+            "Packs built from Wiktionary use kaikki.org's Wiktextract data \
+             (CC BY-SA 4.0 & GFDL) and hermitdave's FrequencyWords lists \
+             (CC BY-SA 4.0).",
+        );
+        // Installed packs state their own licenses (also shown on the
+        // Languages page next to each pack).
+        for info in &self.lang_infos {
+            if let Some(pack) = &info.pack {
+                if !pack.license.is_empty() {
+                    ui.weak(format!("{}: {}", info.name, pack.license));
+                }
+            }
+        }
+
         ui.add_space(10.0);
         if ui.button("Show getting-started guide").clicked() {
             self.open_welcome();
@@ -1147,9 +1183,7 @@ impl ShioriGui {
         );
 
         ui.add_space(12.0);
-        ui.weak("Kanji data: KANJIDIC2 © EDRDG (CC BY-SA 4.0).");
-        ui.weak("Stroke order: KanjiVG © Ulrich Apel (CC BY-SA 3.0).");
-        ui.weak("JLPT lists: stephenmk/yomitan-jlpt-vocab (CC BY-SA 4.0).");
+        ui.weak("Data attributions and licenses live in Settings → General → About.");
     }
 }
 

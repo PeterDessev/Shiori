@@ -49,7 +49,17 @@ impl ShioriGui {
                 ui.add_space(30.0);
                 ui.vertical_centered(|ui| {
                     ui.weak("Nothing here yet.");
-                    ui.weak("Import Japanese books or articles — txt, html (Aozora), epub, pdf.");
+                    if self.active_lang_is_japanese() {
+                        ui.weak(
+                            "Import Japanese books or articles — txt, html (Aozora), \
+                             epub, pdf.",
+                        );
+                    } else {
+                        ui.weak(format!(
+                            "Import {} books or articles — txt, html, epub, pdf.",
+                            self.active_lang_name()
+                        ));
+                    }
                 });
             } else {
                 // Horizontal scroll keeps the action buttons reachable

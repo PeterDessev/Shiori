@@ -790,6 +790,22 @@ impl ShioriGui {
         }
     }
 
+    /// English name of the active language ("Japanese", "French", …),
+    /// from its prompt profile.
+    pub fn active_lang_name(&self) -> String {
+        self.lang
+            .as_ref()
+            .map(|l| l.prompt_profile().language_name.clone())
+            .unwrap_or_else(|| "Japanese".to_string())
+    }
+
+    /// Whether the built-in Japanese service is active. Japanese keeps
+    /// its script-specific hints (kana examples, Aozora mentions); pack
+    /// languages get neutral wording.
+    pub fn active_lang_is_japanese(&self) -> bool {
+        self.active_lang_name() == "Japanese"
+    }
+
     /// Refresh the library/stat caches from the database (active
     /// language only).
     pub fn refresh_caches(&mut self) {

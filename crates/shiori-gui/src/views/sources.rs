@@ -28,15 +28,19 @@ impl ShioriGui {
             });
             ui.add_space(6.0);
 
+            // The sources themselves are still Japanese-only (per-language
+            // sources are future work); only the hint's Japanese example
+            // text is dropped for pack languages.
+            let hint = match (self.sources.tab, self.active_lang_is_japanese()) {
+                (SourceTab::Aozora, true) => "title, reading, or author — 坊っちゃん, なつめ…",
+                (SourceTab::Aozora, false) => "title, reading, or author…",
+                (SourceTab::Wikisource, true) => "search Japanese Wikisource…",
+                (SourceTab::Wikisource, false) => "search Wikisource…",
+            };
             ui.horizontal(|ui| {
                 let response = ui.add_sized(
                     [(ui.available_width() - 180.0).clamp(220.0, 460.0), 24.0],
-                    egui::TextEdit::singleline(&mut self.sources.query).hint_text(
-                        match self.sources.tab {
-                            SourceTab::Aozora => "title, reading, or author — 坊っちゃん, なつめ…",
-                            SourceTab::Wikisource => "search Japanese Wikisource…",
-                        },
-                    ),
+                    egui::TextEdit::singleline(&mut self.sources.query).hint_text(hint),
                 );
                 match self.sources.tab {
                     SourceTab::Aozora => {
