@@ -1,8 +1,8 @@
 # Next Steps
 
-The multilingual architecture is code-complete and unit-tested, but no
-real pack has been built or run in the GUI. Tasks below are ordered:
-each unblocks the next. See `docs/wiki/Language-Packs.md` for context.
+The multilingual architecture shipped in 0.2.0 (2026-07-19); the tasks
+below are the follow-up work, ordered so each unblocks the next. See
+`docs/wiki/Language-Packs.md` for context.
 
 ## P0 — Prove it on real data
 
@@ -25,10 +25,11 @@ each unblocks the next. See `docs/wiki/Language-Packs.md` for context.
 - [ ] (Deferred by choice — build-from-Wiktionary covers discovery.)
       Publish a pack catalog + onboarding language picker. The whole
       client pipeline exists and is tested (offline-cached fetch,
-      SHA-256-verified installs, `shiori-packc catalog` generator); the
-      browse UI was removed from the Languages page until a catalog is
-      actually hosted — restoring it is one call (see the wiki's
-      hosted-catalog section).
+      SHA-256-verified installs, `shiori-packc catalog` generator, GUI
+      catalog state, the `pack_catalog_url` setting); the browse
+      section UI itself still needs writing against that plumbing once
+      a catalog is actually hosted (see the wiki's hosted-catalog
+      section).
 
 ## P2 — Deepen coverage
 

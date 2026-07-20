@@ -10,13 +10,23 @@ Bunko and Japanese Wikisource — and imports works into your library in one cli
 
 Two tabs sit next to the heading: **青空文庫** (Aozora Bunko) and **Wikisource**.
 A single search box serves both; its behavior differs per tab, as described
-below. While an import is running, a spinner with an "importing N…" counter
+below. The search hints follow the active language: with Japanese active they
+include Japanese example queries (坊っちゃん, なつめ); with a pack language
+active they read plain "title, reading, or author…" and "search Wikisource…".
+While an import is running, a spinner with an "importing N…" counter
 appears in the header, and the Library nav icon shows the same count.
+
+Both libraries are Japanese, and the Sources view itself stays Japanese-only
+in 0.2.0 — per-language online sources are future work. Pack languages get
+their texts elsewhere: bundled texts import with one click from
+Settings → Languages, and normal file import works for any active language.
 
 Imported works go through the normal import pipeline and land in the
 [Library](@/docs/getting-started.md) exactly like a file import: they are tokenized,
 difficulty-graded, and openable in the [Reader](@/docs/reading.md) immediately. The
-library refreshes as soon as each import finishes.
+library refreshes as soon as each import finishes. Imports land in the
+*active* language's library and run through the active language's analyzer,
+so switch to Japanese before importing from here.
 
 ## Aozora Bunko
 
@@ -97,6 +107,7 @@ Shiori is deliberately gentle with both services:
 
 After the first successful catalog fetch, Aozora search works fully offline.
 Importing a work and anything on the Wikisource tab require a connection.
-These catalog and import fetches, plus optional LLM calls, are the app's only
-network features — see [Getting-Started](@/docs/getting-started.md) for the first-run
-reference-data download.
+These catalog and import fetches, optional LLM calls, and the language-pack
+downloads under Settings → Languages (install from URL, Build from Wiktionary)
+are the app's only network features — see [Getting-Started](@/docs/getting-started.md)
+for the first-run reference-data download.

@@ -3,14 +3,27 @@ title = "Getting Started"
 weight = 1
 +++
 
-Shiori is built from source with Cargo and sets itself up on first launch by
-downloading its reference data. This page takes you from a clean checkout to
-your first reading session.
+Shiori ships as a prebuilt Windows binary and sets itself up on first launch
+by downloading its reference data. This page takes you from a download — or
+a clean checkout, if you prefer to build — to your first reading session.
+
+## Download
+
+Grab the latest `shiori-*-windows-x86_64.zip` from
+[GitHub Releases](https://github.com/PeterDessev/Shiori/releases), unzip it
+anywhere, and run `shiori.exe`. The zip contains the executable plus the
+licenses, README, and changelog. The binary is statically linked against the
+MSVC C runtime, so it runs on stock Windows 10/11 with no VC++
+Redistributable and nothing else to install.
+
+Windows x86_64 is the only supported target — the only one the CI tests and
+ships. The source has no hard OS lock, so building on macOS or Linux may
+well work, but it is untested and unsupported for now.
 
 ## Building from source
 
-You need Rust (rustc 1.88 or later) and a network connection for the first
-build.
+The alternative to the release zip. You need Rust (rustc 1.88 or later) and
+a network connection for the first build.
 
 ```sh
 cargo build --release -p shiori-gui
@@ -18,9 +31,9 @@ cargo run --release -p shiori-gui
 ```
 
 The first build downloads and embeds the IPADIC morphological dictionary via
-lindera. This happens once, at build time, and takes a few minutes; later
-builds reuse it. If the first build fails with a download error, check your
-network and rebuild.
+lindera (behind a default-on cargo feature). This happens once, at build
+time, and takes a few minutes; later builds reuse it. If the first build
+fails with a download error, check your network and rebuild.
 
 ## First launch
 
@@ -50,6 +63,40 @@ While running this way, a dismissible banner at the top of the window carries
 a retry button for the download and an info button explaining exactly what is
 and is not available. You do not need to dig through settings to retry.
 
+### After setup
+
+Once setup and the one-time welcome guide finish, the app opens on a
+**Home** view: the active language with a quick switcher and a "Manage
+languages" shortcut, cards due today with a time estimate from your
+measured review pace, a continue-reading card for the book you are in the
+middle of (progress, estimated time left, unknown words ahead, difficulty
+verdict), and the reading-activity calendar.
+
+## Choosing and adding languages
+
+The first-launch reference-data table above is the Japanese bundle. Every
+other language installs as a data-driven language pack under
+**Settings → Languages**:
+
+- **Activate** a language to switch the whole app — library, reader,
+  dictionary, reviews, statistics, chat — into it. Nothing mixes across
+  languages.
+- **Install** a pack from a folder, a zip, or a download URL, with optional
+  SHA-256 verification. The page shows what each installed pack ships
+  (license, dictionary, morphology, frequency, graded levels, fonts).
+- **Import bundled texts** — a pack that ships texts (the Koine Greek pack
+  does) adds them to the library with one click.
+- **Remove** a pack — its library and review history stay in the database.
+- **Build from Wiktionary** — pick from ~19 languages (French, German,
+  Spanish, Latin, Ancient Greek, Korean, …) and the app downloads
+  kaikki.org's Wiktextract dump plus hermitdave's frequency list and
+  compiles the pack locally, the same first-run model as the Japanese
+  bundle. The dumps are gigabyte-class; interrupted downloads resume
+  instead of restarting.
+
+The pack format itself is documented in
+[Language-Packs](https://github.com/PeterDessev/Shiori/blob/master/docs/wiki/Language-Packs.md).
+
 ## Where your data lives
 
 Everything lives in `%APPDATA%\shiori` (typically
@@ -59,11 +106,14 @@ Everything lives in `%APPDATA%\shiori` (typically
   history, reading sessions, chat, and the imported reference data.
 - `books\` — archival copies of every file you import, so the original can be
   moved or deleted afterwards.
+- `packs\<code>\` — each installed language pack (Settings → Languages
+  installs into it; a pack directory can also be dropped there by hand).
 - Cached downloads (JMdict JSON, kanji archives, fonts, the Aozora catalog).
 
 After first run the app is fully local. The only features that touch the
-network are LLM calls to remote providers and the Sources catalog fetch,
-which falls back to its cached copy when offline.
+network are LLM calls to remote providers, the Sources catalog fetch (which
+falls back to its cached copy when offline), installing a language pack
+from a URL, and Build-from-Wiktionary downloads.
 
 ## Importing your first book
 
@@ -110,6 +160,11 @@ Every word has one of four statuses:
 
 Furigana display (including "unknown words only" and "first X instances per
 book") is configured in Settings → Reading.
+
+The same click-to-look-up flow applies in a pack language, and for
+pre-annotated texts (the Koine Greek pack) the furigana slot shows an
+interlinear gloss while the word panel decodes each occurrence's parse to
+prose — the [Reading](@/docs/reading.md) page has the details.
 
 From here, see [Reading](@/docs/reading.md) for the full reader — furigana modes, the
 away/pause clock, and the book info panel — and [Reviews-and-SRS](@/docs/reviews-and-srs.md)

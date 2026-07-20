@@ -1,9 +1,11 @@
 +++
 title = "Statistics"
-weight = 7
+weight = 8
 +++
 
-The Statistics view (sidebar) summarizes your vocabulary, your graded reading level, the health of your reviews, your reading time, and how hard each book in your library currently is. Everything on the page is computed live from the database.
+The Statistics view (sidebar) summarizes your vocabulary, your graded reading level, the health of your reviews, your reading time, and how hard each book in your library currently is. Everything on the page is computed live from the database, and every number is scoped to the active language — switch languages and the whole page switches with you.
+
+The scoping covers everything here: due counts and the due forecast, retention, new-words-per-day intake, words matured, reading time and velocity, the vocabulary counts, and the reading-difficulty table. The one deliberate exception is the seconds-per-card review pace behind the home page's time estimate, which stays global across languages — pace is a trait of the user, not of the language.
 
 ## Vocabulary
 
@@ -18,13 +20,15 @@ A count of distinct words by knowledge status:
 
 ## Comfortable reading level
 
-Shiori grades you against community JLPT vocabulary lists (the JLPT has published no official lists since 2010; the community lists are good enough for grading). The lists are downloaded with the other reference data on first run.
+Each language grades against its own scheme. For Japanese that is the community JLPT vocabulary lists (the JLPT has published no official lists since 2010; the community lists are good enough for grading), downloaded with the other reference data on first run.
 
-For each level N5–N1 the page shows a progress bar: how many of that level's words you have marked **known** (kanji-form entries match your words by lemma; kana-only entries match on the kana lemma), out of the level's total.
+Pack languages bring their own tiers. The Koine Greek pack grades against GNT frequency tiers — Core 50×+, 30×+, 20×+, 10×+, 5×+ — which track the classic read-the-GNT vocabulary curricula. Packs built from Wiktionary generate Top 500 / Top 1,000 / Top 2,000 / Top 5,000 tiers from lemmatized frequency, so a verb's conjugated forms all count toward its lemma.
 
-Your **comfortable reading level** is the hardest level where that level *and every easier level* is at least 50% known. The check walks from N5 upward and stops at the first level below the threshold, so a strong N2 share cannot compensate for a weak N4 share. If even N5 is below 50%, the page shows "not enough known vocabulary yet" instead of a level.
+For each level of the active language's scheme the page shows a progress bar: how many of that level's words you have marked **known**, out of the level's total. (The Japanese lists match kanji-form entries against your words by lemma; kana-only entries match on the kana lemma.)
 
-As a cross-check, the **corpus coverage** line reports how many of the most frequent words in the frequency corpus you know, in rank bands: top 1k, 2k, 5k, and 10k, each shown as a percentage of the band size.
+Your **comfortable reading level** is the hardest level where that level *and every easier level* is at least 50% known. The check walks from the easiest level upward and stops at the first level below the threshold — for Japanese, a strong N2 share cannot compensate for a weak N4 share. If even the easiest level is below 50%, the page shows "not enough known vocabulary yet" instead of a level. The result renders as "around *scheme* *level*" — "around JLPT N3", "around GNT tier 30×+".
+
+As a cross-check, the **corpus coverage** line reports how many of the most frequent words in the active language's frequency list you know — the Japanese reference list for Japanese, the pack's own lemmatized frequency list for pack languages — in rank bands: top 1k, 2k, 5k, and 10k, each shown as a percentage of the band size.
 
 ## Reviews
 
@@ -52,7 +56,7 @@ The summary line shows:
 
 ### Reading calendar
 
-A GitHub-style heatmap of the last ~18 weeks, one cell per day, colored by credited reading minutes that day. Color saturates at 60 minutes; days with no reading stay faint.
+A GitHub-style heatmap of the last ~18 weeks, one cell per day, colored by credited reading minutes that day. Color saturates at 60 minutes; days with no reading stay faint. The same calendar appears on the home page under "Reading activity".
 
 ### Words matured
 

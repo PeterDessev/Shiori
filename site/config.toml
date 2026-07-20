@@ -6,7 +6,7 @@
 base_url = "https://PeterDessev.github.io/Shiori"
 
 title = "Shiori（栞）"
-description = "Learn Japanese by actually reading Japanese — a Windows desktop reading companion built around comprehensible input."
+description = "Learn Japanese by actually reading Japanese — a Windows desktop reading companion built around comprehensible input, with installable language packs beyond Japanese."
 
 default_language = "en"
 compile_sass = false

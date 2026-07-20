@@ -30,6 +30,10 @@ what to read next.
 No accounts, no subscription, no cloud. One executable and a folder of
 SQLite.
 
+Japanese is where Shiori lives, but it no longer reads Japanese alone —
+whole languages arrive as [data packs](#whole-languages-as-data), from
+corpus-first Koine Greek to ~19 modern languages built from Wiktionary.
+
 ## The interesting parts
 
 ### A reader that knows what you don't
@@ -67,11 +71,11 @@ matches your level, pushes slightly above it, or goes full native.
 ### A dictionary with stroke order built in
 
 Search JMdict by kanji, kana, or any word form. Every kanji in your query
-gets a card: readings, meanings, school grade, and a numbered stroke-order
-diagram drawn from KanjiVG data. Add any hit straight to spaced repetition
-from the search results.
+gets a card: readings, meanings, school grade, and an animated stroke-order
+diagram drawn from KanjiVG data — scroll to scrub it stroke by stroke. Add
+any hit straight to spaced repetition from the search results.
 
-<img src="assets/screenshots/dictionary.png" alt="Dictionary view: word entries with prefix matches, and the 食 kanji card with a numbered stroke-order diagram" width="850">
+<img src="assets/screenshots/dictionary.png" alt="Dictionary view: word entries with prefix matches, and the 食 kanji card with an animated stroke-order diagram" width="850">
 
 ### Books from the internet, one click away
 
@@ -81,6 +85,40 @@ Aozora's catalog is downloaded once and cached, so every search after that
 runs locally and instantly.
 
 <img src="assets/screenshots/sources.png" alt="Sources view searching the Aozora Bunko catalog" width="850">
+
+### Whole languages as data
+
+Japanese is built in; every other language is a
+[language pack](docs/wiki/Language-Packs.md) — data, not code. Settings →
+Languages activates a language, installs packs from a folder, a zip, or a
+URL (with optional SHA-256 verification), imports a pack's bundled texts,
+and removes packs — all live, no restart, and nothing mixes across
+languages.
+
+Two ways a language gets there. **Koine Greek** ships corpus-first: every
+word of its MorphGNT-derived texts carries a hand-verified parse, the
+furigana slot doubles as an interlinear gloss, the word panel decodes each
+parse to prose, and the statistics grade you against GNT frequency tiers —
+search is accent-insensitive and accepts betacode and Greeklish. **Build
+from Wiktionary** compiles any of ~19 modern languages on your machine
+from kaikki.org's Wiktextract data and hermitdave's frequency lists:
+inflection tables become the grammar, frequency is lemmatized into
+Top-500/1k/2k/5k tiers, senses keep their register labels, IPA is a
+setting away, and the gigabyte-class downloads resume instead of
+restarting.
+
+Pack languages get real analysis without a morphological engine.
+Dictionary search resolves inflected forms — *suis* finds both être and
+suivre, with everyday words ranked above rare homographs — contractions
+are pack data (au reads as à + le, components clickable), Germanic packs
+split unknown compounds against their own dictionary, and a candidate
+picker in the reader re-points any ambiguous occurrence with one click.
+Production practice follows the language too: pack-defined personas (dead
+languages disclose the synthetic persona), composition exercises,
+translation drills built from your own reading, and per-language model
+overrides. The
+[languages guide](https://PeterDessev.github.io/Shiori/docs/languages/)
+covers the details.
 
 <details>
 <summary><b>More screenshots</b> — library with per-book analytics, statistics that change behavior</summary>
@@ -101,6 +139,8 @@ out-of-band words flagged for you to confirm before the sweep, so a stray
 Reading velocity and a reading calendar, a comfortable-reading-level grade
 against JLPT vocabulary lists, review forecasts, true retention, and
 per-book difficulty — the numbers that actually tell you what to do next.
+Every number follows the active language, so Greek reviews never blur
+your Japanese retention.
 
 <img src="assets/screenshots/stats.png" alt="Statistics: JLPT level grading, review forecast, reading calendar" width="850">
 
@@ -117,25 +157,29 @@ per-book difficulty — the numbers that actually tell you what to do next.
   names and noise never pollute your stats.
 - **Press-to-record shortcuts** with modifier combos, dark/light/sepia
   themes, gothic or mincho Japanese fonts, adjustable reader typography.
+- **A home page** — the app opens on the active language with a quick
+  switcher, cards due today with a time estimate from your measured review
+  pace, a pick-up-where-you-left-off card (progress, time left at your
+  reading speed, unknown words ahead), and the reading calendar.
 - **Offline-first** — after the first-run data download everything except
-  LLM calls and online search works without a network. Your data is one
-  SQLite file with one-click backup and restore, and your settings export
-  to a single JSON.
+  LLM calls, online search, and language-pack downloads works without a
+  network; once a pack is installed or built, it works fully offline. Your
+  data is one SQLite file with one-click backup and restore, and your
+  settings export to a single JSON.
 - **Import anything** — `.txt`, `.md`, `.html` (Aozora), `.epub`, `.pdf`,
   UTF-8 or Shift_JIS, by file dialog or drag-and-drop.
-- **Languages beyond Japanese** — data-driven
-  [language packs](docs/wiki/Language-Packs.md) add whole languages without
-  recompiling, dead languages first: Koine Greek reads pre-annotated texts
-  where every word carries a hand-verified parse, glossed inline, graded
-  against GNT frequency tiers.
 
 ## Getting started
 
 **Download** — grab the latest `shiori-*-windows-x86_64.zip` from 
 [Releases](https://github.com/PeterDessev/Shiori/releases), unzip, run
-`shiori.exe`. On first launch the app downloads its reference data (JMdict,
+`shiori.exe`. The zip carries the licenses, README, and changelog next to
+the exe, which is statically linked against the MSVC CRT — it runs on
+stock Windows 10/11 with no VC++ Redistributable or any other install. On
+first launch the app downloads its Japanese reference data (JMdict,
 frequency list, kanji data with stroke order, JLPT lists — ~20 MB total)
-and you're reading.
+and you're reading; other languages arrive as packs from Settings →
+Languages.
 
 Shiori is built and released for **Windows x86_64 only** — that's the only
 target the CI tests and ships. The source has no hard OS lock, so building
@@ -152,26 +196,31 @@ Building needs a recent stable Rust toolchain (CI builds on `stable`). The
 first build downloads and embeds the IPADIC morphological dictionary, so it
 needs network access once and takes a few minutes.
 
-**Learn more** — the [user guide](docs/wiki/Home.md) covers every feature:
-[Getting Started](docs/wiki/Getting-Started.md) ·
-[Reading](docs/wiki/Reading.md) ·
-[Reviews & SRS](docs/wiki/Reviews-and-SRS.md) ·
-[Dictionary & Kanji](docs/wiki/Dictionary-and-Kanji.md) ·
-[Online Sources](docs/wiki/Online-Sources.md) ·
-[AI & Chat](docs/wiki/AI-and-Chat.md) ·
-[Language Packs](docs/wiki/Language-Packs.md) ·
-[Statistics](docs/wiki/Statistics.md) ·
-[Data & Interop](docs/wiki/Data-and-Interop.md) ·
-[Architecture](docs/wiki/Architecture.md)
+**Learn more** — the
+[user guide](https://PeterDessev.github.io/Shiori/docs/) covers every
+feature:
+[Getting Started](https://PeterDessev.github.io/Shiori/docs/getting-started/) ·
+[Reading](https://PeterDessev.github.io/Shiori/docs/reading/) ·
+[Reviews & SRS](https://PeterDessev.github.io/Shiori/docs/reviews-and-srs/) ·
+[Dictionary & Kanji](https://PeterDessev.github.io/Shiori/docs/dictionary-and-kanji/) ·
+[Online Sources](https://PeterDessev.github.io/Shiori/docs/online-sources/) ·
+[AI & Chat](https://PeterDessev.github.io/Shiori/docs/ai-and-chat/) ·
+[Languages](https://PeterDessev.github.io/Shiori/docs/languages/) ·
+[Statistics](https://PeterDessev.github.io/Shiori/docs/statistics/) ·
+[Data & Interop](https://PeterDessev.github.io/Shiori/docs/data-and-interop/) ·
+[Architecture](https://PeterDessev.github.io/Shiori/docs/architecture/)
 
 ## Roadmap & non-goals
 
-The [roadmap](ROADMAP.md) is a plan of record: as of mid-2026 everything in
-it ships except two deferred items — an **NHK Easy News** source (waiting on
-a usable article index) and **text-to-speech** (planned in stages, ending
-in optional local [VOICEVOX](https://voicevox.hiroshiba.jp/)). One hard
-non-goal: **no embedded LLM inference engine, ever** — local AI is delegated
-to Ollama or any OpenAI-compatible server you point Shiori at.
+The [roadmap](ROADMAP.md) is an issue-style tracker of accepted work —
+planned, in progress, done. As of the 0.2.0 release it holds two small UI
+items: better Markdown rendering in the reading view, and more consistent
+scroll bars. Two longer-standing deferrals sit outside it: an **NHK Easy
+News** source waits on a usable article index, and **text-to-speech** is
+planned in stages, ending in optional local
+[VOICEVOX](https://voicevox.hiroshiba.jp/). One hard non-goal: **no
+embedded LLM inference engine, ever** — local AI is delegated to Ollama or
+any OpenAI-compatible server you point Shiori at.
 
 ## Troubleshooting & getting help
 
@@ -181,9 +230,11 @@ edges worth knowing up front:
 
 - KanjiVG stroke-order data covers only about half of the kanji in
   KANJIDIC2, so rarer characters fall back to a plain large glyph with no
-  numbered diagram.
-- Conversation practice and online search are the only features that reach
-  the network after first run; everything else works fully offline.
+  stroke-order diagram.
+- Conversation practice, online search, and language-pack downloads
+  (install-from-URL and Build-from-Wiktionary) are the only features that
+  reach the network after first run; everything else — installed packs
+  included — works fully offline.
 
 ## Contributing
 
@@ -207,7 +258,8 @@ conventional commits). The codebase is a Cargo workspace split by concern:
 
 ## Data sources
 
-Shiori ships no dictionary data; it downloads everything on first run:
+Shiori ships no dictionary data; it downloads everything on first run —
+or when you install or build a language pack:
 
 - [JMdict](https://www.edrdg.org/jmdict/j_jmdict.html) and
   [KANJIDIC2](https://www.edrdg.org/wiki/index.php/KANJIDIC_Project) —
@@ -221,8 +273,19 @@ Shiori ships no dictionary data; it downloads everything on first run:
   [stephenmk/yomitan-jlpt-vocab](https://github.com/stephenmk/yomitan-jlpt-vocab)
   (CC BY-SA 4.0, over Jonathan Waller's CC BY data).
 - Word frequency — Leeds Internet Corpus derived list (CC BY).
+- [MorphGNT](https://github.com/morphgnt/sblgnt) annotations (CC BY-SA)
+  over the SBLGNT (CC BY 4.0) — the Koine Greek pack.
+- [kaikki.org](https://kaikki.org/) Wiktextract data (CC BY-SA 4.0 & GFDL)
+  and
+  [hermitdave's FrequencyWords](https://github.com/hermitdave/FrequencyWords)
+  lists (CC BY-SA 4.0) — packs built from Wiktionary.
+- [Noto Sans JP / Noto Serif JP](https://fonts.google.com/noto) fonts
+  (SIL Open Font License 1.1) — downloaded on first use.
 - Books — [Aozora Bunko](https://www.aozora.gr.jp/) (public domain) and
   [Japanese Wikisource](https://ja.wikisource.org/).
+
+Settings → General gathers every attribution in one place, plus the
+license line of each installed pack.
 
 ## License
 

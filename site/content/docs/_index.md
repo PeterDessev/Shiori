@@ -7,26 +7,38 @@ weight = 0
 +++
 
 Shiori（栞, "bookmark"）is a Windows-first desktop application for learning
-Japanese through reading. These pages document what the app does and how to use
-it.
+languages through reading — built Japanese-first, with installable language
+packs since 0.2.0: a corpus-first Koine Greek pack, and around 19 more
+languages built locally from Wiktionary. These pages document what the app
+does and how to use it.
 
 ## What Shiori is
 
 Shiori is built around **comprehensible input**: the primary activity is reading
-real Japanese text, and every other feature exists to support that. It is not a
-flashcard driller — it is a reading companion that happens to teach.
+real text in the language you're learning, and every other feature exists to
+support that. It is not a flashcard driller — it is a reading companion that
+happens to teach.
 
-You import books, articles, or any Japanese text (paste, `.txt`/`.md`, `.html`
-including Aozora Bunko pages, `.epub`, `.pdf`), and the app parses everything to
-the morpheme level while preserving sentence and paragraph context. While reading
+You import books, articles, or any text (paste, `.txt`/`.md`, `.html`
+including Aozora Bunko pages, `.epub`, `.pdf`) — pack languages can also
+import their bundled texts in one click from Settings → Languages — and the
+app analyzes everything, down to the morpheme for Japanese and through
+full-form tables and grammar rules for pack languages, while preserving
+sentence and paragraph context. While reading
 you click any word to see its dictionary entry, usage register, and a
 component-by-component explanation of its conjugated form; one click adds it to
 spaced-repetition review. The app tracks what you know, grades every document in
-your library by difficulty, and tells you what to read next.
+your library by difficulty, and tells you what to read next. It opens on a
+home page: the active language with a quick switcher, cards due today with a
+time estimate, a continue-reading card, and the reading calendar. Everything
+is scoped to the active language — library, dictionary, reviews, statistics,
+and practice all follow it; nothing mixes across languages.
 
 Shiori runs fully offline after first launch. The only network features are
-optional LLM calls for conversation practice and the online catalog fetch in
-Sources, which falls back to its local cache.
+optional LLM calls for conversation practice, the online catalog fetch in
+Sources (which falls back to its local cache), and the language-pack downloads
+under Settings → Languages — installing a pack from a URL and Build from
+Wiktionary.
 
 ## Where to start
 
@@ -40,6 +52,7 @@ topic:
 - [Dictionary & Kanji](@/docs/dictionary-and-kanji.md) — JMdict search, kanji cards with readings, grade, and stroke order
 - [Online Sources](@/docs/online-sources.md) — Aozora Bunko and Japanese Wikisource search and one-click import
 - [AI & Chat](@/docs/ai-and-chat.md) — conversation practice, annotation underlines, level calibration, LLM backends
+- [Languages](@/docs/languages.md) — installing and activating packs, Koine Greek, Build from Wiktionary, per-language data
 - [Statistics](@/docs/statistics.md) — reading velocity and calendar, comfortable reading level, forecasts, retention
 - [Data & Interop](@/docs/data-and-interop.md) — Anki export/import, settings transfer, database backup and restore
 - [Architecture](@/docs/architecture.md) — workspace crates, the data directory, the NLP pipeline

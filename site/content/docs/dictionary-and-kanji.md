@@ -3,21 +3,39 @@ title = "Dictionary & Kanji"
 weight = 4
 +++
 
-The Dictionary & kanji view is a single search box that answers with both
-JMdict word entries and kanji reference cards, including stroke-order
-diagrams. It is also where you can add a word to spaced repetition without
-having met it in a book.
+The Dictionary & kanji view is a single search box over the active
+language's dictionary. For Japanese it answers with both JMdict word
+entries and kanji reference cards, including animated stroke-order
+diagrams; in a pack language it searches the pack's dictionary. It is also
+where you can add a word to spaced repetition without having met it in a
+book.
 
 ## Searching
 
-Type Japanese text into the search box — kanji, kana, or any word form
-(猫, ねこ, 食べる). Results update as you type; the ✕ button clears the
-query and refocuses the box.
+For Japanese, type kanji, kana, or rōmaji — 猫, ねこ, and neko all reach
+the same entry (rōmaji is transliterated as you type, so tabemashita works
+too). A conjugated query like 食べました resolves to its dictionary root,
+and a banner above the results explains the form: the typed form, its
+root, what kind of word it is, and the grammar of its tail. Results update
+as you type; the ✕ button clears the query and refocuses the box.
 
-Matching runs over the dictionary's form index: a form matches when it
-equals the query exactly or starts with it (prefix matching), so ねこ also
-surfaces ねこじた and friends. Up to 30 word entries are returned per
-query.
+In a pack language the lookup is folded — case and accents are ignored —
+and an inflected query resolves through the pack's grammar table to every
+candidate lemma: *suis* surfaces both *être* and *suivre*. Forms the table
+doesn't list fall back to suffix rules the builder learned from its own
+data.
+
+Koine Greek additionally accepts betacode/Greeklish in the box: *logos*
+finds λόγος. Betacode letter values (h = η, q = θ, w = ω, x = χ, c = ξ,
+y = ψ, f = φ) and the common digraphs (th, ph, ch, ps) both work, and
+betacode diacritic marks are accepted and dropped — matching is
+accent-insensitive either way.
+
+Results build in tiers of match closeness: first the word the query is a
+*form of*, then exact matches, then prefix matches (so ねこ still surfaces
+ねこじた and friends; the prefix tier is capped at 30 entries). Corpus
+frequency orders the words within each tier — the everyday *être* beats
+the archaic *estre* — and a prefix match never outranks an exact one.
 
 If the reference data was never downloaded (you chose "Continue without
 dictionary" at first run), the view shows a no-dictionary notice instead of
@@ -32,6 +50,10 @@ The left column lists word entries. Each shows:
 - a status chip (unknown / learning / known / ignored) if you have already
   met the word while reading,
 - the first three senses, with their English glosses.
+
+Packs built from Wiktionary carry IPA pronunciation: with
+Settings → Reading → "Show IPA with dictionary entries" enabled (off by
+default), it appears where the kana reading would for Japanese.
 
 ### Learn (SRS) from search
 
@@ -51,10 +73,14 @@ already in `learning` status). Clicking it:
 
 ## Kanji cards
 
-The right column shows up to six kanji cards. They are chosen from the
-kanji characters in your query, in order; if the query contains no kanji
-(a kana search), the cards come from the headwords of the top three word
-hits instead — so searching ねこ still produces the card for 猫.
+Character cards exist only for Japanese: in a pack language no cards
+appear, and the word list takes the full width of the view.
+
+For Japanese, the right column shows up to six kanji cards. They are
+chosen from the kanji characters in your query, in order; if the query
+contains no kanji (a kana search), the cards come from the headwords of
+the top three word hits instead — so searching ねこ still produces the
+card for 猫.
 
 Each card contains:
 
@@ -75,10 +101,13 @@ them for that character.
 
 ### Stroke-order diagrams
 
-When KanjiVG has data for the character, the card draws a numbered
-stroke-order diagram: each stroke is rendered from its SVG path, numbered
-at its starting point, and colored on a gradient from accent blue (first
-stroke) to gray (last stroke) so the order is readable at a glance.
+When KanjiVG has data for the character, the card animates the stroke
+order: the character draws itself one stroke at a time — the stroke being
+traced highlighted in accent blue with a pen tip, the not-yet-drawn
+strokes ghosted so the glyph keeps its shape — and loops when finished.
+Scrolling over the character scrubs it stroke by stroke (one wheel notch
+is one stroke; scrolling down advances) and briefly pauses the auto-play
+while you scrub.
 
 KanjiVG covers roughly half of KANJIDIC2's characters. For kanji it does
 not cover — mostly rare and archaic ones — the card shows the character
@@ -86,10 +115,11 @@ large instead of a diagram; everything else on the card is unaffected.
 
 ## Kanji chips in the reader
 
-You do not have to leave the book to look up a kanji. In the reader's word
-panel, each kanji of the selected headword appears as a chip under the
-headword; clicking a chip expands the same kanji card inline, diagram
-included. See [Reading](@/docs/reading.md).
+In the reader's word panel, each kanji of the selected headword appears as
+a chip under the headword; clicking a chip leaves the book and opens this
+view with that character as the query, card and animation included.
+Leaving the reader this way credits the partially read page like a pause.
+See [Reading](@/docs/reading.md).
 
 ## Data sources and licenses
 
@@ -107,3 +137,9 @@ daily; no pinned version exists). KanjiVG is pinned to an immutable GitHub
 release tag. Word entries come from JMdict via the jmdict-simplified
 project — see [Getting-Started](@/docs/getting-started.md) for the full
 reference-data list.
+
+Pack dictionaries ship their own data and licenses: the Koine Greek pack
+is built from MorphGNT, and packs built from Wiktionary use kaikki.org's
+Wiktextract data (CC BY-SA 4.0 & GFDL) and hermitdave's FrequencyWords
+lists (CC BY-SA 4.0). Every attribution — plus each installed pack's
+license line — is consolidated in Settings → General → About.

@@ -9,12 +9,12 @@ Live at **https://PeterDessev.github.io/Shiori/**.
 
 ```
 site/
-  config.toml            # base_url, site metadata, theme/highlight settings
+  config.toml            # base_url, site metadata, GitHub links
   content/
     _index.md            # landing page (renders templates/index.html)
     docs/
       _index.md          # docs overview + sidebar order
-      *.md               # one page per guide topic (sourced from docs/wiki)
+      *.md               # one page per guide topic
   templates/
     base.html            # shell: header, footer, <head>
     index.html           # landing page
@@ -28,8 +28,14 @@ site/
     site.webmanifest     # PWA manifest (icons + theme); wired into base.html <head>
 ```
 
-The docs pages are derived from the project wiki (`docs/wiki/*`). If you edit a
-topic, update it here (this is what readers see).
+`content/docs/` is the canonical user guide — edit these pages directly (this
+is what readers see). They were originally moved here from `docs/wiki/`, which
+now holds only `Language-Packs.md`, the pack-format reference.
+
+To add a docs page, create `content/docs/<slug>.md` with only `title` and
+`weight` in its TOML front matter; the sidebar and prev/next links follow
+`weight` (`docs/_index.md` sets `sort_by = "weight"`), so no template edits
+are needed.
 
 ## Develop locally
 
@@ -45,9 +51,11 @@ zola build     # output to site/public/
 
 ## Deploy
 
-Pushing to `main` with changes under `site/**` triggers
+Pushing to `master` (the default branch) with changes under `site/**` — or to
+the workflow file itself — triggers
 [`.github/workflows/site.yml`](../.github/workflows/site.yml), which builds with
-the pinned Zola version and publishes to Pages.
+the pinned Zola version and publishes to Pages. The workflow can also be run
+manually from the Actions tab (`workflow_dispatch`).
 
 **One-time repo setup:** Settings → Pages → *Build and deployment* → Source =
 **GitHub Actions**.

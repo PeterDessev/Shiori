@@ -38,8 +38,14 @@ everything comes back if the pack is reinstalled.
   indicative · 3rd person singular").
 - **Dictionary** — search is accent/breathing-insensitive; Greek
   additionally accepts betacode and Greeklish (`logos`, `lo/gos`,
-  `qeos`). The kanji panel is a Japanese capability; packs bring their
-  own reference panels instead.
+  `qeos`). An inflected query resolves through the grammar table to
+  every candidate lemma — *suis* surfaces both *être* and *suivre* —
+  and falls back to the learned suffix rules for forms the table
+  doesn't list. Results build in tiers of match closeness (the word
+  the query is a form of, then exact matches, then prefix matches),
+  with corpus frequency ordering words within each tier. The kanji
+  panel is a Japanese capability; pack languages get the full width
+  for word results instead.
 - **Statistics** — the JLPT section generalizes: each pack declares its
   own level scheme (Koine Greek grades against GNT frequency tiers —
   a *closed corpus*, so coverage numbers are exact).
@@ -175,16 +181,19 @@ every attested form. `build-kaikki` inverts Wiktextract `forms` arrays
 and `form_of` senses into the lemma table and keeps up to six glosses
 per lemma.
 
-### The hosted catalog (machinery ready, UI dormant)
+### The hosted catalog (machinery ready, UI unwritten)
 
 The full hosted-catalog pipeline exists and is tested — fetch with
 offline caching, SHA-256-verified one-click installs, and the
 `shiori-packc catalog` generator below — but no catalog is published
-and build-from-Wiktionary covers discovery, so the browse section is
-currently not shown in the app. To bring it back once a catalog is
-hosted: call `browse_packs_section` (see git history for the section's
-UI) from the Languages page and point `DEFAULT_PACK_CATALOG_URL` at
-the published document. Format:
+and Build-from-Wiktionary covers discovery, so the Languages page has
+no browse section. The plumbing to write one against is all in place:
+`fetch_pack_catalog` / `install_pack_from_url` and
+`DEFAULT_PACK_CATALOG_URL` in `crates/shiori-app/src/packs.rs`, the
+catalog state in the GUI, and the `pack_catalog_url` setting. The
+browse section UI itself still needs writing; once a catalog is
+hosted, point `DEFAULT_PACK_CATALOG_URL` at the published document.
+Format:
 
 ```json
 {
@@ -236,6 +245,11 @@ conversion). Known **unusable**: PROIEL, CATSS, OpenGNT, CEFRLex, the
 Cologne scans. Wiktionary/kaikki data is CC BY-SA + GFDL — fine with
 attribution and share-alike on the data.
 
+The manifest's `license` string is user-visible: Settings → General →
+About lists each installed pack's license alongside the
+Wiktextract/FrequencyWords attributions, and the Languages page shows
+it next to the pack.
+
 ## Roadmap for packs
 
 - A hosted pack catalog and an onboarding language picker — the app
@@ -244,8 +258,6 @@ attribution and share-alike on the data.
 - The full ~900k-form Greek table from Morpheus (regenerated under
   MPL-2.0 in Docker CI) merged with the kaikki grc extract; today the
   full-form table covers every form attested in the GNT.
-- A candidate-parse picker for ambiguous Tier-1 forms (today ambiguity
-  safely keeps the surface as lemma).
 - Swete LXX and machine-tagged Apostolic Fathers texts, marked
   `quality:"machine"` in the reader.
 - Per-pack font downloads (Gentium Plus, OFL); today a wide-coverage

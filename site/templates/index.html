@@ -7,7 +7,9 @@
   <p class="hero-sub">
     Shiori（栞, &ldquo;bookmark&rdquo;）is a desktop reading companion built around
     comprehensible input: the primary activity is reading real Japanese text, and
-    every other feature exists to support that.
+    every other feature exists to support that. Since 0.2.0, installable language
+    packs take the same reader beyond Japanese — Koine Greek first, with ~19 more
+    you can build from Wiktionary.
   </p>
   <div class="cta-row">
     <a class="btn btn-primary" href="{{ config.extra.releases }}">Download for Windows</a>
@@ -27,6 +29,44 @@
     sentence you found it in. The app tracks every word you&rsquo;ve ever met, grades
     each book in your library against what you know, and tells you what to read next.
   </p>
+</section>
+
+<section class="everything">
+  <h2>Shiori grows beyond Japanese</h2>
+  <p class="showcase-sub">
+    Language support is data-driven: install a language pack, activate
+    it, and the whole app follows — library, reader, dictionary, reviews,
+    statistics, chat. Nothing mixes across languages.
+  </p>
+  <div class="card-grid">
+    <div class="card">
+      <h3>Installable language packs</h3>
+      <p>
+        Settings → Languages installs a pack from a folder, a zip, or a URL —
+        with optional SHA-256 verification — imports its bundled texts into the
+        library, and activates the language live, no restart.
+      </p>
+    </div>
+    <div class="card">
+      <h3>Koine Greek, corpus-first</h3>
+      <p>
+        Pre-annotated texts derived from MorphGNT carry a lemma, parse, and gloss
+        on every token: interlinear glosses in the furigana slot, parses decoded
+        to prose, stats graded against GNT frequency tiers, and accent-insensitive
+        search that accepts betacode and Greeklish.
+      </p>
+    </div>
+    <div class="card">
+      <h3>Build a pack from Wiktionary</h3>
+      <p>
+        Pick from ~19 languages and Shiori compiles the pack locally from
+        kaikki.org&rsquo;s Wiktextract dump and hermitdave&rsquo;s frequency
+        lists. Inflection tables become the grammar, frequency is lemmatized into
+        Top-500/1k/2k/5k tiers, and the gigabyte-class downloads resume instead
+        of restarting.
+      </p>
+    </div>
+  </div>
 </section>
 
 <section class="features">
@@ -73,12 +113,18 @@
       <h2>A dictionary with stroke order built in</h2>
       <p>
         Search JMdict by kanji, kana, or any word form. Every kanji in your query gets a
-        card — readings, meanings, school grade, and a numbered stroke-order diagram drawn
-        from KanjiVG data — and you can add any hit straight to spaced repetition.
+        card — readings, meanings, school grade, and an animated stroke-order diagram drawn
+        from KanjiVG data, scrubbed stroke by stroke with the scroll wheel — and you can
+        add any hit straight to spaced repetition.
+      </p>
+      <p class="feature-aside">
+        Pack languages get dictionary search too: an inflected query like
+        <em>suis</em> resolves to every candidate lemma — être and suivre — with
+        corpus frequency ranking words within each match tier.
       </p>
     </div>
     <div class="feature-media">
-      <img src="{{ get_url(path='img/dictionary.png') }}" alt="Dictionary view: word entries with prefix matches and a kanji card with a numbered stroke-order diagram" loading="lazy" />
+      <img src="{{ get_url(path='img/dictionary.png') }}" alt="Dictionary view: word entries with prefix matches and a kanji card with an animated stroke-order diagram" loading="lazy" />
     </div>
   </article>
 
@@ -132,12 +178,24 @@
       <p>Unknown / learning / known / ignored, so names and noise never pollute your stats.</p>
     </div>
     <div class="card">
+      <h3>Opens on a home page</h3>
+      <p>The active language with a quick switcher, cards due today with a time estimate from your measured pace, a continue-reading card with time left and a difficulty verdict, and the reading calendar.</p>
+    </div>
+    <div class="card">
+      <h3>Analysis without an engine</h3>
+      <p>Contractions expand in the reader (au = à + le, components clickable), Germanic packs split unknown compounds against their own dictionary, and a candidate picker re-points any ambiguous occurrence.</p>
+    </div>
+    <div class="card">
+      <h3>Practice in any language</h3>
+      <p>Pack-defined personas — dead languages disclose a synthetic partner and judge against attested usage — plus composition exercises, translation drills from your own reading, and per-language model overrides.</p>
+    </div>
+    <div class="card">
       <h3>Make it yours</h3>
       <p>Dark / light / sepia themes, gothic or mincho Japanese fonts, rebindable shortcuts, adjustable typography.</p>
     </div>
     <div class="card">
       <h3>Offline-first</h3>
-      <p>Everything but LLM calls and online search works with no network. One SQLite file, one-click backup &amp; restore.</p>
+      <p>Everything but LLM calls, online search, and language-pack downloads works with no network — installed packs work fully offline. One SQLite file, one-click backup &amp; restore.</p>
     </div>
     <div class="card">
       <h3>Import anything</h3>
@@ -150,8 +208,9 @@
   <h2>Ready to start reading?</h2>
   <p>
     Grab the latest <code>shiori-*-windows-x86_64.zip</code>, unzip, and run
-    <code>shiori.exe</code>. On first launch Shiori downloads its reference data
-    (~20&nbsp;MB) and you&rsquo;re reading.
+    <code>shiori.exe</code>. On first launch Shiori downloads its Japanese
+    reference data (~20&nbsp;MB) and you&rsquo;re reading. Other languages
+    install as packs from Settings → Languages.
   </p>
   <div class="cta-row">
     <a class="btn btn-primary" href="{{ config.extra.releases }}">Download for Windows</a>

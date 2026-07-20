@@ -96,14 +96,27 @@ only works before the answer is shown; the grading shortcuts only after.
 
 ## The due badge and queue
 
+- Reviews follow the **active language**: the badge, the queue, and the
+  due forecast all cover only the language you are currently studying.
+  Switching the active language (the home-page switcher or **Settings →
+  Languages**) swaps the queue in place, and the other language's cards
+  keep their schedules untouched. Even removing a language's pack keeps
+  its cards and review history in the database.
 - The Review icon in the sidebar shows a small count next to it whenever
-  cards are due; its tooltip reads "Review — N due". The count refreshes as
-  you answer cards and mark words.
-- The queue serves due cards most-overdue-first. The header above each card
-  shows how many remain, plus the card's state, repetition count, and
-  lapses.
+  the active language has cards due; its tooltip reads "Review — N due".
+  The count refreshes as you answer cards and mark words.
+- The queue serves the active language's due cards most-overdue-first;
+  cards in other languages wait untouched until you switch back. The
+  header above each card shows how many remain, plus the card's state,
+  repetition count, and lapses.
 - A 14-day due forecast (overdue cards grouped under today) is on the
   [Statistics](@/docs/statistics.md) page.
+- The home page shows the cards due **today** — counted up to your local
+  midnight, so it includes cards that become due later in the day — with
+  a time estimate from your measured review pace (the median seconds per
+  card over your recent reviews; a rough default until enough
+  back-to-back reviews exist) and a **Review now** button enabled when
+  cards are ready.
 
 When nothing is due, the review view says so and suggests you go read —
 which is, after all, the point. See [Reading](@/docs/reading.md) for how words get

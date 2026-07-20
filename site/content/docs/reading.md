@@ -4,8 +4,10 @@ weight = 2
 +++
 
 The reader presents an open document as e-reader-style pages of clickable
-Japanese text, with a dictionary panel on the right. It opens from the
-library; the Reader icon in the rail is enabled only while a document is open.
+text in the active language — Japanese or an installed language pack — with
+a dictionary panel on the right. It opens from the library or the home
+page's continue-reading card; the Reader icon in the rail is enabled only
+while a document is open.
 
 ## Pages and navigation
 
@@ -26,8 +28,8 @@ boundaries.
 
 ## Clicking words and phrase groups
 
-Every Japanese token is clickable. Tokens that belong together are selected
-as one *phrase group*, highlighted in a single color:
+Every token in the book's language is clickable. Tokens that belong together
+are selected as one *phrase group*, highlighted in a single color:
 
 - **Conjugated verbs select with their endings.** Clicking 読んでいる selects
   the whole phrase, and the panel's **Form** box explains the conjugation
@@ -44,8 +46,34 @@ Settings → Reading additionally tints every unknown word in the text.
 The right side panel shows the headword with furigana positioned over each
 kanji run, the surface form from the text when it differs from the lemma,
 part of speech, current knowledge status, corpus frequency rank, usage
-register tags (colloquial, formal, archaic, …), and the numbered JMdict
-senses with cross-references and antonyms.
+register tags (colloquial, formal, archaic, …), and the numbered dictionary
+senses — JMdict for Japanese, the pack's dictionary otherwise — with
+cross-references and antonyms.
+
+Pack languages add a few panel elements of their own:
+
+- **Decoded parse** — in pre-annotated texts (the Koine Greek pack), an
+  italic "this form: …" line decodes the clicked occurrence's stored parse
+  to prose.
+- **IPA** — with Settings → Reading → Pronunciation → "Show IPA with
+  dictionary entries" enabled (off by default), entries from packs built
+  from Wiktionary show their IPA under the headword. Japanese readings are
+  unaffected.
+- **Contractions** — a fused function word (French au = à + le) shows its
+  components under the headword, each a clickable button that looks the
+  part up in the [Dictionary-and-Kanji](@/docs/dictionary-and-kanji.md)
+  view. Leaving the reader this way credits the page like a pause, same as
+  the kanji chips below.
+- **Compound splitting** — when a word in a Germanic pack has no entry of
+  its own, the panel shows "compound of: …" with each part clickable
+  (Arbeitsmaschine → arbeit + maschine): no entry for the whole word, but
+  its parts are in the dictionary.
+- **Ambiguous forms** — when a form has more than one possible analysis,
+  an "Ambiguous form" box lists every candidate (lemma plus decoded
+  parse); one click re-points that single occurrence — the manual override
+  above the frequency vote.
+
+The panel's buttons assign a knowledge status:
 
 | Action | Shortcut | Effect |
 |--------|----------|--------|
@@ -69,7 +97,7 @@ sentence** button (shortcut E) asks it about the selected sentence. Without
 a dictionary installed, the panel says so explicitly — distinct from "no
 entry found for this word".
 
-## Furigana
+## Furigana and glosses
 
 Settings → Reading → Furigana offers four modes:
 
@@ -87,9 +115,15 @@ matter how you flip around or resize the window — later occurrences never
 do. X applies independently to each book.
 
 The unknown-based modes track status live: assigning any status
-(learning/known/ignored) removes a word's furigana everywhere. Furigana is
-drawn only over tokens containing kanji, and a conjugated stem keeps just
-the reading of its kanji run (走っ from 走る shows はし, not はしる).
+(learning/known/ignored) removes a word's furigana everywhere. For
+Japanese, furigana is drawn only over tokens containing kanji, and a
+conjugated stem keeps just the reading of its kanji run (走っ from 走る
+shows はし, not はしる).
+
+In pack languages with pre-annotated texts (the Koine Greek pack), the
+furigana slot doubles as an interlinear gloss layer: each token's
+hand-verified gloss is drawn over it, governed by the same four modes and
+the same live status tracking — no kanji requirement applies.
 
 ## Reading position
 

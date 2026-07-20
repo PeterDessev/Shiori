@@ -17,6 +17,8 @@ Configure a backend under **Settings → AI**. Three providers are supported:
 
 The bottom of the page shows the currently active backend, or "none" if the configuration is incomplete.
 
+When the active language is not Japanese (or an override already exists), a **Model override** field pins a model for that language; blank means the provider's default model. The rationale is stated right in the UI: a local model that handles Japanese fine may write terrible Koine — dead languages need stronger models, and a cloud model is recommended for Koine Greek.
+
 ### Ollama details
 
 - **Detection** — the settings page probes the server (default `http://localhost:11434`) and shows its status: running with version and installed-model count, or "not reachable" with a pointer to install Ollama from ollama.com. A refresh button re-probes.
@@ -36,9 +38,9 @@ If no backend is configured, the Production input area is replaced by a note poi
 
 ## Production chat
 
-Production is a chat with a native-speaker persona. The design separates conversation from correction:
+Production is a chat with a persona defined by the active language — a native speaker for living languages; a dead language discloses a synthetic persona up front, since no native speakers exist to imitate. The design separates conversation from correction:
 
-- **The partner converses, never corrects.** It replies only in Japanese, reacts, asks follow-ups, and responds to what you meant — corrections never appear inside its replies.
+- **The partner converses, never corrects.** It replies only in the language you are practicing, reacts, asks follow-ups, and responds to what you meant — corrections never appear inside its replies.
 - **Corrections come back as a paper-style write-up** of your own messages. Each model call returns both the reply and a set of annotations on your latest message, rendered as colored underlines:
 
 | Underline | Meaning |
@@ -50,17 +52,26 @@ Hover an underline to read the note (a short English explanation with the natura
 
 Annotations are anchored by exact quotes from your message. A quoted span the model invents (one that does not appear verbatim in what you wrote) is dropped rather than guessed at — no underline is better than a wrong one. A message with nothing to flag gets no underlines.
 
+For a dead language, *unnatural* means *unattested*: the Koine Greek pack tells the model to judge your writing against attested usage in the period's texts — the New Testament, the Septuagint, the Apostolic Fathers, documentary papyri — and to prefer "not attested in this period" over appeals to native intuition.
+
+### Structured exercises
+
+Two buttons above the input box start exercises through the ordinary chat pipeline, so corrections come back as the same paper-style write-up:
+
+- **✍ Composition exercise** asks the partner for a short writing topic — stated in the practice language with a brief English hint — and your attempt gets the usual write-up.
+- **⇄ Translation drill** takes a sentence from your own reading, has the partner translate it to natural English, asks you to translate that English back without looking, then compares your version with the original. The button is disabled until your library has sentences in the active language.
+
 ### Clickable words
 
-Every message — yours and the partner's — runs through the same morphological pipeline as the reader: conjugated phrases group together, and clicking any Japanese word opens the right panel with its reading, dictionary entry, and conjugation summary. From there, **Learn** adds the word to your reviews, and **Known** / **Ignore** set its status, exactly as in the reader. See [Reviews & SRS](@/docs/reviews-and-srs.md) for what happens next.
+Every message — yours and the partner's — runs through the same analysis pipeline as the reader: conjugated phrases group together, and clicking any word in the practice language opens the right panel with its dictionary entry — plus, for Japanese, the reading and conjugation summary. This works in pack languages too, through Tier-1 analysis — tokens resolve through the pack's full-form table when unambiguous. The input hint follows suit, reading "Write in *language*…" when the practice language is not Japanese. From there, **Learn** adds the word to your reviews, and **Known** / **Ignore** set its status, exactly as in the reader. See [Reviews & SRS](@/docs/reviews-and-srs.md) for what happens next.
 
 ### Level calibration
 
-The partner's Japanese is calibrated from three signals:
+The partner's level is calibrated from three signals:
 
-1. **Recorded vocabulary** — your known-word count maps to a rough JLPT band that seeds the prompt.
+1. **Recorded vocabulary** — your known-word count in the active language seeds the prompt (for Japanese it maps to a rough JLPT band).
 2. **Your own writing** — the model is told this estimate may lag reality and that your actual messages are the better signal, so a small recorded vocabulary never caps the conversation.
-3. **The challenge dial** — a dropdown next to the input box: *Match my level*, *Push me a little* (the default), or *Full immersion* (natural native Japanese, no simplification). Changing it saves immediately and applies from your next message.
+3. **The challenge dial** — a dropdown next to the input box: *Match my level*, *Push me a little* (the default), or *Full immersion* (natural, unrestricted text in the practice language — no simplification). Changing it saves immediately and applies from your next message.
 
 ### Conversations
 
@@ -70,4 +81,4 @@ In the input box, Enter sends and Shift+Enter inserts a newline.
 
 ## Privacy
 
-Only the text needed for the feature leaves the app, and only to the provider you configured: the sentence being explained, or the conversation history plus the level hint described above. Nothing else — no library contents, no statistics, no review data — is ever sent. With Ollama (or a local custom endpoint such as LM Studio), nothing leaves your machine at all.
+Only the text needed for the feature leaves the app, and only to the provider you configured: the sentence being explained, or the conversation history plus the level hint described above. Nothing else — no library contents, no statistics, no review data — is ever sent, except that a translation drill, when you start one, includes the single sentence being drilled. With Ollama (or a local custom endpoint such as LM Studio), nothing leaves your machine at all.
