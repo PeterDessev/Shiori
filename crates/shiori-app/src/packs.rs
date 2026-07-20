@@ -589,7 +589,7 @@ impl App {
     /// apply the pack's learned suffix rules ("-o" rewrites to "-ar"),
     /// accepting a guess only when the rewritten lemma exists in the
     /// dictionary unambiguously. No parse is claimed for guesses.
-    fn suffix_guess(&self, folded: &str) -> Result<Option<(String, Option<String>)>> {
+    pub(crate) fn suffix_guess(&self, folded: &str) -> Result<Option<(String, Option<String>)>> {
         let Some(rules) = self.suffix_rules.get(self.active_lang()) else {
             return Ok(None);
         };
@@ -1209,6 +1209,15 @@ mod tests {
         let logon = rows4.iter().find(|r| r.token.surface == "λόγον").unwrap();
         assert_eq!(logon.token.lemma, "λόγος");
         assert_eq!(logon.morph, None);
+
+        // Dictionary search resolves inflected queries the same way:
+        // λόγον (absent from the table) reaches λόγος via the suffix
+        // rules, so searching a form the user met in text just works.
+        let results = app.search_dictionary("λόγον").unwrap();
+        assert!(
+            results.words.iter().any(|h| h.entry.headword() == "λόγος"),
+            "an inflected search query must surface its lemma"
+        );
 
         // The candidate picker: the unresolved ἀμφὶ lists both
         // analyses, and applying one fixes exactly that occurrence.

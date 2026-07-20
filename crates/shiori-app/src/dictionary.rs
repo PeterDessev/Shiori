@@ -91,6 +91,7 @@ impl App {
         // Root-form entries first, so a conjugated query leads with the
         // word it is a form of.
         let source = self.active_dict_source();
+        let folded = self.service().normalize_lookup(&search);
         if let Some(a) = &analysis {
             let lookup = self.service().normalize_lookup(&a.lemma);
             for key in self.db().dict_lookup_keys(source, &lookup)? {
@@ -101,9 +102,35 @@ impl App {
                 }
             }
         }
+        // Pack languages have no conjugation analyzer; an inflected
+        // query resolves through the grammar table instead — "suis"
+        // surfaces both être and suivre. Forms the table doesn't know
+        // fall back to the learned suffix rules.
+        if analysis.is_none() && self.active_pack().is_some() {
+            let mut lemmas: Vec<String> = self
+                .tier1_candidates(&search)?
+                .into_iter()
+                .map(|(lemma, _)| lemma)
+                .collect();
+            lemmas.dedup();
+            if lemmas.is_empty() {
+                if let Some((lemma, _)) = self.suffix_guess(&folded)? {
+                    lemmas.push(lemma);
+                }
+            }
+            for lemma in lemmas {
+                let lookup = self.service().normalize_lookup(&lemma);
+                for key in self.db().dict_lookup_keys(source, &lookup)? {
+                    if seen.insert(key.clone()) {
+                        if let Some(hit) = self.build_hit(&key)? {
+                            words.push(hit);
+                        }
+                    }
+                }
+            }
+        }
         // Literal exact/prefix matches on the typed form, folded into the
         // language's lookup key (kana stays verbatim; Greek folds accents).
-        let folded = self.service().normalize_lookup(&search);
         for key in self.db().dict_search_keys(source, &folded, 30)? {
             if seen.insert(key.clone()) {
                 if let Some(hit) = self.build_hit(&key)? {

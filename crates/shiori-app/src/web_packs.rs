@@ -491,6 +491,14 @@ mod tests {
         let gatos = rows.iter().find(|r| r.token.surface == "gatos").unwrap();
         assert_eq!(gatos.token.lemma, "gato");
 
+        // Searching an inflected form finds its lemma's entry through
+        // the grammar table (packs have no conjugation analyzer).
+        let results = app.search_dictionary("hablo").unwrap();
+        assert!(
+            results.words.iter().any(|h| h.entry.headword() == "hablar"),
+            "searching a conjugated form must surface the lemma"
+        );
+
         std::fs::remove_dir_all(&dir).ok();
     }
 }
