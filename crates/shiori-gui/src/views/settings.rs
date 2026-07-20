@@ -421,6 +421,7 @@ impl ShioriGui {
         let filter = self.web_pack_filter.trim().to_lowercase();
         let busy = self.pack_installing;
         let mut build: Option<String> = None;
+        let mut first_row = true;
         for source in shiori_app::WEB_PACK_SOURCES {
             if !filter.is_empty()
                 && !source.name.to_lowercase().contains(&filter)
@@ -428,6 +429,15 @@ impl ShioriGui {
             {
                 continue;
             }
+            // A rule between rows keeps each language's Build button
+            // visually attached to its own line.
+            if !first_row {
+                ui.scope(|ui| {
+                    ui.set_width(ui.available_width().min(640.0));
+                    ui.separator();
+                });
+            }
+            first_row = false;
             ui.horizontal(|ui| {
                 ui.set_width(ui.available_width().min(640.0));
                 ui.strong(source.name);
