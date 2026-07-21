@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-21
+
 ### Added
 - **Per-language book search.** The Sources view ("Find books online") is
   now language-aware: a language switcher at the top re-scopes every tab
@@ -15,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Wikisource** is no longer Japanese-only — it queries the active
     language's Wikisource wiki (`<code>.wikisource.org`, resolved per
     language; Ancient Greek falls back to the Modern Greek wiki).
+    Multi-part books are collapsed to a single result and imported whole
+    as an EPUB via the Wikimedia export tool, rather than one entry per
+    chapter.
   - **Project Gutenberg** search via the [Gutendex](https://gutendex.com/)
     API, filtered to the active language, with Gutenberg license
     boilerplate stripped on import.
@@ -248,6 +253,7 @@ around comprehensible input.
   exit.
 - Japanese font baseline alignment and a crisp Latin font fallback.
 
-[Unreleased]: https://github.com/PeterDessev/Shiori/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/PeterDessev/Shiori/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/PeterDessev/Shiori/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/PeterDessev/Shiori/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/PeterDessev/Shiori/releases/tag/v0.1.0

@@ -219,7 +219,7 @@ feature:
 ## Roadmap & non-goals
 
 The [roadmap](ROADMAP.md) is an issue-style tracker of accepted work —
-planned, in progress, done. As of the 0.2.0 release it holds two small UI
+planned, in progress, done. As of the 0.3.0 release it holds two small UI
 items: better Markdown rendering in the reading view, and more consistent
 scroll bars. Two longer-standing deferrals sit outside it: an **NHK Easy
 News** source waits on a usable article index, and **text-to-speech** is

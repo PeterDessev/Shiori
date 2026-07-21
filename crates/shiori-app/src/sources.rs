@@ -31,7 +31,7 @@ const GUTENDEX_API: &str = "https://gutendex.com/books/";
 const WSEXPORT_URL: &str = "https://ws-export.wmcloud.org/";
 
 const USER_AGENT: &str =
-    "Shiori/0.2.0 (https://github.com/PeterDessev/Shiori; peter.dessev@gmail.com) ureq/2";
+    "Shiori/0.3.0 (https://github.com/PeterDessev/Shiori; peter.dessev@gmail.com) ureq/2";
 
 /// One public-domain work from the Aozora catalog.
 #[derive(Debug, Clone)]
