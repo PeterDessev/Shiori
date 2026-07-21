@@ -15,7 +15,10 @@ use crate::settings::OpdsCatalog;
 
 /// Anonymous, multilingual OPDS feeds offered as one-click additions.
 const OPDS_SUGGESTIONS: &[(&str, &str)] = &[
-    ("Project Gutenberg", "https://www.gutenberg.org/ebooks.opds/"),
+    (
+        "Project Gutenberg",
+        "https://www.gutenberg.org/ebooks.opds/",
+    ),
     ("Open Library", "https://openlibrary.org/opds"),
 ];
 
@@ -96,7 +99,9 @@ impl ShioriGui {
             // Search row (every tab except the static Libraries list).
             if self.sources.tab != SourceTab::Libraries {
                 let hint = match self.sources.tab {
-                    SourceTab::Aozora if is_japanese => "title, reading, or author — 坊っちゃん, なつめ…",
+                    SourceTab::Aozora if is_japanese => {
+                        "title, reading, or author — 坊っちゃん, なつめ…"
+                    }
                     SourceTab::Aozora => "title, reading, or author…",
                     SourceTab::Wikisource => "search this language's Wikisource…",
                     SourceTab::Gutenberg => "search Project Gutenberg…",
@@ -428,10 +433,7 @@ impl ShioriGui {
                     .desired_width(300.0),
             );
             let url_ok = self.sources.new_opds_url.trim().starts_with("http");
-            if ui
-                .add_enabled(url_ok, egui::Button::new("Add"))
-                .clicked()
-            {
+            if ui.add_enabled(url_ok, egui::Button::new("Add")).clicked() {
                 *opds_add = Some((
                     self.sources.new_opds_name.clone(),
                     self.sources.new_opds_url.clone(),

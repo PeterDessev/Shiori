@@ -23,6 +23,10 @@ mod stats;
 mod transfer;
 mod web_packs;
 
+pub use books::{
+    book_lang_profile, cross_reference, multilingual_libraries, suggested_libraries,
+    BookLangProfile, Library,
+};
 pub use chat::{ChatSentence, ChatTokenRow};
 pub use data::DataStatus;
 pub use dictionary::{DictExample, DictSearchHit, DictSearchResults, QueryAnalysis};
@@ -32,10 +36,6 @@ pub use mining::MiningCandidate;
 pub use packs::{
     download_pack_zip, fetch_pack_catalog, parse_pack_catalog, LanguageInfo, PackCatalogEntry,
     PackDetails, DEFAULT_PACK_CATALOG_URL,
-};
-pub use books::{
-    book_lang_profile, cross_reference, multilingual_libraries, suggested_libraries,
-    BookLangProfile, Library,
 };
 pub use review::ReviewItem;
 pub use sources::{AozoraWork, GutendexHit, OpdsHit, WikisourceHit};

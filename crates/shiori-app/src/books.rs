@@ -47,7 +47,9 @@ pub struct Library {
 #[serde(untagged)]
 enum Section {
     List(Vec<Library>),
-    Ref { cross_reference: String },
+    Ref {
+        cross_reference: String,
+    },
     /// Any other shape, kept so one unexpected section can't fail the
     /// whole catalog parse. Its contents are unused.
     #[allow(dead_code)]
@@ -281,9 +283,11 @@ mod tests {
         let ja = book_lang_profile("ja");
         assert_eq!(ja.wikisource_subdomain.as_deref(), Some("ja"));
         assert_eq!(ja.gutendex_lang.as_deref(), Some("ja"));
-        assert!(suggested_libraries("ja").iter().any(|l| l.name.contains("Wikisource")
-            || l.name.contains("Aozora")
-            || !l.name.is_empty()));
+        assert!(suggested_libraries("ja")
+            .iter()
+            .any(|l| l.name.contains("Wikisource")
+                || l.name.contains("Aozora")
+                || !l.name.is_empty()));
     }
 
     #[test]

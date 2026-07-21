@@ -568,7 +568,11 @@ impl App {
             return self.import_text_meta(meta, &text);
         }
         // Unknown type: let the file pipeline sniff it by extension.
-        let ext = lower_url.rsplit('.').next().filter(|e| e.len() <= 5).unwrap_or("epub");
+        let ext = lower_url
+            .rsplit('.')
+            .next()
+            .filter(|e| e.len() <= 5)
+            .unwrap_or("epub");
         self.import_download_as_file(url, &download_filename(title, ext))
     }
 }
@@ -761,7 +765,10 @@ mod tests {
              Chapter 1.\nThe real text.\n\
              *** END OF THE PROJECT GUTENBERG EBOOK FOO ***\n\
              License footer, donations, etc.";
-        assert_eq!(strip_gutenberg_boilerplate(raw), "Chapter 1.\nThe real text.");
+        assert_eq!(
+            strip_gutenberg_boilerplate(raw),
+            "Chapter 1.\nThe real text."
+        );
         // Text without markers is returned trimmed but intact.
         assert_eq!(strip_gutenberg_boilerplate("  plain body  "), "plain body");
     }
@@ -813,7 +820,10 @@ mod tests {
 
     #[test]
     fn download_filename_is_safe() {
-        assert_eq!(download_filename("Alice's Adventures!", "epub"), "Alice_s_Adventures.epub");
+        assert_eq!(
+            download_filename("Alice's Adventures!", "epub"),
+            "Alice_s_Adventures.epub"
+        );
         assert_eq!(download_filename("", "pdf"), "opds.pdf");
     }
 

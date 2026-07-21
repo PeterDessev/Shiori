@@ -141,27 +141,25 @@ pub(crate) fn parse_atom(xml: &str, base: &Url) -> ParsedFeed {
     loop {
         match reader.read_event() {
             // Opening tags may set text-capture state or start an entry.
-            Ok(Event::Start(e)) => {
-                match local(e.name().as_ref()) {
-                    b"feed" => {
-                        if let Some(b) = attr(&e, b"base") {
-                            if let Ok(u) = Url::parse(&b) {
-                                base = u;
-                            }
+            Ok(Event::Start(e)) => match local(e.name().as_ref()) {
+                b"feed" => {
+                    if let Some(b) = attr(&e, b"base") {
+                        if let Ok(u) = Url::parse(&b) {
+                            base = u;
                         }
                     }
-                    b"entry" => {
-                        in_entry = true;
-                        entry = ParsedEntry::default();
-                    }
-                    b"link" => push_link(&e, &base, in_entry, &mut entry, &mut feed_links),
-                    b"author" if in_entry => in_author = true,
-                    b"title" if in_entry => target = Target::Title,
-                    b"name" if in_entry && in_author => target = Target::Author,
-                    b"summary" | b"content" if in_entry => target = Target::Summary,
-                    _ => {}
                 }
-            }
+                b"entry" => {
+                    in_entry = true;
+                    entry = ParsedEntry::default();
+                }
+                b"link" => push_link(&e, &base, in_entry, &mut entry, &mut feed_links),
+                b"author" if in_entry => in_author = true,
+                b"title" if in_entry => target = Target::Title,
+                b"name" if in_entry && in_author => target = Target::Author,
+                b"summary" | b"content" if in_entry => target = Target::Summary,
+                _ => {}
+            },
             // Self-closing tags carry no text, so they must not set a
             // capture target (which would misattribute later text). Only
             // `<link/>` matters here — its data is all in attributes.
@@ -356,7 +354,11 @@ fn expand_token(token: &str, enc: &str) -> String {
     // RFC 6570 form-style query expansion: {?a,b} or {&a,b}.
     if let Some(vars) = token.strip_prefix('?').or_else(|| token.strip_prefix('&')) {
         let sep = if token.starts_with('?') { '?' } else { '&' };
-        let names: Vec<&str> = vars.split(',').map(str::trim).filter(|v| !v.is_empty()).collect();
+        let names: Vec<&str> = vars
+            .split(',')
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+            .collect();
         // A single-variable template (e.g. `{?query}`, `{?q}`, `{?text}`)
         // is the search parameter whatever it's named; with several, only
         // fill the ones that clearly carry the query.
@@ -385,7 +387,9 @@ fn expand_token(token: &str, enc: &str) -> String {
 fn json_rel_contains(link: &Value, needle: &str) -> bool {
     match &link["rel"] {
         Value::String(s) => s.contains(needle),
-        Value::Array(a) => a.iter().any(|r| r.as_str().is_some_and(|s| s.contains(needle))),
+        Value::Array(a) => a
+            .iter()
+            .any(|r| r.as_str().is_some_and(|s| s.contains(needle))),
         _ => false,
     }
 }
@@ -424,7 +428,11 @@ pub(crate) fn parse_opds2(v: &Value, base: &Url) -> ParsedFeed {
     if let Some(pubs) = v["publications"].as_array() {
         for p in pubs {
             let meta = &p["metadata"];
-            let title = meta["title"].as_str().unwrap_or_default().trim().to_string();
+            let title = meta["title"]
+                .as_str()
+                .unwrap_or_default()
+                .trim()
+                .to_string();
             if title.is_empty() {
                 continue;
             }
@@ -436,7 +444,8 @@ pub(crate) fn parse_opds2(v: &Value, base: &Url) -> ParsedFeed {
             let mut links = Vec::new();
             if let Some(ls) = p["links"].as_array() {
                 for l in ls {
-                    if json_rel_contains(l, ACQUISITION_REL) || json_rel_contains(l, "acquisition") {
+                    if json_rel_contains(l, ACQUISITION_REL) || json_rel_contains(l, "acquisition")
+                    {
                         if let Some(href) = l["href"].as_str() {
                             links.push(FeedLink {
                                 rel: ACQUISITION_REL.into(),
@@ -469,7 +478,10 @@ mod tests {
     #[test]
     fn expand_opensearch_and_rfc6570_templates() {
         assert_eq!(
-            expand_template("http://m.gutenberg.org/ebooks/search.opds/?query={searchTerms}", "war peace"),
+            expand_template(
+                "http://m.gutenberg.org/ebooks/search.opds/?query={searchTerms}",
+                "war peace"
+            ),
             "http://m.gutenberg.org/ebooks/search.opds/?query=war%20peace"
         );
         assert_eq!(

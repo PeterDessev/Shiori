@@ -542,7 +542,11 @@ mod tests {
         let dir = std::env::temp_dir().join("jrc-settings-opds-test");
         std::fs::create_dir_all(&dir).unwrap();
         let mut s = Settings::default();
-        assert!(s.add_opds("en", "Standard Ebooks", "https://standardebooks.org/feeds/opds"));
+        assert!(s.add_opds(
+            "en",
+            "Standard Ebooks",
+            "https://standardebooks.org/feeds/opds"
+        ));
         // Blank url rejected; duplicate url (case-insensitive) rejected.
         assert!(!s.add_opds("en", "blank", "   "));
         assert!(!s.add_opds("en", "dup", "HTTPS://STANDARDEBOOKS.ORG/feeds/opds"));
@@ -554,10 +558,7 @@ mod tests {
 
         let loaded = Settings::load(&dir);
         assert_eq!(loaded.opds_for("en")[0].name, "Standard Ebooks");
-        assert_eq!(
-            loaded.opds_for("fr")[0].url,
-            "https://ebooks-bnr.com/opds/"
-        );
+        assert_eq!(loaded.opds_for("fr")[0].url, "https://ebooks-bnr.com/opds/");
 
         let mut loaded = loaded;
         loaded.remove_opds("en", 0);
