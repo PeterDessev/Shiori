@@ -33,12 +33,30 @@ fn gutendex_search_returns_books() {
 
 #[test]
 #[ignore = "hits ja.wikisource.org"]
-fn wikisource_search_returns_hits() {
+fn wikisource_search_returns_whole_works() {
     let app = app();
     let hits = app.search_wikisource("夏目漱石").expect("wikisource search");
-    println!("ja.wikisource '夏目漱石': {} hits", hits.len());
+    println!("ja.wikisource '夏目漱石': {} whole works", hits.len());
     assert!(!hits.is_empty(), "expected Japanese Wikisource hits");
-    println!("  {}", hits[0].title);
+    for h in hits.iter().take(5) {
+        println!("  {} ({} words)", h.title, h.wordcount);
+    }
+    // Multi-part books are collapsed: no chapter subpages leak through.
+    assert!(
+        hits.iter().all(|h| !h.title.contains('/')),
+        "results should be whole works, not `Work/Chapter` fragments"
+    );
+}
+
+#[test]
+#[ignore = "downloads a work via WSexport (ws-export.wmcloud.org) and imports it whole"]
+fn wikisource_whole_book_import() {
+    let app = app();
+    // A standalone Japanese Wikisource work; imported whole via WSexport.
+    let id = app
+        .import_wikisource_page("第三夜")
+        .expect("whole-book Wikisource import");
+    println!("imported ja.wikisource '第三夜' as document {id:?}");
 }
 
 #[test]

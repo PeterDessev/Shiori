@@ -9,7 +9,7 @@ authors.workspace = true
 [dependencies]
 chrono.workspace = true
 shiori-core.workspace = true
-shiori-srs = { version = "0.2.0", path = "../shiori-srs" }
+shiori-srs = { version = "0.3.0", path = "../shiori-srs" }
 rusqlite = { version = "0.37", features = ["bundled", "chrono"] }
 serde.workspace = true
 serde_json.workspace = true
