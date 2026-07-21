@@ -5,6 +5,7 @@
 //! mining vocabulary, reviewing cards, and computing reading-difficulty
 //! statistics.
 
+pub mod books;
 mod chat;
 mod data;
 mod dictionary;
@@ -13,6 +14,7 @@ mod finish;
 mod home;
 mod ingest;
 mod mining;
+mod opds;
 mod packs;
 mod review;
 mod sessions;
@@ -31,8 +33,12 @@ pub use packs::{
     download_pack_zip, fetch_pack_catalog, parse_pack_catalog, LanguageInfo, PackCatalogEntry,
     PackDetails, DEFAULT_PACK_CATALOG_URL,
 };
+pub use books::{
+    book_lang_profile, cross_reference, multilingual_libraries, suggested_libraries,
+    BookLangProfile, Library,
+};
 pub use review::ReviewItem;
-pub use sources::{AozoraWork, WikisourceHit};
+pub use sources::{AozoraWork, GutendexHit, OpdsHit, WikisourceHit};
 pub use stats::{DifficultyBand, DocStats, Recommendation, StatsOverview};
 pub use web_packs::{
     build_web_pack, download_web_pack_inputs, web_pack_source, WebPackSource, WEB_PACK_SOURCES,
