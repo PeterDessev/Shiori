@@ -4217,6 +4217,7 @@ dependencies = [
  "encoding_rs",
  "epub",
  "pdf-extract",
+ "quick-xml 0.39.4",
  "serde",
  "serde_json",
  "sha2",
@@ -4229,6 +4230,7 @@ dependencies = [
  "shiori-srs",
  "thiserror 2.0.18",
  "ureq",
+ "url",
  "zip 2.4.2",
 ]
 

@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Per-language book search.** The Sources view ("Find books online") is
+  now language-aware: a language switcher at the top re-scopes every tab
+  (and where imports land), and each language searches its own free
+  libraries.
+  - **Wikisource** is no longer Japanese-only — it queries the active
+    language's Wikisource wiki (`<code>.wikisource.org`, resolved per
+    language; Ancient Greek falls back to the Modern Greek wiki).
+  - **Project Gutenberg** search via the [Gutendex](https://gutendex.com/)
+    API, filtered to the active language, with Gutenberg license
+    boilerplate stripped on import.
+  - **OPDS distributors**, added per language under the new OPDS tab and
+    persisted in settings. Searches OPDS 1.x (Atom, following an
+    OpenSearch description and navigation feeds) and OPDS 2.0 (JSON), and
+    imports EPUB/PDF/HTML/text. Project Gutenberg and Open Library are
+    offered as one-click suggestions.
+  - **Libraries** tab: a browsable, bundled directory of free, legal
+    digital libraries for the active language, plus multilingual
+    aggregators.
+
 ## [0.2.0] - 2026-07-19
 
 Shiori grows beyond Japanese: language support is now data-driven, with

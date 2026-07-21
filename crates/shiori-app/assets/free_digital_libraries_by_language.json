@@ -1,0 +1,2087 @@
+{
+  "meta": {
+    "title": "Free, legal digital libraries for e-books, organized by language",
+    "generated": "2026-07-18",
+    "scope": "Sources that provide free, legal access to complete book-length texts (e-books, scanned volumes, or machine-readable text corpora). Shadow libraries (Library Genesis, Z-Library, Anna's Archive, Sci-Hub and similar) are deliberately excluded as not legal. Subscription-only services are excluded; freemium services with a substantial free tier are included and marked.",
+    "field_definitions": {
+      "access": "free = no account needed; free_with_registration = free account required for some or all content; freemium = meaningful free tier plus paid tier",
+      "api": "true = documented programmatic interface; partial = machine-readable access exists but is limited, undocumented, or metadata-only (e.g. OAI-PMH harvesting, IIIF, git repositories, static data dumps); false = no programmatic access",
+      "search": "true if the site offers search; search_details distinguishes full-text search from metadata/catalog search",
+      "bulk_download": "true = whole-corpus or large-batch download is supported and permitted; partial = per-title downloads or bulk by arrangement",
+      "confidence": "high = verified or well-established and stable; medium = believed correct but details (especially API endpoints) should be verified before building on them; low = uncertain, verify before relying on it"
+    },
+    "jurisdiction_caveats": [
+      "Public domain status varies by country. US-based sites generally apply the US rule (publication before a rolling cutoff year, currently pre-1931); Canadian sites (Faded Page, Project Gutenberg Canada) apply Canadian terms; European sites generally apply life of the author plus 70 years. A text legally downloadable from one site may still be in copyright where you live.",
+      "Project Gutenberg applies US public domain rules. A site-wide block of German IP addresses imposed in 2018 after the S. Fischer Verlag lawsuit was lifted under a 2021 settlement; only the specific disputed authors' titles remain blocked in Germany until their German copyrights expire.",
+      "HathiTrust full-view access depends on your location: users outside the US see a smaller public domain set than US users.",
+      "The National Library of Norway (nb.no) shows in-copyright Norwegian books only to Norwegian IP addresses; public domain material is open to all.",
+      "For biblical and classical texts, the ancient text itself is public domain but modern critical editions and apparatus (e.g. NA28, BHS apparatus, Rahlfs-Hanhart 2006) are copyrighted. The reliably free-to-redistribute editions are noted per entry.",
+      "The British Library is still recovering from its October 2023 cyber-attack. Its new main catalogue went live around January 2026 and EThOS returned in July 2026, but some digital services remain in phased restoration."
+    ],
+    "coverage_note": "Languages with thin dedicated ecosystems are best served through the multilingual aggregators (Internet Archive, Wikisource language subdomains, HathiTrust); the by-language sections list the strongest dedicated collections."
+  },
+  "multilingual_general": [
+    {
+      "name": "Internet Archive",
+      "url": "https://archive.org",
+      "description": "Largest open scan repository; millions of public domain books in most written languages, plus a controlled lending program for some in-copyright titles.",
+      "access": "free",
+      "api": true,
+      "api_details": "Advanced Search API (JSON), Metadata API, Scrape API, IIIF image service, and the official ia command-line client for bulk work.",
+      "search": true,
+      "search_details": "Metadata search plus full-text search across OCRed volumes.",
+      "bulk_download": true,
+      "confidence": "high",
+      "notes": "Public domain items are unrestricted; lending items require an account and are US-litigation constrained."
+    },
+    {
+      "name": "Open Library",
+      "url": "https://openlibrary.org",
+      "description": "Internet Archive's catalog front end; one record per book with read links into Archive.org copies.",
+      "access": "free",
+      "api": true,
+      "api_details": "REST JSON APIs for search, books, works, authors, and covers; full monthly data dumps of the catalog.",
+      "search": true,
+      "search_details": "Catalog and metadata search; full text is searched via the underlying Archive items.",
+      "bulk_download": true,
+      "confidence": "high"
+    },
+    {
+      "name": "HathiTrust",
+      "url": "https://www.hathitrust.org",
+      "description": "Academic scan repository of roughly 18 million volumes in 400+ languages; full view for public domain items.",
+      "access": "free",
+      "api": "partial",
+      "api_details": "Bibliographic API (identifier lookup, JSON) remains; the content-level Data API was retired in July 2024. Bulk metadata via OAI feed and Hathifiles; computational text analysis via HTRC Extracted Features datasets.",
+      "search": true,
+      "search_details": "Full-text search across the whole corpus, including in-copyright works (snippet-level for restricted items).",
+      "bulk_download": "partial",
+      "confidence": "high",
+      "notes": "Full-view coverage differs for US and non-US users."
+    },
+    {
+      "name": "Project Gutenberg",
+      "url": "https://www.gutenberg.org",
+      "description": "The original e-book library; 75,000+ hand-proofed public domain e-books, mostly English but with significant French, German, Portuguese, Italian, Finnish, Dutch and other holdings.",
+      "access": "free",
+      "api": "partial",
+      "api_details": "No official REST API. Official bulk access via the complete RDF and CSV catalog dumps and sanctioned mirroring. The third-party Gutendex project (gutendex.com) provides a free JSON REST API over the catalog.",
+      "search": true,
+      "search_details": "Site search over titles, authors, and subjects; full-text search is limited.",
+      "bulk_download": true,
+      "confidence": "high",
+      "notes": "Clean EPUB, Kindle, HTML, and plain-text formats make it the easiest large corpus to ingest."
+    },
+    {
+      "name": "Wikisource (all language subdomains)",
+      "url": "https://wikisource.org",
+      "description": "Wikimedia's transcription library with 70+ language editions; proofread public domain and freely licensed texts, from major literatures to Latin, Ancient Greek, Hebrew, Sanskrit, and Armenian.",
+      "access": "free",
+      "api": true,
+      "api_details": "Full MediaWiki Action and REST APIs on every subdomain, complete XML dumps, and the WSExport tool for on-demand EPUB, PDF, and MOBI generation. One integration covers every language edition.",
+      "search": true,
+      "search_details": "Full-text search via CirrusSearch, exposed through the API.",
+      "bulk_download": true,
+      "confidence": "high"
+    },
+    {
+      "name": "Europeana",
+      "url": "https://www.europeana.eu",
+      "description": "Aggregator for European cultural heritage institutions; millions of digitized books among 50+ million objects, with per-item rights statements.",
+      "access": "free",
+      "api": true,
+      "api_details": "Search API, Record API, IIIF, and SPARQL; free API key required.",
+      "search": true,
+      "search_details": "Metadata search with rights filtering; full text only where partners supply it (notably newspapers).",
+      "bulk_download": "partial",
+      "confidence": "high"
+    },
+    {
+      "name": "Google Books",
+      "url": "https://books.google.com",
+      "description": "Full view and EPUB/PDF download for scanned public domain books; snippet or preview for the rest.",
+      "access": "free",
+      "api": true,
+      "api_details": "Google Books API v1 for search and metadata (API key); programmatic full-text retrieval is not offered.",
+      "search": true,
+      "search_details": "Full-text search across the entire scanned corpus, one of the deepest search indexes anywhere.",
+      "bulk_download": false,
+      "confidence": "high"
+    },
+    {
+      "name": "Library of Congress Digital Collections",
+      "url": "https://www.loc.gov/collections/",
+      "description": "US national library digital collections, including the absorbed World Digital Library, with books, manuscripts, and maps in many languages.",
+      "access": "free",
+      "api": true,
+      "api_details": "The loc.gov JSON API (append fo=json to most URLs) plus IIIF; no key required.",
+      "search": true,
+      "search_details": "Metadata search with faceting; full text where OCR exists.",
+      "bulk_download": "partial",
+      "confidence": "high"
+    },
+    {
+      "name": "Digital Public Library of America (DPLA)",
+      "url": "https://dp.la",
+      "description": "US aggregator linking out to member institutions' digitized books and archives.",
+      "access": "free",
+      "api": true,
+      "api_details": "REST API with free key; bulk metadata downloads.",
+      "search": true,
+      "search_details": "Metadata search; content is hosted by partners.",
+      "bulk_download": "partial",
+      "confidence": "medium",
+      "notes": "Organizationally leaner than it once was; verify service levels before depending on the API."
+    },
+    {
+      "name": "ManyBooks",
+      "url": "https://manybooks.net",
+      "description": "Free e-books, largely repackaged public domain plus author-submitted free titles, in several languages.",
+      "access": "free_with_registration",
+      "api": false,
+      "api_details": "None.",
+      "search": true,
+      "search_details": "Catalog search and genre browsing.",
+      "bulk_download": false,
+      "confidence": "high"
+    },
+    {
+      "name": "Internet Sacred Text Archive",
+      "url": "https://sacred-texts.com",
+      "description": "Long-running archive of religion, mythology, and folklore texts, mostly older English translations of world scriptures.",
+      "access": "free",
+      "api": false,
+      "api_details": "None; static HTML site.",
+      "search": true,
+      "search_details": "Basic site search.",
+      "bulk_download": "partial",
+      "confidence": "high"
+    },
+    {
+      "name": "Bloom Library",
+      "url": "https://bloomlibrary.org",
+      "description": "SIL-run library of Creative Commons books, strongest for minority and low-resource languages; hundreds of languages represented.",
+      "access": "free",
+      "api": "partial",
+      "api_details": "Open data orientation and downloadable books; no prominent public query API.",
+      "search": true,
+      "search_details": "Search and filter by language and level.",
+      "bulk_download": "partial",
+      "confidence": "medium"
+    },
+    {
+      "name": "StoryWeaver (Pratham Books)",
+      "url": "https://storyweaver.org.in",
+      "description": "Creative Commons children's books in 350+ languages with translation tooling; strong for Indian and African languages.",
+      "access": "free_with_registration",
+      "api": "partial",
+      "api_details": "Openly licensed content and downloads; public API status unclear.",
+      "search": true,
+      "search_details": "Search by language, level, and theme.",
+      "bulk_download": "partial",
+      "confidence": "medium"
+    },
+    {
+      "name": "African Storybook",
+      "url": "https://www.africanstorybook.org",
+      "description": "Openly licensed picture books in 200+ African languages.",
+      "access": "free",
+      "api": false,
+      "api_details": "None documented.",
+      "search": true,
+      "search_details": "Search by language and level.",
+      "bulk_download": "partial",
+      "confidence": "medium"
+    }
+  ],
+  "scholarly_open_access_books": [
+    {
+      "name": "Directory of Open Access Books (DOAB)",
+      "url": "https://directory.doabooks.org",
+      "description": "Index of 80,000+ peer-reviewed open access academic books across languages, linking to full texts at publishers and OAPEN.",
+      "access": "free",
+      "api": true,
+      "api_details": "OAI-PMH harvesting plus REST endpoints (DSpace-based); full metadata exports.",
+      "search": true,
+      "search_details": "Metadata search with subject and language facets.",
+      "bulk_download": "partial",
+      "confidence": "high"
+    },
+    {
+      "name": "OAPEN Library",
+      "url": "https://library.oapen.org",
+      "description": "Hosted full-text repository for open access monographs, mostly humanities and social sciences, in English, German, French, Dutch, Italian and more.",
+      "access": "free",
+      "api": true,
+      "api_details": "OAI-PMH and DSpace REST API; bulk-friendly.",
+      "search": true,
+      "search_details": "Metadata search; PDFs downloadable per title.",
+      "bulk_download": "partial",
+      "confidence": "high"
+    },
+    {
+      "name": "OpenEdition Books",
+      "url": "https://books.openedition.org",
+      "description": "French-centered open access platform for humanities monographs; HTML reading free for most titles, PDF and EPUB sometimes paywalled (freemium).",
+      "access": "freemium",
+      "api": "partial",
+      "api_details": "OAI-PMH metadata harvesting.",
+      "search": true,
+      "search_details": "Full-text search across the platform.",
+      "bulk_download": false,
+      "confidence": "high"
+    },
+    {
+      "name": "SciELO Books",
+      "url": "https://books.scielo.org",
+      "description": "Latin American academic books, largely open access, in Portuguese and Spanish.",
+      "access": "free",
+      "api": "partial",
+      "api_details": "OAI-PMH metadata; per-title PDF and EPUB downloads.",
+      "search": true,
+      "search_details": "Metadata search.",
+      "bulk_download": "partial",
+      "confidence": "medium"
+    },
+    {
+      "name": "Open Textbook Library",
+      "url": "https://open.umn.edu/opentextbooks",
+      "description": "Curated index of openly licensed college textbooks, mostly English.",
+      "access": "free",
+      "api": false,
+      "api_details": "None public.",
+      "search": true,
+      "search_details": "Subject browsing and search.",
+      "bulk_download": "partial",
+      "confidence": "high"
+    }
+  ],
+  "modern_languages": {
+    "english": [
+      {
+        "name": "Standard Ebooks",
+        "url": "https://standardebooks.org",
+        "description": "Carefully typeset, modernized editions of public domain literature; the highest production quality among free English e-book sources.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "OPDS, Atom, and RSS feeds of the whole catalog; all source files on GitHub. No search API.",
+        "search": true,
+        "search_details": "Site search over the catalog.",
+        "bulk_download": true,
+        "confidence": "high"
+      },
+      {
+        "name": "Faded Page",
+        "url": "https://www.fadedpage.com",
+        "description": "Canadian equivalent of Project Gutenberg; includes 20th-century authors public domain in Canada but not the US.",
+        "access": "free",
+        "api": false,
+        "api_details": "None.",
+        "search": true,
+        "search_details": "Catalog search.",
+        "bulk_download": false,
+        "confidence": "high",
+        "notes": "Check your local copyright law before downloading post-1930 titles."
+      },
+      {
+        "name": "Project Gutenberg Australia",
+        "url": "https://gutenberg.net.au",
+        "description": "Australian public domain texts, including works still copyrighted in the US.",
+        "access": "free",
+        "api": false,
+        "api_details": "None.",
+        "search": true,
+        "search_details": "Basic site search and author indexes.",
+        "bulk_download": false,
+        "confidence": "high"
+      },
+      {
+        "name": "Project Gutenberg Canada",
+        "url": "https://gutenberg.ca",
+        "description": "Canadian public domain e-books, complementary to Faded Page.",
+        "access": "free",
+        "api": false,
+        "api_details": "None.",
+        "search": true,
+        "search_details": "Basic catalog browsing and search.",
+        "bulk_download": false,
+        "confidence": "high"
+      },
+      {
+        "name": "LibriVox",
+        "url": "https://librivox.org",
+        "description": "Volunteer-read public domain audiobooks (included here as the audio complement to the text libraries), primarily English with other languages represented.",
+        "access": "free",
+        "api": true,
+        "api_details": "Documented JSON API for the catalog; audio files hosted on Internet Archive.",
+        "search": true,
+        "search_details": "Catalog search by title, author, language, and reader.",
+        "bulk_download": true,
+        "confidence": "high"
+      },
+      {
+        "name": "Christian Classics Ethereal Library (CCEL)",
+        "url": "https://www.ccel.org",
+        "description": "English translations of patristic, medieval, and Reformation Christian classics, including the standard Ante-Nicene and Nicene Fathers sets.",
+        "access": "free",
+        "api": false,
+        "api_details": "None; per-title downloads in several formats.",
+        "search": true,
+        "search_details": "Full-text search across the collection.",
+        "bulk_download": "partial",
+        "confidence": "high"
+      },
+      {
+        "name": "The Online Books Page",
+        "url": "https://onlinebooks.library.upenn.edu",
+        "description": "Curated index (University of Pennsylvania) of 3+ million free books hosted elsewhere; the best human-maintained map of the free English e-book landscape.",
+        "access": "free",
+        "api": false,
+        "api_details": "None; static listings.",
+        "search": true,
+        "search_details": "Author, title, and subject search over the index.",
+        "bulk_download": false,
+        "confidence": "high"
+      },
+      {
+        "name": "Trove (National Library of Australia)",
+        "url": "https://trove.nla.gov.au",
+        "description": "Australian aggregator with digitized books, newspapers, and journals.",
+        "access": "free",
+        "api": true,
+        "api_details": "Trove API v3 with free key; well documented.",
+        "search": true,
+        "search_details": "Full-text search of digitized content.",
+        "bulk_download": "partial",
+        "confidence": "high"
+      },
+      {
+        "name": "Oxford Text Archive",
+        "url": "https://ota.bodleian.ox.ac.uk",
+        "description": "Long-running scholarly archive of literary and linguistic e-texts, many in TEI XML.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "Per-item TEI downloads; no query API.",
+        "search": true,
+        "search_details": "Catalog search.",
+        "bulk_download": "partial",
+        "confidence": "medium"
+      },
+      {
+        "name": "Text Creation Partnership (EEBO-TCP, ECCO-TCP, Evans-TCP)",
+        "url": "https://textcreationpartnership.org",
+        "description": "Keyed transcriptions of tens of thousands of early modern English books (1473-1800), released into the public domain.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "Complete TEI XML corpora on GitHub; searchable interfaces hosted at the University of Michigan.",
+        "search": true,
+        "search_details": "Full-text search via hosting interfaces.",
+        "bulk_download": true,
+        "confidence": "high"
+      },
+      {
+        "name": "OpenStax",
+        "url": "https://openstax.org",
+        "description": "Peer-reviewed, openly licensed college textbooks; free PDF and web reading.",
+        "access": "free",
+        "api": false,
+        "api_details": "None needed; direct downloads.",
+        "search": true,
+        "search_details": "Catalog browsing.",
+        "bulk_download": "partial",
+        "confidence": "high"
+      },
+      {
+        "name": "British Library",
+        "url": "https://www.bl.uk",
+        "description": "UK national library; digitized manuscripts and collection items are returning online after the October 2023 cyber-attack, with the new catalogue live and EThOS restored in July 2026.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "Historic APIs and datasets were disrupted by the attack; verify current availability of any specific service before building on it.",
+        "search": true,
+        "search_details": "New Alma and Primo based catalogue search; digital item coverage still expanding.",
+        "bulk_download": "partial",
+        "confidence": "medium"
+      }
+    ],
+    "french": [
+      {
+        "name": "Gallica (Bibliotheque nationale de France)",
+        "url": "https://gallica.bnf.fr",
+        "description": "One of the world's great digital libraries: 10+ million documents including hundreds of thousands of French books, plus Latin, Greek, and Arabic holdings.",
+        "access": "free",
+        "api": true,
+        "api_details": "SRU search API, Document API, OAI-PMH, and full IIIF Image and Presentation APIs; excellent documentation.",
+        "search": true,
+        "search_details": "Metadata and OCR full-text search.",
+        "bulk_download": "partial",
+        "confidence": "high"
+      },
+      {
+        "name": "Wikisource francophone",
+        "url": "https://fr.wikisource.org",
+        "description": "One of the largest and best-proofread Wikisource editions; strong classic French literature coverage with EPUB export.",
+        "access": "free",
+        "api": true,
+        "api_details": "MediaWiki API and dumps; WSExport for e-book generation.",
+        "search": true,
+        "search_details": "Full-text search.",
+        "bulk_download": true,
+        "confidence": "high"
+      },
+      {
+        "name": "Ebooks libres et gratuits",
+        "url": "https://www.ebooksgratuits.com",
+        "description": "Volunteer-made EPUBs of public domain French literature.",
+        "access": "free",
+        "api": false,
+        "api_details": "None.",
+        "search": true,
+        "search_details": "Catalog search.",
+        "bulk_download": false,
+        "confidence": "high"
+      },
+      {
+        "name": "Bibliotheque electronique du Quebec (BEQ)",
+        "url": "https://beq.ebooksgratuits.com",
+        "description": "Clean PDF and EPUB editions of French and Quebecois classics.",
+        "access": "free",
+        "api": false,
+        "api_details": "None.",
+        "search": false,
+        "search_details": "Author and collection browsing only.",
+        "bulk_download": false,
+        "confidence": "high"
+      },
+      {
+        "name": "Bibliotheque numerique romande",
+        "url": "https://ebooks-bnr.com",
+        "description": "Swiss volunteer project producing quality EPUBs of francophone public domain works.",
+        "access": "free",
+        "api": false,
+        "api_details": "None.",
+        "search": true,
+        "search_details": "Catalog search.",
+        "bulk_download": false,
+        "confidence": "high"
+      },
+      {
+        "name": "Canadiana",
+        "url": "https://www.canadiana.ca",
+        "description": "Digitized Canadian print heritage in French and English; free since 2018.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "IIIF for images; metadata search interface.",
+        "search": true,
+        "search_details": "Full-text search of OCRed material.",
+        "bulk_download": false,
+        "confidence": "medium"
+      }
+    ],
+    "german": [
+      {
+        "name": "Projekt Gutenberg-DE",
+        "url": "https://www.projekt-gutenberg.org",
+        "description": "The main German-language literature portal (unrelated to the US Project Gutenberg); free online reading of thousands of German classics.",
+        "access": "free",
+        "api": false,
+        "api_details": "None; reading is browser-based and downloads are not the focus.",
+        "search": true,
+        "search_details": "Author and title search.",
+        "bulk_download": false,
+        "confidence": "high"
+      },
+      {
+        "name": "Zeno.org",
+        "url": "http://www.zeno.org",
+        "description": "Very large German full-text library spanning literature, philosophy, reference works, and art.",
+        "access": "free",
+        "api": false,
+        "api_details": "None.",
+        "search": true,
+        "search_details": "Full-text search across the corpus.",
+        "bulk_download": false,
+        "confidence": "high"
+      },
+      {
+        "name": "Deutsches Textarchiv (DTA)",
+        "url": "https://www.deutschestextarchiv.de",
+        "description": "Scholarly TEI corpus of German texts 1600-1900 with linguistic annotation; the best machine-readable historical German source.",
+        "access": "free",
+        "api": true,
+        "api_details": "OAI-PMH, per-text TEI and plain-text downloads, whole-corpus downloads, and CLARIN-D linguistic web services (DDC search API).",
+        "search": true,
+        "search_details": "Linguistically aware full-text search (lemma, POS).",
+        "bulk_download": true,
+        "confidence": "high"
+      },
+      {
+        "name": "Munchener DigitalisierungsZentrum (MDZ / digitale-sammlungen.de)",
+        "url": "https://www.digitale-sammlungen.de",
+        "description": "Bavarian State Library scans: 3+ million volumes including vast early modern German and Latin holdings.",
+        "access": "free",
+        "api": true,
+        "api_details": "Public API portal with IIIF Image and Presentation plus OAI-PMH.",
+        "search": true,
+        "search_details": "Metadata and OCR full-text search.",
+        "bulk_download": "partial",
+        "confidence": "high"
+      },
+      {
+        "name": "Deutsche Digitale Bibliothek",
+        "url": "https://www.deutsche-digitale-bibliothek.de",
+        "description": "German national aggregator across libraries, archives, and museums.",
+        "access": "free",
+        "api": true,
+        "api_details": "REST API with free key.",
+        "search": true,
+        "search_details": "Metadata search with rights filters.",
+        "bulk_download": false,
+        "confidence": "high"
+      },
+      {
+        "name": "e-rara",
+        "url": "https://www.e-rara.ch",
+        "description": "Swiss libraries' platform for digitized rare prints, strong in German, Latin, and French early modern books.",
+        "access": "free",
+        "api": true,
+        "api_details": "IIIF and OAI-PMH.",
+        "search": true,
+        "search_details": "Metadata search; full text where OCRed.",
+        "bulk_download": "partial",
+        "confidence": "medium"
+      },
+      {
+        "name": "Wikisource (deutsch)",
+        "url": "https://de.wikisource.org",
+        "description": "Rigorously sourced German transcriptions, strong for 19th-century works and reference material.",
+        "access": "free",
+        "api": true,
+        "api_details": "MediaWiki API and dumps.",
+        "search": true,
+        "search_details": "Full-text search.",
+        "bulk_download": true,
+        "confidence": "high"
+      }
+    ],
+    "spanish": [
+      {
+        "name": "Biblioteca Virtual Miguel de Cervantes",
+        "url": "https://www.cervantesvirtual.com",
+        "description": "The flagship Hispanic digital library: hundreds of thousands of records for Spanish and Latin American literature, many with full text.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "Linked open data platform (data.cervantesvirtual.com) with SPARQL endpoint plus OAI-PMH; no simple REST content API.",
+        "search": true,
+        "search_details": "Catalog and full-text search.",
+        "bulk_download": false,
+        "confidence": "medium"
+      },
+      {
+        "name": "Biblioteca Digital Hispanica (BNE)",
+        "url": "https://bdh.bne.es",
+        "description": "Spanish National Library scans: manuscripts, incunabula, and books.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "OAI-PMH; related BNE linked-data SPARQL service at datos.bne.es.",
+        "search": true,
+        "search_details": "Metadata search; viewer-level text search where OCRed.",
+        "bulk_download": false,
+        "confidence": "medium"
+      },
+      {
+        "name": "Elejandria",
+        "url": "https://www.elejandria.com",
+        "description": "Free Spanish e-books, public domain and Creative Commons, in EPUB and PDF.",
+        "access": "free",
+        "api": false,
+        "api_details": "None.",
+        "search": true,
+        "search_details": "Catalog search.",
+        "bulk_download": false,
+        "confidence": "high"
+      },
+      {
+        "name": "textos.info",
+        "url": "https://www.textos.info",
+        "description": "Public domain Spanish-language e-books with EPUB and Kindle downloads.",
+        "access": "free",
+        "api": false,
+        "api_details": "None.",
+        "search": true,
+        "search_details": "Catalog search.",
+        "bulk_download": false,
+        "confidence": "medium"
+      },
+      {
+        "name": "Memoria Chilena",
+        "url": "https://www.memoriachilena.gob.cl",
+        "description": "National Library of Chile's thematic digital library with thousands of downloadable PDFs of Chilean books and documents.",
+        "access": "free",
+        "api": false,
+        "api_details": "None public.",
+        "search": true,
+        "search_details": "Catalog and thematic search.",
+        "bulk_download": false,
+        "confidence": "medium"
+      },
+      {
+        "name": "Wikisource en espanol",
+        "url": "https://es.wikisource.org",
+        "description": "Spanish-language Wikisource with classic literature and historical documents.",
+        "access": "free",
+        "api": true,
+        "api_details": "MediaWiki API and dumps.",
+        "search": true,
+        "search_details": "Full-text search.",
+        "bulk_download": true,
+        "confidence": "high"
+      }
+    ],
+    "portuguese": [
+      {
+        "name": "Dominio Publico (Brazil)",
+        "url": "http://www.dominiopublico.gov.br",
+        "description": "Brazilian government portal with thousands of public domain Portuguese works, including the complete Machado de Assis.",
+        "access": "free",
+        "api": false,
+        "api_details": "None.",
+        "search": true,
+        "search_details": "Catalog search by author, title, and category.",
+        "bulk_download": false,
+        "confidence": "high"
+      },
+      {
+        "name": "Biblioteca Nacional Digital (Portugal)",
+        "url": "https://bndigital.bnportugal.gov.pt",
+        "description": "National Library of Portugal scans of books, manuscripts, and maps.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "OAI-PMH harvesting; persistent purl.pt identifiers.",
+        "search": true,
+        "search_details": "Metadata search.",
+        "bulk_download": false,
+        "confidence": "medium"
+      },
+      {
+        "name": "Projeto Adamastor",
+        "url": "https://projetoadamastor.org",
+        "description": "Volunteer-made EPUB editions of Portuguese-language public domain literature.",
+        "access": "free",
+        "api": false,
+        "api_details": "None.",
+        "search": true,
+        "search_details": "Catalog browsing and search.",
+        "bulk_download": false,
+        "confidence": "medium"
+      },
+      {
+        "name": "Wikisource em portugues",
+        "url": "https://pt.wikisource.org",
+        "description": "Portuguese Wikisource with Brazilian and Portuguese classics.",
+        "access": "free",
+        "api": true,
+        "api_details": "MediaWiki API and dumps.",
+        "search": true,
+        "search_details": "Full-text search.",
+        "bulk_download": true,
+        "confidence": "high"
+      }
+    ],
+    "italian": [
+      {
+        "name": "Liber Liber",
+        "url": "https://liberliber.it",
+        "description": "The main Italian free e-book project; thousands of public domain works in EPUB and ODT plus audiobooks.",
+        "access": "free",
+        "api": false,
+        "api_details": "None.",
+        "search": true,
+        "search_details": "Catalog search.",
+        "bulk_download": "partial",
+        "confidence": "high"
+      },
+      {
+        "name": "Wikisource in italiano",
+        "url": "https://it.wikisource.org",
+        "description": "Highly active Italian Wikisource with strong classic literature coverage and EPUB export.",
+        "access": "free",
+        "api": true,
+        "api_details": "MediaWiki API and dumps.",
+        "search": true,
+        "search_details": "Full-text search.",
+        "bulk_download": true,
+        "confidence": "high"
+      },
+      {
+        "name": "Biblioteca Italiana",
+        "url": "http://www.bibliotecaitaliana.it",
+        "description": "Scholarly TEI digital library of Italian literary tradition from the Middle Ages onward (Sapienza University).",
+        "access": "free",
+        "api": false,
+        "api_details": "None public; TEI underlies the site.",
+        "search": true,
+        "search_details": "Full-text and catalog search.",
+        "bulk_download": false,
+        "confidence": "medium"
+      },
+      {
+        "name": "Internet Culturale",
+        "url": "https://www.internetculturale.it",
+        "description": "Italian national aggregator of digitized library holdings.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "OAI-PMH aggregation.",
+        "search": true,
+        "search_details": "Metadata search.",
+        "bulk_download": false,
+        "confidence": "medium",
+        "notes": "Service reliability has been uneven historically."
+      }
+    ],
+    "dutch": [
+      {
+        "name": "DBNL (Digitale Bibliotheek voor de Nederlandse Letteren)",
+        "url": "https://www.dbnl.org",
+        "description": "The definitive Dutch and Flemish literature library; thousands of complete works, many with EPUB and PDF downloads.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "Per-title downloads; bulk text sets available for research by arrangement with the KB; no public query API.",
+        "search": true,
+        "search_details": "Full-text search across the corpus.",
+        "bulk_download": "partial",
+        "confidence": "medium"
+      },
+      {
+        "name": "Delpher",
+        "url": "https://www.delpher.nl",
+        "description": "KB (Dutch national library) platform with millions of digitized book, newspaper, and journal pages.",
+        "access": "free_with_registration",
+        "api": "partial",
+        "api_details": "Harvesting and datasets available under KB conditions rather than an open public API.",
+        "search": true,
+        "search_details": "Excellent OCR full-text search.",
+        "bulk_download": "partial",
+        "confidence": "medium"
+      }
+    ],
+    "nordic_languages": [
+      {
+        "name": "National Library of Norway (nb.no)",
+        "url": "https://www.nb.no",
+        "description": "Essentially every book ever published in Norway, digitized; public domain open worldwide, in-copyright readable from Norwegian IP addresses.",
+        "access": "free",
+        "api": true,
+        "api_details": "Documented public API (api.nb.no) plus the DH-lab text analysis APIs; unusually good for computational work.",
+        "search": true,
+        "search_details": "Full-text search across the national corpus.",
+        "bulk_download": "partial",
+        "confidence": "high"
+      },
+      {
+        "name": "Litteraturbanken",
+        "url": "https://litteraturbanken.se",
+        "description": "Swedish literary classics in reliable editions with EPUB downloads and scholarly commentary.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "JSON endpoints power the site and are usable, but documentation is thin.",
+        "search": true,
+        "search_details": "Full-text search.",
+        "bulk_download": "partial",
+        "confidence": "medium"
+      },
+      {
+        "name": "Project Runeberg",
+        "url": "https://runeberg.org",
+        "description": "Volunteer-scanned Nordic literature (Swedish, Danish, Norwegian, Finnish, Icelandic) since 1992.",
+        "access": "free",
+        "api": false,
+        "api_details": "None; predictable static URL structure makes scraping straightforward.",
+        "search": true,
+        "search_details": "Basic search and extensive indexes.",
+        "bulk_download": "partial",
+        "confidence": "high"
+      },
+      {
+        "name": "Arkiv for Dansk Litteratur (tekster.kb.dk)",
+        "url": "https://tekster.kb.dk",
+        "description": "Danish Royal Library's scholarly editions of classic Danish literature.",
+        "access": "free",
+        "api": false,
+        "api_details": "None public.",
+        "search": true,
+        "search_details": "Author and full-text search.",
+        "bulk_download": false,
+        "confidence": "medium"
+      },
+      {
+        "name": "Projekti Lonnrot",
+        "url": "http://www.lonnrot.net",
+        "description": "The Finnish Project Gutenberg equivalent: proofread public domain Finnish and Swedish e-texts.",
+        "access": "free",
+        "api": false,
+        "api_details": "None.",
+        "search": false,
+        "search_details": "Author listing only.",
+        "bulk_download": "partial",
+        "confidence": "medium"
+      },
+      {
+        "name": "Digi (National Library of Finland)",
+        "url": "https://digi.kansalliskirjasto.fi",
+        "description": "Digitized Finnish newspapers, journals, and books.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "OAI-PMH and open data exports for out-of-copyright material.",
+        "search": true,
+        "search_details": "Strong OCR full-text search.",
+        "bulk_download": "partial",
+        "confidence": "medium"
+      }
+    ],
+    "polish": [
+      {
+        "name": "Wolne Lektury",
+        "url": "https://wolnelektury.pl",
+        "description": "Poland's flagship free library: thousands of school-canon and classic works in EPUB, MOBI, PDF, and audio.",
+        "access": "free",
+        "api": true,
+        "api_details": "Documented public REST API covering the whole catalog.",
+        "search": true,
+        "search_details": "Catalog and full-text search.",
+        "bulk_download": true,
+        "confidence": "high"
+      },
+      {
+        "name": "Polona",
+        "url": "https://polona.pl",
+        "description": "National Library of Poland's massive scan portal.",
+        "access": "free",
+        "api": true,
+        "api_details": "Public Polona API plus IIIF.",
+        "search": true,
+        "search_details": "Metadata search; OCR text for many items.",
+        "bulk_download": "partial",
+        "confidence": "medium"
+      },
+      {
+        "name": "Federacja Bibliotek Cyfrowych",
+        "url": "https://fbc.pionier.net.pl",
+        "description": "Aggregator for Polish digital libraries.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "OAI-PMH based aggregation with some open endpoints.",
+        "search": true,
+        "search_details": "Federated metadata search.",
+        "bulk_download": false,
+        "confidence": "medium"
+      }
+    ],
+    "czech": [
+      {
+        "name": "Czech Digital Library / Kramerius (NDK)",
+        "url": "https://ndk.cz",
+        "description": "National Digital Library of the Czech Republic on the Kramerius platform; public domain items fully open.",
+        "access": "free",
+        "api": true,
+        "api_details": "Kramerius REST API (documented) plus IIIF on modern instances.",
+        "search": true,
+        "search_details": "OCR full-text search.",
+        "bulk_download": "partial",
+        "confidence": "medium",
+        "notes": "Some in-copyright material is limited to on-site or Czech library access under the DNNT scheme."
+      },
+      {
+        "name": "Municipal Library of Prague e-knihovna",
+        "url": "https://www.mlp.cz",
+        "description": "Free, well-formatted EPUB and PDF editions of Czech classics produced by the Prague municipal library.",
+        "access": "free",
+        "api": false,
+        "api_details": "None.",
+        "search": true,
+        "search_details": "Catalog search.",
+        "bulk_download": false,
+        "confidence": "medium"
+      }
+    ],
+    "hungarian": [
+      {
+        "name": "Magyar Elektronikus Konyvtar (MEK)",
+        "url": "https://mek.oszk.hu",
+        "description": "Hungarian Electronic Library at the national library; tens of thousands of free Hungarian e-books.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "OAI-PMH metadata harvesting.",
+        "search": true,
+        "search_details": "Catalog and full-text search.",
+        "bulk_download": "partial",
+        "confidence": "medium"
+      }
+    ],
+    "modern_greek": [
+      {
+        "name": "Anemi",
+        "url": "https://anemi.lib.uoc.gr",
+        "description": "University of Crete digital library of modern Greek studies; large downloadable PDF collection.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "OAI-PMH harvesting.",
+        "search": true,
+        "search_details": "Catalog search.",
+        "bulk_download": false,
+        "confidence": "medium"
+      },
+      {
+        "name": "OpenBook.gr",
+        "url": "https://www.openbook.gr",
+        "description": "Free modern Greek e-books under open licenses.",
+        "access": "free",
+        "api": false,
+        "api_details": "None.",
+        "search": true,
+        "search_details": "Catalog search.",
+        "bulk_download": false,
+        "confidence": "medium"
+      },
+      {
+        "name": "Wikisource (Vikithiki)",
+        "url": "https://el.wikisource.org",
+        "description": "Greek Wikisource covering modern, katharevousa, and ancient texts.",
+        "access": "free",
+        "api": true,
+        "api_details": "MediaWiki API and dumps.",
+        "search": true,
+        "search_details": "Full-text search.",
+        "bulk_download": true,
+        "confidence": "high"
+      }
+    ],
+    "russian": [
+      {
+        "name": "Lib.ru (Biblioteka Moshkova)",
+        "url": "http://lib.ru",
+        "description": "The oldest large Russian text library (with satellites like az.lib.ru for classics), built on author permissions and public domain.",
+        "access": "free",
+        "api": false,
+        "api_details": "None; plain HTML and text files.",
+        "search": true,
+        "search_details": "Basic search and deep author indexes.",
+        "bulk_download": "partial",
+        "confidence": "high"
+      },
+      {
+        "name": "National Electronic Library (NEB / rusneb.ru)",
+        "url": "https://rusneb.ru",
+        "description": "Russian state digital library with large public domain holdings viewable free.",
+        "access": "free_with_registration",
+        "api": false,
+        "api_details": "None public.",
+        "search": true,
+        "search_details": "Catalog and full-text search.",
+        "bulk_download": false,
+        "confidence": "medium",
+        "notes": "Access from outside Russia can be inconsistent."
+      },
+      {
+        "name": "ImWerden",
+        "url": "https://imwerden.de",
+        "description": "Non-commercial library of Russian literature PDFs and DjVu, run from Germany with attention to rights.",
+        "access": "free",
+        "api": false,
+        "api_details": "None.",
+        "search": true,
+        "search_details": "Catalog search.",
+        "bulk_download": false,
+        "confidence": "high"
+      },
+      {
+        "name": "Wikisource (Vikiteka)",
+        "url": "https://ru.wikisource.org",
+        "description": "Russian Wikisource with classic literature and historical documents.",
+        "access": "free",
+        "api": true,
+        "api_details": "MediaWiki API and dumps.",
+        "search": true,
+        "search_details": "Full-text search.",
+        "bulk_download": true,
+        "confidence": "high"
+      }
+    ],
+    "ukrainian": [
+      {
+        "name": "Diasporiana",
+        "url": "https://diasporiana.org.ua",
+        "description": "Digitized Ukrainian diaspora publications; thousands of free PDFs.",
+        "access": "free",
+        "api": false,
+        "api_details": "None.",
+        "search": true,
+        "search_details": "Catalog search.",
+        "bulk_download": false,
+        "confidence": "medium"
+      },
+      {
+        "name": "Wikisource (Vikidzherela)",
+        "url": "https://uk.wikisource.org",
+        "description": "Ukrainian Wikisource.",
+        "access": "free",
+        "api": true,
+        "api_details": "MediaWiki API and dumps.",
+        "search": true,
+        "search_details": "Full-text search.",
+        "bulk_download": true,
+        "confidence": "high"
+      }
+    ],
+    "turkish": [
+      {
+        "name": "Ministry of Culture e-kitap",
+        "url": "https://ekitap.ktb.gov.tr",
+        "description": "Turkish Ministry of Culture free PDFs of Turkish classics, folklore, and scholarship.",
+        "access": "free",
+        "api": false,
+        "api_details": "None.",
+        "search": true,
+        "search_details": "Catalog browsing and search.",
+        "bulk_download": false,
+        "confidence": "medium"
+      },
+      {
+        "name": "Vikikaynak (Turkish Wikisource)",
+        "url": "https://tr.wikisource.org",
+        "description": "Turkish Wikisource.",
+        "access": "free",
+        "api": true,
+        "api_details": "MediaWiki API and dumps.",
+        "search": true,
+        "search_details": "Full-text search.",
+        "bulk_download": true,
+        "confidence": "high"
+      }
+    ],
+    "arabic": [
+      {
+        "name": "Al-Maktaba al-Shamela",
+        "url": "https://shamela.ws",
+        "description": "The dominant classical Arabic library: thousands of works of tafsir, hadith, fiqh, history, and literature, online and via desktop app.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "No official API; the desktop library is downloadable in bulk and community-made structured dumps circulate on GitHub.",
+        "search": true,
+        "search_details": "Powerful full-text search across the entire corpus.",
+        "bulk_download": true,
+        "confidence": "high"
+      },
+      {
+        "name": "Hindawi Foundation",
+        "url": "https://www.hindawi.org",
+        "description": "Cairo-based foundation publishing beautifully produced free Arabic e-books: modern works, translations, and Nahda-era classics in EPUB, Kindle, and PDF.",
+        "access": "free",
+        "api": false,
+        "api_details": "None.",
+        "search": true,
+        "search_details": "Catalog search.",
+        "bulk_download": false,
+        "confidence": "high",
+        "notes": "Distinct from the former academic journal publisher hindawi.com."
+      },
+      {
+        "name": "Arabic Collections Online (ACO)",
+        "url": "https://dlib.nyu.edu/aco/",
+        "description": "NYU-led consortium with 20,000+ public domain Arabic books scanned cover to cover.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "No documented public API; standard repository infrastructure underneath.",
+        "search": true,
+        "search_details": "Catalog search in Arabic and transliteration.",
+        "bulk_download": false,
+        "confidence": "medium"
+      },
+      {
+        "name": "OpenITI",
+        "url": "https://github.com/OpenITI",
+        "description": "Machine-readable corpus of thousands of premodern Arabic (and some Persian) texts in a standardized markdown format, built for computational analysis.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "Entire corpus on GitHub with versioned releases on Zenodo; git access substitutes for an API.",
+        "search": false,
+        "search_details": "No hosted search; designed for local processing.",
+        "bulk_download": true,
+        "confidence": "high"
+      },
+      {
+        "name": "Qatar Digital Library",
+        "url": "https://www.qdl.qa",
+        "description": "Gulf history and Arabic scientific manuscripts digitized from British Library and Qatar collections.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "IIIF image access.",
+        "search": true,
+        "search_details": "Bilingual metadata and full-text search.",
+        "bulk_download": false,
+        "confidence": "medium"
+      },
+      {
+        "name": "Wikisource (Wikimasdar)",
+        "url": "https://ar.wikisource.org",
+        "description": "Arabic Wikisource.",
+        "access": "free",
+        "api": true,
+        "api_details": "MediaWiki API and dumps.",
+        "search": true,
+        "search_details": "Full-text search.",
+        "bulk_download": true,
+        "confidence": "high"
+      }
+    ],
+    "persian": [
+      {
+        "name": "Ganjoor",
+        "url": "https://ganjoor.net",
+        "description": "The standard free library of classical Persian poetry (Hafez, Rumi, Ferdowsi, Saadi and hundreds more).",
+        "access": "free",
+        "api": true,
+        "api_details": "Open REST API (api.ganjoor.net) with the service code on GitHub.",
+        "search": true,
+        "search_details": "Full-text search across all poets.",
+        "bulk_download": true,
+        "confidence": "high"
+      },
+      {
+        "name": "Wikisource (Vikinebeshte)",
+        "url": "https://fa.wikisource.org",
+        "description": "Persian Wikisource.",
+        "access": "free",
+        "api": true,
+        "api_details": "MediaWiki API and dumps.",
+        "search": true,
+        "search_details": "Full-text search.",
+        "bulk_download": true,
+        "confidence": "high"
+      }
+    ],
+    "hebrew_modern": [
+      {
+        "name": "Project Ben-Yehuda",
+        "url": "https://benyehuda.org",
+        "description": "The Hebrew Project Gutenberg: public domain modern Hebrew literature, poetry, and translations.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "Full public domain corpus dump published on GitHub for text analysis; site API limited.",
+        "search": true,
+        "search_details": "Author and full-text search.",
+        "bulk_download": true,
+        "confidence": "high"
+      },
+      {
+        "name": "National Library of Israel",
+        "url": "https://www.nli.org.il",
+        "description": "Digitized Hebrew and Judaica books, manuscripts, and newspapers.",
+        "access": "free",
+        "api": true,
+        "api_details": "Documented NLI API (api.nli.org.il, key required) plus IIIF for many collections.",
+        "search": true,
+        "search_details": "Strong catalog search; full-text for newspaper archives.",
+        "bulk_download": false,
+        "confidence": "medium"
+      },
+      {
+        "name": "HebrewBooks.org",
+        "url": "https://hebrewbooks.org",
+        "description": "60,000+ scanned rabbinic and Hebrew books as free PDFs.",
+        "access": "free",
+        "api": false,
+        "api_details": "None.",
+        "search": true,
+        "search_details": "OCR full-text search across the collection.",
+        "bulk_download": "partial",
+        "confidence": "high"
+      },
+      {
+        "name": "Wikisource (Vikitekst)",
+        "url": "https://he.wikisource.org",
+        "description": "Hebrew Wikisource; exceptionally active for Jewish canonical texts alongside modern literature.",
+        "access": "free",
+        "api": true,
+        "api_details": "MediaWiki API and dumps.",
+        "search": true,
+        "search_details": "Full-text search.",
+        "bulk_download": true,
+        "confidence": "high"
+      }
+    ],
+    "yiddish": [
+      {
+        "name": "Yiddish Book Center (Steven Spielberg Digital Yiddish Library)",
+        "url": "https://www.yiddishbookcenter.org",
+        "description": "11,000+ digitized Yiddish books, essentially the whole surviving Yiddish literary canon, free to read and download.",
+        "access": "free",
+        "api": false,
+        "api_details": "None; hosting is via Internet Archive, so Archive APIs partially apply.",
+        "search": true,
+        "search_details": "Full-text OCR search across the collection.",
+        "bulk_download": "partial",
+        "confidence": "high"
+      }
+    ],
+    "hindi_urdu": [
+      {
+        "name": "Rekhta",
+        "url": "https://www.rekhta.org",
+        "description": "The premier Urdu portal: enormous poetry corpus in Urdu, Devanagari, and Roman scripts plus tens of thousands of scanned e-books.",
+        "access": "free_with_registration",
+        "api": false,
+        "api_details": "None public.",
+        "search": true,
+        "search_details": "Excellent search across poets, couplets, and books.",
+        "bulk_download": false,
+        "confidence": "high"
+      },
+      {
+        "name": "Hindi Samay",
+        "url": "https://www.hindisamay.com",
+        "description": "University-run free library of modern Hindi literature.",
+        "access": "free",
+        "api": false,
+        "api_details": "None.",
+        "search": true,
+        "search_details": "Author and title search.",
+        "bulk_download": false,
+        "confidence": "medium"
+      }
+    ],
+    "sanskrit_and_indic": [
+      {
+        "name": "GRETIL",
+        "url": "https://gretil.sub.uni-goettingen.de",
+        "description": "Gottingen register of machine-readable Sanskrit (and other Indic) e-texts; the standard scholarly starting point, now in TEI.",
+        "access": "free",
+        "api": false,
+        "api_details": "None; direct file downloads.",
+        "search": false,
+        "search_details": "Browsable index; no full-text search.",
+        "bulk_download": "partial",
+        "confidence": "high"
+      },
+      {
+        "name": "Digital Corpus of Sanskrit",
+        "url": "http://www.sanskrit-linguistics.org/dcs/",
+        "description": "Lemmatized, morphologically analyzed Sanskrit corpus for linguistic research.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "Corpus data published on GitHub; web interface for queries.",
+        "search": true,
+        "search_details": "Lemma and word-form search.",
+        "bulk_download": true,
+        "confidence": "medium"
+      },
+      {
+        "name": "Sanskrit Documents",
+        "url": "https://sanskritdocuments.org",
+        "description": "Large volunteer collection of Sanskrit texts in multiple encodings and scripts.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "Source files maintained on GitHub.",
+        "search": true,
+        "search_details": "Site search.",
+        "bulk_download": true,
+        "confidence": "medium"
+      },
+      {
+        "name": "Muktabodha Digital Library",
+        "url": "https://muktabodha.org",
+        "description": "Searchable e-texts and manuscript scans of tantric and agamic Sanskrit literature.",
+        "access": "free_with_registration",
+        "api": false,
+        "api_details": "None.",
+        "search": true,
+        "search_details": "Full-text search of e-texts.",
+        "bulk_download": false,
+        "confidence": "medium"
+      },
+      {
+        "name": "TITUS",
+        "url": "https://titus.uni-frankfurt.de",
+        "description": "Frankfurt's Indo-European text server: Sanskrit, Avestan, Old Persian, Gothic, Old Church Slavonic and many more.",
+        "access": "free_with_registration",
+        "api": false,
+        "api_details": "None; some texts require registration.",
+        "search": true,
+        "search_details": "Word search within texts.",
+        "bulk_download": false,
+        "confidence": "medium"
+      },
+      {
+        "name": "National Digital Library of India",
+        "url": "https://ndl.iitkgp.ac.in",
+        "description": "Indian government aggregator of educational and cultural content across Indian languages.",
+        "access": "free_with_registration",
+        "api": false,
+        "api_details": "None public.",
+        "search": true,
+        "search_details": "Federated metadata search.",
+        "bulk_download": false,
+        "confidence": "medium"
+      }
+    ],
+    "chinese": [
+      {
+        "name": "Chinese Text Project (ctext.org)",
+        "url": "https://ctext.org",
+        "description": "The standard open library for premodern Chinese: classics, histories, and philosophy with dictionaries and parallel translations.",
+        "access": "free",
+        "api": true,
+        "api_details": "Documented JSON API (with usage tiers) plus a Python library; crowdsourced OCR layer for additional texts.",
+        "search": true,
+        "search_details": "Full-text search with concordance tools.",
+        "bulk_download": "partial",
+        "confidence": "high"
+      },
+      {
+        "name": "Kanseki Repository (Kanripo)",
+        "url": "https://www.kanripo.org",
+        "description": "Scholarly repository of premodern Chinese texts maintained as version-controlled files.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "Entire corpus on GitHub; git access substitutes for an API.",
+        "search": true,
+        "search_details": "Text search on the site.",
+        "bulk_download": true,
+        "confidence": "medium"
+      },
+      {
+        "name": "CBETA",
+        "url": "https://www.cbeta.org",
+        "description": "The Chinese Buddhist canon (Taisho and beyond) in carefully proofread digital form.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "Complete TEI XML on GitHub; CBETA Online reader has internal JSON endpoints but no formally documented public API.",
+        "search": true,
+        "search_details": "Full-text search across the canon.",
+        "bulk_download": true,
+        "confidence": "high"
+      },
+      {
+        "name": "Wikisource (zhongwen weijiwenku)",
+        "url": "https://zh.wikisource.org",
+        "description": "Chinese Wikisource, strong for classical and historical documents.",
+        "access": "free",
+        "api": true,
+        "api_details": "MediaWiki API and dumps.",
+        "search": true,
+        "search_details": "Full-text search.",
+        "bulk_download": true,
+        "confidence": "high"
+      }
+    ],
+    "japanese": [
+      {
+        "name": "Aozora Bunko",
+        "url": "https://www.aozora.gr.jp",
+        "description": "The Japanese public domain library: 17,000+ carefully proofread works of modern Japanese literature with ruby annotations.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "No official API, but the complete site including all texts and the index CSV is mirrored on GitHub (github.com/aozorabunko), and community APIs exist. The ruby markup format is well documented for parsing.",
+        "search": true,
+        "search_details": "Author and title search; no official full-text search.",
+        "bulk_download": true,
+        "confidence": "high"
+      },
+      {
+        "name": "NDL Digital Collections (National Diet Library)",
+        "url": "https://dl.ndl.go.jp",
+        "description": "Japan's national library scans: out-of-copyright books, rare materials, and (for registered users in Japan) a huge lending layer.",
+        "access": "free",
+        "api": true,
+        "api_details": "NDL Search external interfaces (SRU, OpenSearch, OAI-PMH) plus IIIF on the digital collections; well documented.",
+        "search": true,
+        "search_details": "Metadata search plus growing OCR full-text search.",
+        "bulk_download": "partial",
+        "confidence": "high"
+      },
+      {
+        "name": "Wikisource (Wikibunko)",
+        "url": "https://ja.wikisource.org",
+        "description": "Japanese Wikisource with historical documents and literature.",
+        "access": "free",
+        "api": true,
+        "api_details": "MediaWiki API and dumps.",
+        "search": true,
+        "search_details": "Full-text search.",
+        "bulk_download": true,
+        "confidence": "high"
+      }
+    ],
+    "korean": [
+      {
+        "name": "National Library of Korea",
+        "url": "https://www.nl.go.kr",
+        "description": "Digitized Korean books and old and rare materials.",
+        "access": "free_with_registration",
+        "api": "partial",
+        "api_details": "Open API program for bibliographic data (Korean-language documentation, key required).",
+        "search": true,
+        "search_details": "Catalog search.",
+        "bulk_download": false,
+        "confidence": "medium"
+      },
+      {
+        "name": "Institute for the Translation of Korean Classics (ITKC DB)",
+        "url": "https://db.itkc.or.kr",
+        "description": "Comprehensive database of classical Korean texts (in Hanmun) with modern Korean translations.",
+        "access": "free",
+        "api": false,
+        "api_details": "None public.",
+        "search": true,
+        "search_details": "Full-text search across classical corpora.",
+        "bulk_download": false,
+        "confidence": "medium"
+      }
+    ],
+    "vietnamese": [
+      {
+        "name": "Nom Foundation Digital Library",
+        "url": "http://www.nomfoundation.org",
+        "description": "Digitized Han-Nom texts and tools for Vietnam's pre-Latin literary heritage.",
+        "access": "free",
+        "api": false,
+        "api_details": "None.",
+        "search": true,
+        "search_details": "Catalog and dictionary search.",
+        "bulk_download": false,
+        "confidence": "medium"
+      }
+    ],
+    "thai": [
+      {
+        "name": "Vajirayana Digital Library",
+        "url": "https://vajirayana.org",
+        "description": "Free, well-formatted editions of Thai literary classics and historical works.",
+        "access": "free",
+        "api": false,
+        "api_details": "None documented.",
+        "search": true,
+        "search_details": "Title search and reading interface.",
+        "bulk_download": false,
+        "confidence": "medium"
+      }
+    ],
+    "indonesian": [
+      {
+        "name": "iPusnas",
+        "url": "https://ipusnas.id",
+        "description": "Indonesian National Library's free e-book lending app, including in-copyright titles.",
+        "access": "free_with_registration",
+        "api": false,
+        "api_details": "None; app-based DRM lending.",
+        "search": true,
+        "search_details": "In-app catalog search.",
+        "bulk_download": false,
+        "confidence": "medium"
+      },
+      {
+        "name": "Wikisource (Indonesian)",
+        "url": "https://id.wikisource.org",
+        "description": "Indonesian Wikisource.",
+        "access": "free",
+        "api": true,
+        "api_details": "MediaWiki API and dumps.",
+        "search": true,
+        "search_details": "Full-text search.",
+        "bulk_download": true,
+        "confidence": "high"
+      }
+    ]
+  },
+  "classical_and_ancient_languages": {
+    "koine_greek": [
+      {
+        "name": "Perseus Digital Library / Scaife Viewer",
+        "url": "https://scaife.perseus.org",
+        "description": "The core open library for ancient Greek: classical and Hellenistic authors with morphology, lexica (LSJ), and aligned translations; Koine-era authors well represented.",
+        "access": "free",
+        "api": true,
+        "api_details": "CTS APIs behind Scaife plus complete TEI XML repositories on GitHub (PerseusDL canonical-greekLit); CC BY-SA licensed.",
+        "search": true,
+        "search_details": "Text search plus lemma-aware tools.",
+        "bulk_download": true,
+        "confidence": "high"
+      },
+      {
+        "name": "Open Greek and Latin / First1KGreek",
+        "url": "https://opengreekandlatin.org",
+        "description": "TEI XML editions of Greek texts from the first thousand years CE not in Perseus, including much patristic and technical Koine prose.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "Full corpus on GitHub (OpenGreekAndLatin/First1KGreek); served through Scaife with CTS identifiers.",
+        "search": true,
+        "search_details": "Via Scaife; otherwise local processing.",
+        "bulk_download": true,
+        "confidence": "high"
+      },
+      {
+        "name": "SBLGNT + MorphGNT",
+        "url": "https://sblgnt.com",
+        "description": "The SBL Greek New Testament: a modern critical text free to download and redistribute, with full morphological tagging in the companion MorphGNT project.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "Static downloads (plain text, XML, OSIS); MorphGNT data on GitHub.",
+        "search": false,
+        "search_details": "No hosted search; designed for download.",
+        "bulk_download": true,
+        "confidence": "high"
+      },
+      {
+        "name": "Nestle 1904 Greek New Testament",
+        "url": "https://github.com/biblicalhumanities/Nestle1904",
+        "description": "Public domain Nestle 1904 GNT with morphology, the least-encumbered tagged Greek NT available.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "GitHub data files.",
+        "search": false,
+        "search_details": "None hosted.",
+        "bulk_download": true,
+        "confidence": "high"
+      },
+      {
+        "name": "STEP Bible",
+        "url": "https://www.stepbible.org",
+        "description": "Tyndale House's free study platform with tagged Greek NT and LXX resources; underlying tagged datasets (TAGNT, TAHOT) are CC BY on GitHub.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "Data repositories on GitHub (STEPBible-Data); the web app itself has no public API.",
+        "search": true,
+        "search_details": "Sophisticated lemma, morphology, and interlinear search.",
+        "bulk_download": true,
+        "confidence": "high"
+      },
+      {
+        "name": "Thesaurus Linguae Graecae (TLG)",
+        "url": "https://stephanus.tlg.uci.edu",
+        "description": "The comprehensive corpus of Greek literature from Homer to Byzantium; full corpus is subscription, but the Abridged TLG and the TLG Canon are free with registration.",
+        "access": "freemium",
+        "api": false,
+        "api_details": "None; licensing prohibits bulk extraction.",
+        "search": true,
+        "search_details": "Best-in-class lemmatized full-corpus search (in the licensed tiers; abridged tier is smaller).",
+        "bulk_download": false,
+        "confidence": "high"
+      },
+      {
+        "name": "Kata Biblon",
+        "url": "https://en.katabiblon.com",
+        "description": "Parsed Greek Septuagint and Wiki English translation alongside the GNT.",
+        "access": "free",
+        "api": false,
+        "api_details": "None.",
+        "search": true,
+        "search_details": "Word and lemma search.",
+        "bulk_download": false,
+        "confidence": "medium"
+      },
+      {
+        "name": "CCAT / CATSS Septuagint materials (UPenn)",
+        "url": "http://ccat.sas.upenn.edu",
+        "description": "The classic morphologically analyzed LXX (Rahlfs-based) and parallel Hebrew-Greek alignment files.",
+        "access": "free_with_registration",
+        "api": false,
+        "api_details": "Plain files after agreeing to a user declaration; a venerable but dated distribution.",
+        "search": false,
+        "search_details": "None; download only.",
+        "bulk_download": true,
+        "confidence": "medium",
+        "notes": "License permits scholarly use but not unrestricted redistribution."
+      },
+      {
+        "name": "Academic-bible.com (German Bible Society)",
+        "url": "https://www.academic-bible.com",
+        "description": "Free online reading of the current scholarly editions: NA28, UBS5, and Rahlfs LXX.",
+        "access": "free_with_registration",
+        "api": false,
+        "api_details": "None; reading only, no downloads (the editions are copyrighted).",
+        "search": true,
+        "search_details": "Passage lookup and word search.",
+        "bulk_download": false,
+        "confidence": "high"
+      },
+      {
+        "name": "Center for New Testament Restoration (CNTR)",
+        "url": "https://greekcntr.org",
+        "description": "Aligned transcriptions of the earliest Greek NT manuscripts plus a computer-generated critical text, all openly licensed.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "Data on GitHub; site provides collation views.",
+        "search": true,
+        "search_details": "Manuscript collation browsing and lookup.",
+        "bulk_download": true,
+        "confidence": "medium"
+      },
+      {
+        "name": "Documenta Catholica Omnia (Migne Patrologia Graeca)",
+        "url": "https://www.documentacatholicaomnia.eu",
+        "description": "Free PDFs of the Migne Patrologia Graeca volumes, the workhorse (if dated) edition of the Greek church fathers.",
+        "access": "free",
+        "api": false,
+        "api_details": "None; static PDFs.",
+        "search": false,
+        "search_details": "Index browsing; the PDFs are scans of old typography.",
+        "bulk_download": "partial",
+        "confidence": "medium"
+      },
+      {
+        "name": "Wikisource (Ancient Greek texts on el.wikisource)",
+        "url": "https://el.wikisource.org",
+        "description": "Greek Wikisource hosts many ancient texts in Unicode alongside modern Greek material.",
+        "access": "free",
+        "api": true,
+        "api_details": "MediaWiki API and dumps.",
+        "search": true,
+        "search_details": "Full-text search.",
+        "bulk_download": true,
+        "confidence": "high"
+      }
+    ],
+    "latin": [
+      {
+        "name": "The Latin Library",
+        "url": "https://www.thelatinlibrary.com",
+        "description": "The long-standing plain-text collection of classical, medieval, and neo-Latin texts; convenient though without critical apparatus.",
+        "access": "free",
+        "api": false,
+        "api_details": "None; simple static HTML, trivially scrapable.",
+        "search": false,
+        "search_details": "Author index browsing only.",
+        "bulk_download": "partial",
+        "confidence": "high"
+      },
+      {
+        "name": "Perseus Digital Library (Latin collection)",
+        "url": "https://scaife.perseus.org",
+        "description": "Canonical classical Latin texts with morphology and Lewis and Short integration.",
+        "access": "free",
+        "api": true,
+        "api_details": "Same CTS APIs and GitHub TEI (canonical-latinLit) as the Greek side.",
+        "search": true,
+        "search_details": "Text and lemma search.",
+        "bulk_download": true,
+        "confidence": "high"
+      },
+      {
+        "name": "PHI Latin Texts",
+        "url": "https://latin.packhum.org",
+        "description": "The authoritative corpus of classical Latin through roughly AD 200, in accurate editions.",
+        "access": "free",
+        "api": false,
+        "api_details": "None; terms of use prohibit downloading and scraping.",
+        "search": true,
+        "search_details": "Excellent concordance-style word and phrase search.",
+        "bulk_download": false,
+        "confidence": "high"
+      },
+      {
+        "name": "Corpus Corporum",
+        "url": "https://mlat.uzh.ch",
+        "description": "Zurich meta-repository of 15,000+ Latin works including a full retyped Patrologia Latina; spans antiquity through neo-Latin.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "Per-work TEI viewing and some export; no documented query API.",
+        "search": true,
+        "search_details": "Full-text and lemmatized search across sub-corpora.",
+        "bulk_download": "partial",
+        "confidence": "medium"
+      },
+      {
+        "name": "digilibLT",
+        "url": "https://digiliblt.uniupo.it",
+        "description": "Scholarly digital library of late antique Latin prose with downloadable TEI.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "TEI downloads per work.",
+        "search": true,
+        "search_details": "Full-text search.",
+        "bulk_download": "partial",
+        "confidence": "medium"
+      },
+      {
+        "name": "Musisque Deoque",
+        "url": "https://mqdq.it",
+        "description": "Latin poetry from its origins to the Renaissance with critical apparatus.",
+        "access": "free",
+        "api": false,
+        "api_details": "None documented.",
+        "search": true,
+        "search_details": "Metrically and critically aware search.",
+        "bulk_download": false,
+        "confidence": "medium"
+      },
+      {
+        "name": "dMGH (Monumenta Germaniae Historica digital)",
+        "url": "https://www.dmgh.de",
+        "description": "The complete MGH volumes online: the foundational editions of medieval Latin historical sources.",
+        "access": "free",
+        "api": false,
+        "api_details": "None public.",
+        "search": true,
+        "search_details": "Full-text search across volumes.",
+        "bulk_download": false,
+        "confidence": "high"
+      },
+      {
+        "name": "Documenta Catholica Omnia (Migne Patrologia Latina)",
+        "url": "https://www.documentacatholicaomnia.eu",
+        "description": "Free PDFs of the Migne Patrologia Latina and much other ecclesiastical Latin.",
+        "access": "free",
+        "api": false,
+        "api_details": "None; static PDFs.",
+        "search": false,
+        "search_details": "Index browsing.",
+        "bulk_download": "partial",
+        "confidence": "medium"
+      },
+      {
+        "name": "CAMENA",
+        "url": "https://mateo.uni-mannheim.de",
+        "description": "Early modern (neo-Latin) texts from German-speaking Europe.",
+        "access": "free",
+        "api": false,
+        "api_details": "None.",
+        "search": true,
+        "search_details": "Basic search and browsing.",
+        "bulk_download": "partial",
+        "confidence": "medium"
+      },
+      {
+        "name": "Bibliotheca Augustana",
+        "url": "https://www.hs-augsburg.de/~harsch/augustana.html",
+        "description": "Curated chronological anthology of Latin (and Greek, German, and other) texts.",
+        "access": "free",
+        "api": false,
+        "api_details": "None; static pages.",
+        "search": false,
+        "search_details": "Chronological browsing.",
+        "bulk_download": false,
+        "confidence": "medium"
+      },
+      {
+        "name": "Loebolus",
+        "url": "https://ryanfb.xyz/loebolus/",
+        "description": "Downloadable PDFs of the public domain Loeb Classical Library volumes (Latin and Greek with facing English).",
+        "access": "free",
+        "api": false,
+        "api_details": "None; direct PDF links and a bulk archive.",
+        "search": false,
+        "search_details": "List browsing.",
+        "bulk_download": true,
+        "confidence": "medium",
+        "notes": "Only pre-copyright-cutoff Loeb volumes; legal because the volumes themselves are public domain in the US."
+      },
+      {
+        "name": "LacusCurtius",
+        "url": "https://penelope.uchicago.edu/Thayer/E/Roman/home.html",
+        "description": "Bill Thayer's transcriptions of Latin texts and English translations, plus Roman antiquities reference material.",
+        "access": "free",
+        "api": false,
+        "api_details": "None.",
+        "search": true,
+        "search_details": "Site search.",
+        "bulk_download": false,
+        "confidence": "high"
+      },
+      {
+        "name": "Vicifons (Latin Wikisource)",
+        "url": "https://la.wikisource.org",
+        "description": "Latin Wikisource with classical, medieval, and ecclesiastical texts in Unicode.",
+        "access": "free",
+        "api": true,
+        "api_details": "MediaWiki API and dumps.",
+        "search": true,
+        "search_details": "Full-text search.",
+        "bulk_download": true,
+        "confidence": "high"
+      }
+    ],
+    "biblical_hebrew": [
+      {
+        "name": "Sefaria",
+        "url": "https://www.sefaria.org",
+        "description": "The standard open library for the Hebrew Bible and rabbinic literature: Tanakh, Talmud, midrash, commentaries, and translations, with cross-links.",
+        "access": "free",
+        "api": true,
+        "api_details": "Well-documented REST API (texts, links, lexicon, search) plus the complete database exported on GitHub (Sefaria-Export). The best API in this entire list.",
+        "search": true,
+        "search_details": "Full-text search in Hebrew and English with morphology-aware tools.",
+        "bulk_download": true,
+        "confidence": "high"
+      },
+      {
+        "name": "Tanach.us (Westminster Leningrad Codex)",
+        "url": "https://tanach.us",
+        "description": "The Westminster Leningrad Codex, the scholarly baseline Masoretic text, in versioned Unicode XML.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "Static, versioned XML and text downloads of the whole Tanakh; stable URLs per book.",
+        "search": false,
+        "search_details": "Reference lookup rather than search.",
+        "bulk_download": true,
+        "confidence": "high"
+      },
+      {
+        "name": "Open Scriptures Hebrew Bible (morphhb)",
+        "url": "https://github.com/openscriptures/morphhb",
+        "description": "The WLC with full morphological tagging and Strong's alignment, CC BY licensed; the go-to machine-readable tagged Hebrew Bible.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "GitHub data (OSIS XML and JSON); hosted reader at hb.openscriptures.org.",
+        "search": false,
+        "search_details": "None hosted; designed for local processing.",
+        "bulk_download": true,
+        "confidence": "high"
+      },
+      {
+        "name": "Mechon Mamre",
+        "url": "https://mechon-mamre.org",
+        "description": "Hebrew Bible (Aleppo-tradition text), Mishneh Torah, and other core texts, downloadable as an HTML bundle.",
+        "access": "free",
+        "api": false,
+        "api_details": "None; whole-site zip download offered.",
+        "search": true,
+        "search_details": "Basic search.",
+        "bulk_download": true,
+        "confidence": "high"
+      },
+      {
+        "name": "BHSA / ETCBC via Text-Fabric and SHEBANQ",
+        "url": "https://github.com/ETCBC/bhsa",
+        "description": "The Amsterdam linguistic database of the Hebrew Bible: full syntactic and morphological annotation, queryable programmatically.",
+        "access": "free",
+        "api": true,
+        "api_details": "Text-Fabric Python package loads the whole annotated corpus; SHEBANQ (shebanq.ancient-data.org) offers hosted MQL queries.",
+        "search": true,
+        "search_details": "Structural linguistic queries, far beyond string search.",
+        "bulk_download": true,
+        "confidence": "high"
+      },
+      {
+        "name": "STEP Bible (TAHOT tagged Hebrew OT)",
+        "url": "https://github.com/STEPBible/STEPBible-Data",
+        "description": "Tyndale House's amalgamated tagged Hebrew OT (and Greek NT) data, CC BY.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "GitHub data files; used through the STEP web app.",
+        "search": true,
+        "search_details": "Via stepbible.org interface.",
+        "bulk_download": true,
+        "confidence": "high"
+      },
+      {
+        "name": "Academic-bible.com (BHS online)",
+        "url": "https://www.academic-bible.com",
+        "description": "Free online reading of the Biblia Hebraica Stuttgartensia.",
+        "access": "free_with_registration",
+        "api": false,
+        "api_details": "None; no downloads (BHS pointing and apparatus are copyrighted).",
+        "search": true,
+        "search_details": "Passage lookup.",
+        "bulk_download": false,
+        "confidence": "high"
+      },
+      {
+        "name": "Miqra according to the Masorah (he.wikisource)",
+        "url": "https://he.wikisource.org",
+        "description": "A modern, openly licensed critical Masoretic edition based on the Aleppo Codex, maintained on Hebrew Wikisource with exportable data.",
+        "access": "free",
+        "api": true,
+        "api_details": "MediaWiki API; structured exports circulate on GitHub and via Sefaria.",
+        "search": true,
+        "search_details": "Full-text search.",
+        "bulk_download": true,
+        "confidence": "medium"
+      },
+      {
+        "name": "DICTA",
+        "url": "https://dicta.org.il",
+        "description": "Israeli research group offering a free library of biblical and rabbinic texts plus NLP tools (vocalization, morphology) for historical Hebrew.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "Public tool APIs for several NLP services; library content via apps.",
+        "search": true,
+        "search_details": "Advanced search in the DICTA library tools.",
+        "bulk_download": "partial",
+        "confidence": "medium"
+      }
+    ],
+    "scripture_data_multilingual": [
+      {
+        "name": "eBible.org",
+        "url": "https://ebible.org",
+        "description": "Downloadable Bibles in 1,000+ languages, public domain or openly licensed, in USFM, USFX, EPUB, and more.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "Bulk file downloads with a consistent directory structure; no query API.",
+        "search": false,
+        "search_details": "Language directory browsing.",
+        "bulk_download": true,
+        "confidence": "high"
+      },
+      {
+        "name": "unfoldingWord / Door43",
+        "url": "https://door43.org",
+        "description": "Openly licensed (CC BY-SA) biblical texts, translation resources, and lexica designed for reuse.",
+        "access": "free",
+        "api": true,
+        "api_details": "Door43 content service is a Gitea instance with a catalog API; everything is git-accessible.",
+        "search": true,
+        "search_details": "Repository and catalog search.",
+        "bulk_download": true,
+        "confidence": "medium"
+      },
+      {
+        "name": "API.Bible",
+        "url": "https://scripture.api.bible",
+        "description": "API gateway to 2,500+ Bible versions in 1,600+ languages, run by the American Bible Society.",
+        "access": "free_with_registration",
+        "api": true,
+        "api_details": "REST API with free key; per-version licensing limits apply to redistribution.",
+        "search": true,
+        "search_details": "Search endpoint within versions.",
+        "bulk_download": false,
+        "confidence": "high"
+      }
+    ],
+    "pali": [
+      {
+        "name": "SuttaCentral",
+        "url": "https://suttacentral.net",
+        "description": "The Pali canon and parallels in Sanskrit, Chinese, and Tibetan, with a large body of open modern translations.",
+        "access": "free",
+        "api": true,
+        "api_details": "Public JSON API used by the site plus all texts and translations in the Bilara data repositories on GitHub.",
+        "search": true,
+        "search_details": "Full-text search across texts and translations.",
+        "bulk_download": true,
+        "confidence": "high"
+      },
+      {
+        "name": "Tipitaka.org (Vipassana Research Institute)",
+        "url": "https://tipitaka.org",
+        "description": "The Chattha Sangayana edition of the Pali canon in many scripts, downloadable.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "Offline data and application downloads; community mirrors of the XML exist.",
+        "search": true,
+        "search_details": "Search within the online reader.",
+        "bulk_download": true,
+        "confidence": "medium"
+      }
+    ],
+    "tibetan_classical": [
+      {
+        "name": "Buddhist Digital Resource Center (BDRC)",
+        "url": "https://library.bdrc.io",
+        "description": "The central archive of Tibetan literature: millions of scanned pages plus growing e-text, with Chinese, Sanskrit, and Pali materials too.",
+        "access": "free_with_registration",
+        "api": true,
+        "api_details": "Open linked-data APIs and IIIF; datasets on GitHub.",
+        "search": true,
+        "search_details": "Catalog and increasingly full-text search (OCR for Tibetan).",
+        "bulk_download": "partial",
+        "confidence": "high"
+      },
+      {
+        "name": "Lotsawa House",
+        "url": "https://www.lotsawahouse.org",
+        "description": "Thousands of Tibetan Buddhist texts in translation (English and other languages), openly licensed.",
+        "access": "free",
+        "api": false,
+        "api_details": "None.",
+        "search": true,
+        "search_details": "Site search by author, topic, and collection.",
+        "bulk_download": false,
+        "confidence": "high"
+      }
+    ],
+    "coptic": [
+      {
+        "name": "Coptic Scriptorium",
+        "url": "https://copticscriptorium.org",
+        "description": "Digitized, richly annotated Coptic texts (biblical, monastic, patristic) built for both reading and computational analysis.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "Corpora on GitHub; ANNIS search backend exposes query capabilities.",
+        "search": true,
+        "search_details": "Linguistic search via ANNIS.",
+        "bulk_download": true,
+        "confidence": "medium"
+      }
+    ],
+    "syriac": [
+      {
+        "name": "Digital Syriac Corpus",
+        "url": "https://syriaccorpus.org",
+        "description": "TEI editions of Syriac literature from the classical period onward.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "TEI XML on GitHub.",
+        "search": true,
+        "search_details": "Browse and search interface.",
+        "bulk_download": true,
+        "confidence": "medium"
+      }
+    ],
+    "geez_ethiopic": [
+      {
+        "name": "Beta masaheft",
+        "url": "https://betamasaheft.eu",
+        "description": "Hamburg-based research environment cataloguing and transcribing Ethiopic (Geez) manuscripts and texts.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "TEI data on GitHub plus REST-style endpoints from the underlying database.",
+        "search": true,
+        "search_details": "Catalog and text search.",
+        "bulk_download": true,
+        "confidence": "medium"
+      }
+    ],
+    "sumerian_akkadian_cuneiform": [
+      {
+        "name": "ORACC",
+        "url": "http://oracc.museum.upenn.edu",
+        "description": "Umbrella for dozens of open cuneiform text corpora (Akkadian, Sumerian) with transliteration and translation.",
+        "access": "free",
+        "api": "partial",
+        "api_details": "Complete open data as JSON downloads per project.",
+        "search": true,
+        "search_details": "Corpus search within projects.",
+        "bulk_download": true,
+        "confidence": "high"
+      },
+      {
+        "name": "ETCSL",
+        "url": "https://etcsl.orinst.ox.ac.uk",
+        "description": "The Electronic Text Corpus of Sumerian Literature: transliterations and translations of the Sumerian literary canon.",
+        "access": "free",
+        "api": false,
+        "api_details": "None; static site (no longer updated but stable).",
+        "search": true,
+        "search_details": "Catalog and word search.",
+        "bulk_download": "partial",
+        "confidence": "high"
+      },
+      {
+        "name": "CDLI",
+        "url": "https://cdli.mpiwg-berlin.mpg.de",
+        "description": "Cuneiform Digital Library Initiative: catalog, images, and transliterations of hundreds of thousands of tablets.",
+        "access": "free",
+        "api": true,
+        "api_details": "Public API on the rebuilt framework plus data dumps on GitHub.",
+        "search": true,
+        "search_details": "Catalog and transliteration search.",
+        "bulk_download": true,
+        "confidence": "medium"
+      }
+    ],
+    "classical_chinese": {
+      "cross_reference": "See the chinese section: the Chinese Text Project, Kanseki Repository, and CBETA are the primary classical Chinese libraries and all three are listed there."
+    }
+  }
+}
