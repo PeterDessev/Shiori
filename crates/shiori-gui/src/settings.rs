@@ -229,7 +229,22 @@ pub struct Settings {
     /// Japanese fine may write terrible Koine, so each language can pin
     /// its own model. Empty = use the provider's configured model.
     pub language_models: std::collections::HashMap<String, String>,
+    /// User-added OPDS catalog feeds, keyed by language code. Book search
+    /// pulls from these distributors alongside Wikisource and Project
+    /// Gutenberg for the active language.
+    pub opds_catalogs: std::collections::HashMap<String, Vec<OpdsCatalog>>,
     pub shortcuts: Shortcuts,
+}
+
+/// One user-added OPDS catalog feed (an [OPDS] distributor). `url` is the
+/// root feed; searching follows the feed's advertised search link when it
+/// has one, else filters the feed's own entries.
+///
+/// [OPDS]: https://opds.io/
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OpdsCatalog {
+    pub name: String,
+    pub url: String,
 }
 
 /// Persisted form of the production-chat challenge dial.
@@ -284,6 +299,7 @@ impl Default for Settings {
             active_language: "ja".to_string(),
             pack_catalog_url: String::new(),
             language_models: Default::default(),
+            opds_catalogs: Default::default(),
             shortcuts: Shortcuts::default(),
         }
     }
@@ -313,6 +329,50 @@ impl Settings {
     pub fn load_from(path: &Path) -> Option<Self> {
         let json = std::fs::read_to_string(path).ok()?;
         serde_json::from_str(&json).ok()
+    }
+
+    /// The OPDS distributors the user has added for `lang`.
+    pub fn opds_for(&self, lang: &str) -> &[OpdsCatalog] {
+        self.opds_catalogs
+            .get(lang)
+            .map(|v| v.as_slice())
+            .unwrap_or(&[])
+    }
+
+    /// Add an OPDS distributor for `lang`, ignoring blank entries and
+    /// exact duplicates (same URL, case-insensitive). Returns whether it
+    /// was added.
+    pub fn add_opds(&mut self, lang: &str, name: &str, url: &str) -> bool {
+        let name = name.trim();
+        let url = url.trim();
+        if url.is_empty() {
+            return false;
+        }
+        let list = self.opds_catalogs.entry(lang.to_string()).or_default();
+        if list.iter().any(|c| c.url.eq_ignore_ascii_case(url)) {
+            return false;
+        }
+        list.push(OpdsCatalog {
+            name: if name.is_empty() {
+                url.to_string()
+            } else {
+                name.to_string()
+            },
+            url: url.to_string(),
+        });
+        true
+    }
+
+    /// Remove the OPDS distributor at `idx` for `lang`.
+    pub fn remove_opds(&mut self, lang: &str, idx: usize) {
+        if let Some(list) = self.opds_catalogs.get_mut(lang) {
+            if idx < list.len() {
+                list.remove(idx);
+            }
+            if list.is_empty() {
+                self.opds_catalogs.remove(lang);
+            }
+        }
     }
 
     /// The model to use right now: the active language's override when
@@ -474,6 +534,35 @@ mod tests {
         assert_eq!(loaded.shortcuts.review_correct, "Enter");
         assert_eq!(loaded.shortcuts.review_reveal, "Space");
         assert_eq!(loaded.llm_model, "claude-opus-4-8");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn opds_catalogs_round_trip_and_dedupe() {
+        let dir = std::env::temp_dir().join("jrc-settings-opds-test");
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut s = Settings::default();
+        assert!(s.add_opds("en", "Standard Ebooks", "https://standardebooks.org/feeds/opds"));
+        // Blank url rejected; duplicate url (case-insensitive) rejected.
+        assert!(!s.add_opds("en", "blank", "   "));
+        assert!(!s.add_opds("en", "dup", "HTTPS://STANDARDEBOOKS.ORG/feeds/opds"));
+        assert!(s.add_opds("fr", "Ebooks BNR", "https://ebooks-bnr.com/opds/"));
+        assert_eq!(s.opds_for("en").len(), 1);
+        assert_eq!(s.opds_for("fr").len(), 1);
+        assert!(s.opds_for("de").is_empty());
+        s.save(&dir).unwrap();
+
+        let loaded = Settings::load(&dir);
+        assert_eq!(loaded.opds_for("en")[0].name, "Standard Ebooks");
+        assert_eq!(
+            loaded.opds_for("fr")[0].url,
+            "https://ebooks-bnr.com/opds/"
+        );
+
+        let mut loaded = loaded;
+        loaded.remove_opds("en", 0);
+        assert!(loaded.opds_for("en").is_empty());
+        assert!(!loaded.opds_catalogs.contains_key("en"));
         std::fs::remove_dir_all(&dir).ok();
     }
 
