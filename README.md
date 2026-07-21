@@ -79,12 +79,18 @@ any hit straight to spaced repetition from the search results.
 
 ### Books from the internet, one click away
 
-Search Aozora Bunko's 17,000+ public-domain works and Japanese Wikisource,
-then import straight into your library — Shift_JIS, ruby markup and all.
-Aozora's catalog is downloaded once and cached, so every search after that
-runs locally and instantly.
+Book search is per-language. Switch the active language right in the
+window and search **that language's** free libraries: its **Wikisource**
+wiki, **Project Gutenberg** (via the Gutendex API, filtered to the
+language), and — for Japanese — **Aozora Bunko**'s 17,000+ public-domain
+works (Shift_JIS, ruby markup and all; the catalog is cached after the
+first fetch so later searches run locally and instantly). Add your own
+**OPDS** distributors per language to search any compatible catalog
+(OPDS 1.x and 2.0, with OpenSearch), and browse a bundled directory of
+free, legal collections for the language under the **Libraries** tab.
+Everything imports straight into your library under the active language.
 
-<img src="assets/screenshots/sources.png" alt="Sources view searching the Aozora Bunko catalog" width="850">
+<img src="assets/screenshots/sources.png" alt="Book search view: per-language tabs for Wikisource, Project Gutenberg, and OPDS distributors" width="850">
 
 ### Whole languages as data
 
@@ -281,8 +287,12 @@ or when you install or build a language pack:
   lists (CC BY-SA 4.0) — packs built from Wiktionary.
 - [Noto Sans JP / Noto Serif JP](https://fonts.google.com/noto) fonts
   (SIL Open Font License 1.1) — downloaded on first use.
-- Books — [Aozora Bunko](https://www.aozora.gr.jp/) (public domain) and
-  [Japanese Wikisource](https://ja.wikisource.org/).
+- Books — [Aozora Bunko](https://www.aozora.gr.jp/) (public domain, Japanese),
+  the per-language [Wikisource](https://wikisource.org/) wikis,
+  [Project Gutenberg](https://www.gutenberg.org/) via the
+  [Gutendex](https://gutendex.com/) API, and any user-added
+  [OPDS](https://opds.io/) distributor. The bundled `Libraries` directory
+  of free, legal collections is compiled from public catalog metadata.
 
 Settings → General gathers every attribution in one place, plus the
 license line of each installed pack.
