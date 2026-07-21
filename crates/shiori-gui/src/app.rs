@@ -33,7 +33,12 @@ pub enum Msg {
     OllamaPullProgress(String, Option<f32>),
     OllamaPullDone(Result<(), String>),
     AozoraCatalog(Result<Vec<shiori_app::AozoraWork>, String>),
-    WikisourceResults(Result<Vec<shiori_app::WikisourceHit>, String>),
+    // Book-search results carry the language they were requested for, so a
+    // result arriving after a language switch can be discarded rather than
+    // shown (or imported) under the wrong language.
+    WikisourceResults(String, Result<Vec<shiori_app::WikisourceHit>, String>),
+    GutendexResults(String, Result<Vec<shiori_app::GutendexHit>, String>),
+    OpdsResults(String, Result<Vec<shiori_app::OpdsHit>, String>),
     /// The hosted pack catalog arrived (or failed to).
     PackCatalog(Result<Vec<shiori_app::PackCatalogEntry>, String>),
     /// Export/import/backup finished: Ok(summary) or Err(reason).
@@ -305,9 +310,16 @@ pub struct DictInfoModal {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SourceTab {
-    #[default]
+    /// Aozora Bunko — Japanese only.
     Aozora,
+    #[default]
     Wikisource,
+    /// Project Gutenberg, via the Gutendex API.
+    Gutenberg,
+    /// A user-added OPDS distributor.
+    Opds,
+    /// Read-only list of the language's libraries from the bundled catalog.
+    Libraries,
 }
 
 #[derive(Default)]
@@ -319,6 +331,36 @@ pub struct SourcesState {
     pub catalog_loading: bool,
     pub ws_results: Vec<shiori_app::WikisourceHit>,
     pub ws_searching: bool,
+    pub gutendex_results: Vec<shiori_app::GutendexHit>,
+    pub gutendex_searching: bool,
+    pub opds_results: Vec<shiori_app::OpdsHit>,
+    pub opds_searching: bool,
+    /// Index of the OPDS distributor (in the active language's list) that
+    /// is currently selected for searching.
+    pub opds_selected: usize,
+    /// "Add distributor" form fields.
+    pub new_opds_name: String,
+    pub new_opds_url: String,
+}
+
+impl SourcesState {
+    /// Clear all per-language search results, in-flight flags, and inputs
+    /// (on a language switch, so results from the previous language don't
+    /// linger and a fresh search isn't blocked by a stale flag). Any
+    /// worker still running is neutralized by the language check in the
+    /// result handlers.
+    pub fn reset_results(&mut self) {
+        self.query.clear();
+        self.ws_results.clear();
+        self.ws_searching = false;
+        self.gutendex_results.clear();
+        self.gutendex_searching = false;
+        self.opds_results.clear();
+        self.opds_searching = false;
+        self.opds_selected = 0;
+        self.new_opds_name.clear();
+        self.new_opds_url.clear();
+    }
 }
 
 /// One chat message prepared for display.
@@ -375,6 +417,13 @@ pub struct SweepState {
 pub enum SourceImport {
     Aozora(shiori_app::AozoraWork),
     Wikisource(String),
+    Gutendex(shiori_app::GutendexHit),
+    Opds {
+        url: String,
+        mime: String,
+        title: String,
+        author: String,
+    },
 }
 
 /// Press-to-record state for one shortcut binding. The combo is
@@ -768,6 +817,8 @@ impl ShioriGui {
         self.reader = None;
         self.book_info = None;
         self.sweep = None;
+        // Book search is per-language; drop the previous language's hits.
+        self.sources.reset_results();
         self.dictionary = DictionaryState::default();
         self.production = ProductionState::default();
         self.review = ReviewState::default();
@@ -928,11 +979,32 @@ impl ShioriGui {
                         Err(e) => eprintln!("aozora catalog unavailable: {e}"),
                     }
                 }
-                Msg::WikisourceResults(result) => {
-                    self.sources.ws_searching = false;
-                    match result {
-                        Ok(hits) => self.sources.ws_results = hits,
-                        Err(e) => self.error = Some(e),
+                Msg::WikisourceResults(lang, result) => {
+                    // Ignore results for a language the user has since left.
+                    if lang == self.settings.active_language {
+                        self.sources.ws_searching = false;
+                        match result {
+                            Ok(hits) => self.sources.ws_results = hits,
+                            Err(e) => self.error = Some(e),
+                        }
+                    }
+                }
+                Msg::GutendexResults(lang, result) => {
+                    if lang == self.settings.active_language {
+                        self.sources.gutendex_searching = false;
+                        match result {
+                            Ok(hits) => self.sources.gutendex_results = hits,
+                            Err(e) => self.error = Some(e),
+                        }
+                    }
+                }
+                Msg::OpdsResults(lang, result) => {
+                    if lang == self.settings.active_language {
+                        self.sources.opds_searching = false;
+                        match result {
+                            Ok(hits) => self.sources.opds_results = hits,
+                            Err(e) => self.error = Some(e),
+                        }
                     }
                 }
                 Msg::PackCatalog(result) => {
@@ -1438,7 +1510,7 @@ impl ShioriGui {
         });
     }
 
-    /// Search Japanese Wikisource in the background.
+    /// Search the active language's Wikisource in the background.
     pub fn start_wikisource_search(&mut self, ctx: &egui::Context) {
         if self.sources.ws_searching || self.sources.query.trim().is_empty() {
             return;
@@ -1446,6 +1518,7 @@ impl ShioriGui {
         let Some(app) = self.app.clone() else { return };
         self.sources.ws_searching = true;
         let query = self.sources.query.clone();
+        let lang = self.settings.active_language.clone();
         let tx = self.tx.clone();
         let ctx = ctx.clone();
         std::thread::spawn(move || {
@@ -1453,7 +1526,51 @@ impl ShioriGui {
                 Ok(guard) => guard.search_wikisource(&query).map_err(|e| e.to_string()),
                 Err(_) => Err("app lock poisoned".into()),
             };
-            let _ = tx.send(Msg::WikisourceResults(result));
+            let _ = tx.send(Msg::WikisourceResults(lang, result));
+            ctx.request_repaint();
+        });
+    }
+
+    /// Search Project Gutenberg (Gutendex) for the active language.
+    pub fn start_gutendex_search(&mut self, ctx: &egui::Context) {
+        if self.sources.gutendex_searching || self.sources.query.trim().is_empty() {
+            return;
+        }
+        let Some(app) = self.app.clone() else { return };
+        self.sources.gutendex_searching = true;
+        let query = self.sources.query.clone();
+        let lang = self.settings.active_language.clone();
+        let tx = self.tx.clone();
+        let ctx = ctx.clone();
+        std::thread::spawn(move || {
+            let result = match app.lock() {
+                Ok(guard) => guard.search_gutendex(&query).map_err(|e| e.to_string()),
+                Err(_) => Err("app lock poisoned".into()),
+            };
+            let _ = tx.send(Msg::GutendexResults(lang, result));
+            ctx.request_repaint();
+        });
+    }
+
+    /// Search one OPDS distributor feed in the background.
+    pub fn start_opds_search(&mut self, ctx: &egui::Context, catalog_url: String) {
+        if self.sources.opds_searching {
+            return;
+        }
+        let Some(app) = self.app.clone() else { return };
+        self.sources.opds_searching = true;
+        let query = self.sources.query.clone();
+        let lang = self.settings.active_language.clone();
+        let tx = self.tx.clone();
+        let ctx = ctx.clone();
+        std::thread::spawn(move || {
+            let result = match app.lock() {
+                Ok(guard) => guard
+                    .search_opds(&catalog_url, &query)
+                    .map_err(|e| e.to_string()),
+                Err(_) => Err("app lock poisoned".into()),
+            };
+            let _ = tx.send(Msg::OpdsResults(lang, result));
             ctx.request_repaint();
         });
     }
@@ -1472,6 +1589,17 @@ impl ShioriGui {
                     }
                     SourceImport::Wikisource(title) => guard
                         .import_wikisource_page(title)
+                        .map_err(|e| e.to_string()),
+                    SourceImport::Gutendex(hit) => {
+                        guard.import_gutendex_book(hit).map_err(|e| e.to_string())
+                    }
+                    SourceImport::Opds {
+                        url,
+                        mime,
+                        title,
+                        author,
+                    } => guard
+                        .import_opds(url, mime, title, author)
                         .map_err(|e| e.to_string()),
                 },
                 Err(_) => Err("app lock poisoned".into()),
