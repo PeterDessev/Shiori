@@ -26,6 +26,10 @@ pub const AOZORA_CATALOG_FILENAME: &str = "aozora_catalog.zip";
 // Trailing slash avoids a 301 (Gutendex's own paging links use it too).
 const GUTENDEX_API: &str = "https://gutendex.com/books/";
 
+// The Wikimedia book-export tool (the site's "Download as EPUB" button):
+// it assembles a work's index page and all its subpages into one EPUB.
+const WSEXPORT_URL: &str = "https://ws-export.wmcloud.org/";
+
 const USER_AGENT: &str =
     "Shiori/0.2.0 (https://github.com/PeterDessev/Shiori; peter.dessev@gmail.com) ureq/2";
 
@@ -276,7 +280,8 @@ impl App {
             .is_some()
     }
 
-    /// Full-text search on the active language's Wikisource (mainspace).
+    /// Full-text search on the active language's Wikisource (mainspace),
+    /// with multi-part works collapsed to a single whole-book result.
     pub fn search_wikisource(&self, query: &str) -> Result<Vec<WikisourceHit>> {
         let sub = self.wikisource_subdomain()?;
         let api = format!("https://{sub}.wikisource.org/w/api.php");
@@ -286,7 +291,9 @@ impl App {
             .query("list", "search")
             .query("srsearch", query)
             .query("srnamespace", "0")
-            .query("srlimit", "20")
+            // A long book is stored as many `Work/Chapter` subpages; fetch
+            // a wide page so enough distinct works survive collapsing.
+            .query("srlimit", "50")
             .query("srprop", "size|wordcount|snippet")
             .query("maxlag", "5")
             .query("format", "json")
@@ -300,22 +307,36 @@ impl App {
             .as_array()
             .cloned()
             .unwrap_or_default();
-        Ok(hits
-            .iter()
-            .filter_map(|h| {
-                Some(WikisourceHit {
-                    title: h["title"].as_str()?.to_string(),
-                    snippet: strip_tags(h["snippet"].as_str().unwrap_or("")),
-                    wordcount: h["wordcount"].as_u64().unwrap_or(0),
-                })
-            })
-            .collect())
+        let mut works = collapse_wikisource_hits(&hits);
+        works.truncate(20);
+        Ok(works)
     }
 
-    /// Download a Wikisource page as rendered HTML and import it under the
-    /// active language.
+    /// Import a whole Wikisource work under the active language. The work
+    /// is fetched as a single EPUB from the Wikimedia export tool (which
+    /// assembles the index page and every chapter subpage — the same
+    /// download the site offers), falling back to the single page's
+    /// rendered HTML if the export tool is unavailable.
     pub fn import_wikisource_page(&self, title: &str) -> Result<shiori_core::DocumentId> {
         let sub = self.wikisource_subdomain()?;
+        // Search shows whole works, but guard against a subpage title.
+        let work = title.split('/').next().unwrap_or(title);
+        self.import_wikisource_epub(&sub, work)
+            .or_else(|_| self.import_wikisource_html(&sub, title))
+    }
+
+    /// Export a work to EPUB via WSexport and import it whole.
+    fn import_wikisource_epub(&self, sub: &str, page: &str) -> Result<shiori_core::DocumentId> {
+        let url = format!(
+            "{WSEXPORT_URL}?lang={sub}&format=epub-3&page={}",
+            urlencode(page)
+        );
+        self.import_download_as_file(&url, &download_filename(page, "epub"))
+    }
+
+    /// Import one Wikisource page from its rendered HTML (the fallback when
+    /// the export tool is down).
+    fn import_wikisource_html(&self, sub: &str, title: &str) -> Result<shiori_core::DocumentId> {
         // Subpages are common on Wikisource (Book/Chapter_1); encode '/'.
         let encoded = urlencode(&title.replace(' ', "_"));
         let url = format!("https://{sub}.wikisource.org/w/rest.php/v1/page/{encoded}/html");
@@ -519,10 +540,10 @@ impl App {
         let is = |m: &str, ext: &str| mime.contains(m) || lower_url.ends_with(ext);
 
         if is("epub", ".epub") {
-            return self.import_download_as_file(url, &opds_filename(title, "epub"));
+            return self.import_download_as_file(url, &download_filename(title, "epub"));
         }
         if is("pdf", ".pdf") {
-            return self.import_download_as_file(url, &opds_filename(title, "pdf"));
+            return self.import_download_as_file(url, &download_filename(title, "pdf"));
         }
 
         let meta = DocumentMeta {
@@ -548,7 +569,7 @@ impl App {
         }
         // Unknown type: let the file pipeline sniff it by extension.
         let ext = lower_url.rsplit('.').next().filter(|e| e.len() <= 5).unwrap_or("epub");
-        self.import_download_as_file(url, &opds_filename(title, ext))
+        self.import_download_as_file(url, &download_filename(title, ext))
     }
 }
 
@@ -652,9 +673,48 @@ fn gutenberg_author_name(name: &str) -> String {
     }
 }
 
-/// A safe temp-download filename for an OPDS acquisition, keyed on the
-/// book title so concurrent imports of different books don't collide.
-fn opds_filename(title: &str, ext: &str) -> String {
+/// Collapse Wikisource search hits into whole works. A long book is
+/// stored as an index page plus `Work/Chapter` subpages, so a search
+/// returns every fragment; group each hit under its root page (the part
+/// before the first `/`) so a book appears once, with the parts' combined
+/// word count and the most relevant part's snippet. First-seen (i.e.
+/// most-relevant) order is preserved.
+fn collapse_wikisource_hits(hits: &[serde_json::Value]) -> Vec<WikisourceHit> {
+    let mut order: Vec<String> = Vec::new();
+    let mut by_root: std::collections::HashMap<String, WikisourceHit> =
+        std::collections::HashMap::new();
+    for h in hits {
+        let Some(title) = h["title"].as_str() else {
+            continue;
+        };
+        let root = title.split('/').next().unwrap_or(title);
+        let wordcount = h["wordcount"].as_u64().unwrap_or(0);
+        if let Some(existing) = by_root.get_mut(root) {
+            existing.wordcount += wordcount;
+            if existing.snippet.is_empty() {
+                existing.snippet = strip_tags(h["snippet"].as_str().unwrap_or(""));
+            }
+        } else {
+            order.push(root.to_string());
+            by_root.insert(
+                root.to_string(),
+                WikisourceHit {
+                    title: root.to_string(),
+                    snippet: strip_tags(h["snippet"].as_str().unwrap_or("")),
+                    wordcount,
+                },
+            );
+        }
+    }
+    order
+        .into_iter()
+        .filter_map(|r| by_root.remove(&r))
+        .collect()
+}
+
+/// A safe temp-download filename keyed on the book title, so concurrent
+/// imports of different books don't collide.
+fn download_filename(title: &str, ext: &str) -> String {
     let stem: String = title
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
@@ -752,9 +812,32 @@ mod tests {
     }
 
     #[test]
-    fn opds_filename_is_safe() {
-        assert_eq!(opds_filename("Alice's Adventures!", "epub"), "Alice_s_Adventures.epub");
-        assert_eq!(opds_filename("", "pdf"), "opds.pdf");
+    fn download_filename_is_safe() {
+        assert_eq!(download_filename("Alice's Adventures!", "epub"), "Alice_s_Adventures.epub");
+        assert_eq!(download_filename("", "pdf"), "opds.pdf");
+    }
+
+    #[test]
+    fn wikisource_hits_collapse_to_whole_works() {
+        let hits: Vec<serde_json::Value> = serde_json::from_str(
+            r#"[
+              {"title": "Les Trois Mousquetaires/Chapitre 1", "wordcount": 4000, "snippet": "d'Artagnan <span>arrive</span>"},
+              {"title": "Les Trois Mousquetaires", "wordcount": 300, "snippet": "table des matières"},
+              {"title": "Les Trois Mousquetaires/Chapitre 2", "wordcount": 3500, "snippet": ""},
+              {"title": "Vingt ans après", "wordcount": 5000, "snippet": "suite"}
+            ]"#,
+        )
+        .unwrap();
+        let works = collapse_wikisource_hits(&hits);
+        // Two whole works, not four fragments; relevance order preserved.
+        assert_eq!(works.len(), 2);
+        assert_eq!(works[0].title, "Les Trois Mousquetaires");
+        // Combined word count across the parts (4000 + 300 + 3500).
+        assert_eq!(works[0].wordcount, 7800);
+        // Snippet comes from the most relevant (first-seen) part.
+        assert_eq!(works[0].snippet, "d'Artagnan arrive");
+        assert_eq!(works[1].title, "Vingt ans après");
+        assert_eq!(works[1].wordcount, 5000);
     }
 
     #[test]

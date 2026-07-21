@@ -268,7 +268,8 @@ impl ShioriGui {
         if self.sources.ws_results.is_empty() {
             ui.weak(format!(
                 "Search the {lang_name} Wikisource — classic literature, \
-                 historical documents, speeches, law texts."
+                 historical documents, speeches, law texts. Multi-part books \
+                 are shown once and imported whole."
             ));
             return;
         }
@@ -279,7 +280,7 @@ impl ShioriGui {
                     ui.horizontal(|ui| {
                         if ui
                             .button("⬇ Import")
-                            .on_hover_text("Download and add to the library")
+                            .on_hover_text("Download the whole work and add to the library")
                             .clicked()
                         {
                             *import = Some(SourceImport::Wikisource(hit.title.clone()));
