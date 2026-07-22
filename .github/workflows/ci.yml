@@ -10,6 +10,9 @@ env:
   # The first build downloads the IPADIC source (lindera embed-ipadic);
   # everything after that is cached.
 
+# Everyday CI runs on Windows only, for fast, cheap feedback. Linux and
+# macOS are built and tested by the release workflow on every tag, so a
+# cross-platform break is caught before it ships (see release.yml).
 jobs:
   lint:
     name: Format and lints

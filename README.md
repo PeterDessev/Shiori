@@ -12,7 +12,7 @@ and every other feature exists to support that.*
 
 [![CI](https://github.com/PeterDessev/Shiori/actions/workflows/ci.yml/badge.svg)](https://github.com/PeterDessev/Shiori/actions/workflows/ci.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-MIT)
-[![Platform: Windows x86_64](https://img.shields.io/badge/platform-Windows%20x86__64-0078D6.svg)](#getting-started)
+[![Platforms: Windows · Linux · macOS](https://img.shields.io/badge/platforms-Windows%20%C2%B7%20Linux%20%C2%B7%20macOS-success.svg)](#getting-started)
 
 <img src="assets/screenshots/reader-demo.gif" alt="Reading in Shiori: furigana over unknown words, one click for the dictionary panel, one keypress to start learning a word" width="850">
 
@@ -177,19 +177,35 @@ your Japanese retention.
 
 ## Getting started
 
-**Download** — grab the latest `shiori-*-windows-x86_64.zip` from 
-[Releases](https://github.com/PeterDessev/Shiori/releases), unzip, run
-`shiori.exe`. The zip carries the licenses, README, and changelog next to
-the exe, which is statically linked against the MSVC CRT — it runs on
-stock Windows 10/11 with no VC++ Redistributable or any other install. On
-first launch the app downloads its Japanese reference data (JMdict,
-frequency list, kanji data with stroke order, JLPT lists — ~20 MB total)
-and you're reading; other languages arrive as packs from Settings →
+**Download** — grab the build for your platform from
+[Releases](https://github.com/PeterDessev/Shiori/releases) and run it:
+
+| Platform | Asset | Run |
+|---|---|---|
+| Windows x86_64 | `shiori-*-windows-x86_64.zip` | unzip, run `shiori.exe` |
+| Linux x86_64 | `shiori-*-linux-x86_64.tar.gz` | extract, run `./shiori` |
+| macOS (Apple Silicon) | `shiori-*-macos-aarch64.tar.gz` | extract, run `./shiori` |
+| macOS (Intel) | `shiori-*-macos-x86_64.tar.gz` | extract, run `./shiori` |
+
+Each archive carries the licenses, README, and changelog next to the
+binary. On first launch the app downloads its Japanese reference data
+(JMdict, frequency list, kanji data with stroke order, JLPT lists — ~20 MB
+total) and you're reading; other languages arrive as packs from Settings →
 Languages.
 
-Shiori is built and released for **Windows x86_64 only** — that's the only
-target the CI tests and ships. The source has no hard OS lock, so building
-on macOS or Linux may well work, but it's untested and unsupported for now.
+Platform notes:
+- **Windows** — statically linked against the MSVC CRT; runs on stock
+  Windows 10/11 with no VC++ Redistributable.
+- **Linux** — needs a desktop with OpenGL, `xdg-desktop-portal` for the
+  open/save dialogs (standard on GNOME/KDE), and a CJK font for Japanese
+  text (install `noto-cjk`, e.g. `sudo apt install fonts-noto-cjk`); Noto
+  is also downloadable in-app from Settings.
+- **macOS** — the binary is unsigned, so the first launch needs a
+  right-click → Open (or *System Settings → Privacy & Security → Open
+  Anyway*) to get past Gatekeeper.
+
+Everyday CI runs on Windows for fast feedback; every tagged release builds
+and tests on all three platforms and ships a binary for each.
 
 **Build from source**:
 
