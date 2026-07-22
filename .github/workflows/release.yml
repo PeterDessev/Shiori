@@ -8,17 +8,66 @@ permissions:
   contents: write
 
 jobs:
-  windows:
-    name: Windows release
-    runs-on: windows-latest
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows-x86_64
+          - os: ubuntu-latest
+            name: linux-x86_64
+          - os: macos-latest
+            name: macos-aarch64
+          - os: macos-13
+            name: macos-x86_64
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+            libxkbcommon-dev libssl-dev
       - name: Build
         run: cargo build --release -p shiori-gui
-      - name: Package
-        run: Compress-Archive -Path target/release/shiori.exe, LICENSE-MIT, LICENSE-APACHE, README.md, CHANGELOG.md -DestinationPath shiori-${{ github.ref_name }}-windows-x86_64.zip
+      # Windows ships shiori.exe in a .zip; Unix ships the `shiori` binary
+      # in a .tar.gz. Both bundle the licenses and docs.
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        run: Compress-Archive -Path target/release/shiori.exe, LICENSE-MIT, LICENSE-APACHE, README.md, CHANGELOG.md -DestinationPath shiori-${{ github.ref_name }}-${{ matrix.name }}.zip
+      - name: Package (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          staging="shiori-${{ github.ref_name }}-${{ matrix.name }}"
+          mkdir "$staging"
+          cp target/release/shiori LICENSE-MIT LICENSE-APACHE README.md CHANGELOG.md "$staging/"
+          tar czf "$staging.tar.gz" "$staging"
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: |
+            shiori-${{ github.ref_name }}-${{ matrix.name }}.zip
+            shiori-${{ github.ref_name }}-${{ matrix.name }}.tar.gz
+          if-no-files-found: error
+
+  publish:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
       - name: Extract release notes from CHANGELOG
         shell: pwsh
         run: |
@@ -42,6 +91,6 @@ jobs:
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          files: shiori-${{ github.ref_name }}-windows-x86_64.zip
+          files: artifacts/*
           body_path: RELEASE_NOTES.md
           generate_release_notes: true

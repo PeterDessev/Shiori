@@ -41,6 +41,7 @@ tracing = "0.1"
 [profile.release]
 lto = "thin"
 codegen-units = 1
+strip = true
 
 # The embedded morphological dictionary is slow to build unoptimized; always
 # optimize heavy dependencies even in dev builds.
