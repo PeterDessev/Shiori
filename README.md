@@ -204,8 +204,8 @@ Platform notes:
   right-click → Open (or *System Settings → Privacy & Security → Open
   Anyway*) to get past Gatekeeper.
 
-CI builds and tests every commit on all three platforms, and each release
-ships binaries for all of them.
+Everyday CI runs on Windows for fast feedback; every tagged release builds
+and tests on all three platforms and ships a binary for each.
 
 **Build from source**:
 

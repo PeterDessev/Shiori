@@ -2,8 +2,7 @@ name: CI
 
 on:
   push:
-    # `claude/**` so AI-authored branches get the full matrix before merge.
-    branches: [main, master, "claude/**"]
+    branches: [main, master]
   pull_request:
 
 env:
@@ -11,35 +10,37 @@ env:
   # The first build downloads the IPADIC source (lindera embed-ipadic);
   # everything after that is cached.
 
+# Everyday CI runs on Windows only, for fast, cheap feedback. Linux and
+# macOS are built and tested by the release workflow on every tag, so a
+# cross-platform break is caught before it ships (see release.yml).
 jobs:
-  check:
-    name: ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+  lint:
+    name: Format and lints
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
-      # egui/winit/arboard need X11 + xkbcommon dev libraries on Linux; the
-      # file dialog uses rfd's xdg-portal backend, so no GTK is required.
-      - name: Install Linux dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
-            libxkbcommon-dev libssl-dev
       - name: rustfmt
-        if: runner.os == 'Linux'
         run: cargo fmt --check
       - name: clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
+
+  test:
+    name: Build and test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
       - name: Test
         run: cargo test --workspace
       - name: Release build
         run: cargo build --release -p shiori-gui
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: shiori-windows-x86_64
+          path: target/release/shiori.exe
