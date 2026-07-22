@@ -4210,7 +4210,7 @@ dependencies = [
 
 [[package]]
 name = "shiori-app"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "chrono",
  "csv",
@@ -4236,7 +4236,7 @@ dependencies = [
 
 [[package]]
 name = "shiori-core"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "chrono",
  "serde",
@@ -4245,7 +4245,7 @@ dependencies = [
 
 [[package]]
 name = "shiori-db"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "chrono",
  "rusqlite",
@@ -4259,7 +4259,7 @@ dependencies = [
 
 [[package]]
 name = "shiori-dict"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "csv",
  "flate2",
@@ -4274,7 +4274,7 @@ dependencies = [
 
 [[package]]
 name = "shiori-gui"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "chrono",
  "dirs",
@@ -4299,7 +4299,7 @@ dependencies = [
 
 [[package]]
 name = "shiori-lang"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "shiori-core",
  "thiserror 2.0.18",
@@ -4307,7 +4307,7 @@ dependencies = [
 
 [[package]]
 name = "shiori-llm"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -4319,7 +4319,7 @@ dependencies = [
 
 [[package]]
 name = "shiori-nlp"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "lindera",
  "serde_json",
@@ -4330,7 +4330,7 @@ dependencies = [
 
 [[package]]
 name = "shiori-pack"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -4343,7 +4343,7 @@ dependencies = [
 
 [[package]]
 name = "shiori-packc"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "serde_json",
  "sha2",
@@ -4353,7 +4353,7 @@ dependencies = [
 
 [[package]]
 name = "shiori-srs"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "chrono",
  "serde",
