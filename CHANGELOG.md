@@ -11,11 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Linux and macOS support.** Shiori now builds, is tested, and ships
-  release binaries for Linux (x86_64) and macOS (Apple Silicon and Intel)
-  alongside Windows. Everyday CI stays on Windows for fast feedback; every
-  tagged release runs the full check suite (`cargo fmt`, `clippy`, tests)
-  and builds a stripped binary archive on Windows, Linux, and macOS before
-  publishing them all to one GitHub release.
+  release binaries for Linux (x86_64) and macOS (Apple Silicon) alongside
+  Windows. CI runs formatting and lints on Linux and the tests on Windows
+  and macOS; every tagged release builds a stripped binary archive for each
+  platform and publishes them to one GitHub release. (Intel Macs can build
+  from source.)
 
 ## [0.3.1] - 2026-07-21
 

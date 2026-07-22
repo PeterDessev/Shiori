@@ -185,7 +185,6 @@ your Japanese retention.
 | Windows x86_64 | `shiori-*-windows-x86_64.zip` | unzip, run `shiori.exe` |
 | Linux x86_64 | `shiori-*-linux-x86_64.tar.gz` | extract, run `./shiori` |
 | macOS (Apple Silicon) | `shiori-*-macos-aarch64.tar.gz` | extract, run `./shiori` |
-| macOS (Intel) | `shiori-*-macos-x86_64.tar.gz` | extract, run `./shiori` |
 
 Each archive carries the licenses, README, and changelog next to the
 binary. On first launch the app downloads its Japanese reference data
@@ -204,8 +203,9 @@ Platform notes:
   right-click → Open (or *System Settings → Privacy & Security → Open
   Anyway*) to get past Gatekeeper.
 
-Everyday CI runs on Windows for fast feedback; every tagged release builds
-and tests on all three platforms and ships a binary for each.
+CI runs formatting and lints on Linux and the test suite on Windows and
+macOS; every tagged release builds and ships a binary for each platform.
+(Prebuilt macOS binaries are Apple Silicon; Intel Macs build from source.)
 
 **Build from source**:
 

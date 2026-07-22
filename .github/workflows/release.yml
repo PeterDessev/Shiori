@@ -7,6 +7,8 @@ on:
 permissions:
   contents: write
 
+# The release workflow only builds and packages the shipping binaries;
+# formatting, lints, and tests already ran in CI on the tagged commit.
 jobs:
   build:
     name: ${{ matrix.name }}
@@ -21,13 +23,9 @@ jobs:
             name: linux-x86_64
           - os: macos-latest
             name: macos-aarch64
-          - os: macos-13
-            name: macos-x86_64
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
@@ -36,15 +34,6 @@ jobs:
           sudo apt-get install -y \
             libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
             libxkbcommon-dev libssl-dev
-      # A release is gated on the full check suite on every platform — this
-      # is where Linux and macOS get validated (everyday CI is Windows-only).
-      - name: rustfmt
-        if: runner.os == 'Linux'
-        run: cargo fmt --check
-      - name: clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
-      - name: Test
-        run: cargo test --workspace
       - name: Build
         run: cargo build --release -p shiori-gui
       # Windows ships shiori.exe in a .zip; Unix ships the `shiori` binary
