@@ -155,7 +155,7 @@ pub const WEB_PACK_SOURCES: &[WebPackSource] = &[
     src("es", "Spanish", "Spanish", "Spanish", Some("es"), 966, &[], &[], ES_CONTRACTIONS, None),
     src("fi", "Finnish", "Finnish", "Finnish", Some("fi"), 419, &[], &[], &[], None),
     src("fr", "French", "French", "French", Some("fr"), 544, &[], FR_ELISIONS, FR_CONTRACTIONS, None),
-    src("grc", "Ancient Greek", "Ancient Greek", "AncientGreek", None, 373, GREEK, &[], &[], None),
+    src("grc", "Koine Greek", "Ancient Greek", "AncientGreek", None, 373, GREEK, &[], &[], None),
     src("hu", "Hungarian", "Hungarian", "Hungarian", Some("hu"), 176, &[], &[], &[], None),
     src("id", "Indonesian", "Indonesian", "Indonesian", Some("id"), 56, &[], &[], &[], None),
     src("it", "Italian", "Italian", "Italian", Some("it"), 550, &[], IT_ELISIONS, IT_CONTRACTIONS, None),

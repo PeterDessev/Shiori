@@ -88,7 +88,7 @@ other language installs as a data-driven language pack under
   does) adds them to the library with one click.
 - **Remove** a pack — its library and review history stay in the database.
 - **Build from Wiktionary** — pick from ~19 languages (French, German,
-  Spanish, Latin, Ancient Greek, Korean, …) and the app downloads
+  Spanish, Latin, Koine Greek, Korean, …) and the app downloads
   kaikki.org's Wiktextract dump plus hermitdave's frequency list and
   compiles the pack locally, the same first-run model as the Japanese
   bundle. The dumps are gigabyte-class; interrupted downloads resume

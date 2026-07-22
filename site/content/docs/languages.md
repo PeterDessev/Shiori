@@ -108,20 +108,20 @@ Polytonic Greek currently renders through a wide-coverage system font;
 packs can declare fonts in their manifest, but per-pack font downloads are
 not wired up yet.
 
-The Greek pack is compiled by `shiori-packc` from MorphGNT and installs
-like any other pack — folder, zip, or URL. (The Build-from-Wiktionary list
-below also offers *Ancient Greek*: that is a different, dictionary-driven
-pack built from Wiktionary data, without the pre-annotated GNT corpus.
-Both packs share the language code `grc`, so only one can be installed at
-a time — installing either replaces the other, while your library and
-review history survive the swap.)
+The Koine Greek pack is compiled by `shiori-packc` from MorphGNT and
+installs like any other pack — folder, zip, or URL. (The
+Build-from-Wiktionary list below also offers *Koine Greek* as a different,
+dictionary-driven pack built from Wiktionary's Ancient Greek data, without
+the pre-annotated GNT corpus. Both packs share the language code `grc`, so
+only one can be installed at a time — installing either replaces the other,
+while your library and review history survive the swap.)
 
 ## Build from Wiktionary
 
 **Settings → Languages → Build from Wiktionary** generalizes the Japanese
 first-run model to ~19 languages: Czech, Danish, Dutch, Finnish, French,
 German, Hungarian, Indonesian, Italian, Korean, Latin, Polish, Portuguese,
-Romanian, Russian, Spanish, Swedish, Turkish, and Ancient Greek. Pick one,
+Romanian, Russian, Spanish, Swedish, Turkish, and Koine Greek. Pick one,
 click **Build**, and the app downloads public data from its stable upstream
 URLs and compiles the pack locally — nothing is hosted or maintained by
 Shiori.
@@ -131,7 +131,7 @@ Two things are downloaded:
 - **kaikki.org's Wiktextract dump** for the language (CC BY-SA 4.0 & GFDL)
   — the dictionary and the full inflection tables.
 - **hermitdave's FrequencyWords list** (CC BY-SA 4.0) — subtitle-corpus
-  frequency ranks, where a list exists. Latin and Ancient Greek have none,
+  frequency ranks, where a list exists. Latin and Koine Greek have none,
   and the row says so; the pack still builds, just without ranks.
 
 Each row shows the approximate download size — dumps are large, hundreds
