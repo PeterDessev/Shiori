@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-07-21
+
+### Changed
+- Koine (Ancient) Greek and Modern Greek are now fully separate languages
+  for book search, sharing no sources: Koine keeps its own Project
+  Gutenberg filter (`grc`) and Koine-specific Libraries directory (Perseus,
+  First1KGreek, …) and no longer borrows the Modern Greek Wikisource. The
+  Build-from-Wiktionary "Ancient Greek" option is renamed "Koine Greek" to
+  match the corpus pack, so the language reads as Koine everywhere.
+
 ## [0.3.0] - 2026-07-21
 
 ### Added
@@ -253,7 +263,8 @@ around comprehensible input.
   exit.
 - Japanese font baseline alignment and a crisp Latin font fallback.
 
-[Unreleased]: https://github.com/PeterDessev/Shiori/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/PeterDessev/Shiori/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/PeterDessev/Shiori/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/PeterDessev/Shiori/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/PeterDessev/Shiori/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/PeterDessev/Shiori/releases/tag/v0.1.0

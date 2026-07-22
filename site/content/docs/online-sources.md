@@ -68,8 +68,11 @@ field is set to 青空文庫.
 The Wikisource tab queries the active language's Wikisource wiki — classic
 literature, historical documents, speeches, and law texts. The subdomain is
 resolved from the language code (`fr` → fr.wikisource.org, `la` → Vicifons,
-and so on); Ancient Greek, which has no dedicated wiki, falls back to the
-Modern Greek Wikisource.
+and so on). A language with no Wikisource of its own simply doesn't get the
+tab — Koine Greek, for example, has no Koine-specific Wikisource (the only
+Greek wiki is Modern Greek's), so it relies on Project Gutenberg and its
+Libraries directory instead. Koine and Modern Greek are treated as entirely
+separate languages, sharing no book sources.
 
 Type a query and press Enter or click **Search**: Shiori runs a MediaWiki
 full-text search over mainspace (readable prose, not the `Page:` proofreading

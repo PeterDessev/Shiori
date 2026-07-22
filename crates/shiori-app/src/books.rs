@@ -131,9 +131,6 @@ fn wikisource_subdomain(code: &str) -> Option<&'static str> {
     // Match on the base code so region/script subtags (e.g. `nn-NO`) route
     // the same as the bare code.
     match base_code(code) {
-        // Ancient Greek has no dedicated wiki; its texts live on the
-        // Modern Greek Wikisource.
-        "grc" => Some("el"),
         // Biblical Hebrew texts sit on the Hebrew Wikisource.
         "hbo" => Some("he"),
         // Classical/Literary Chinese is hosted on the Chinese Wikisource.
@@ -141,8 +138,12 @@ fn wikisource_subdomain(code: &str) -> Option<&'static str> {
         // Norwegian Bokmål/Nynorsk share the Norwegian wiki (there is no
         // nn.wikisource.org).
         "nb" | "nn" | "no" => Some("no"),
-        // Scripts/languages without a usable Wikisource.
-        "akk" | "sux" | "cop" | "syc" | "gez" | "pi" | "bo" | "egy" | "" => None,
+        // Koine Greek keeps its own resources: the only Greek Wikisource is
+        // Modern Greek's (`el`), which is not Koine-specific, so it is left
+        // to Modern Greek and Koine relies on Project Gutenberg and its
+        // Libraries directory (Perseus, First1KGreek, …) instead. The rest
+        // are scripts/languages with no usable Wikisource.
+        "grc" | "akk" | "sux" | "cop" | "syc" | "gez" | "pi" | "bo" | "egy" | "" => None,
         // Modern languages: subdomain == code.
         base => WIKISOURCE_SUBDOMAINS.iter().copied().find(|s| *s == base),
     }
@@ -169,8 +170,9 @@ fn gutendex_lang(code: &str) -> Option<&'static str> {
         "nb" | "nn" | "no" => Some("no"),
         // No meaningful Gutenberg corpus / no supported filter.
         "lzh" | "akk" | "sux" | "cop" | "syc" | "gez" | "pi" | "bo" | "egy" => None,
-        // Ancient Greek: Gutenberg tags a few works `grc` (3-letter tags
-        // are honored despite the docs' "two-character" wording).
+        // Koine Greek: Gutenberg tags its Ancient Greek works `grc`
+        // (3-letter tags are honored despite the docs' "two-character"
+        // wording), keeping Koine's results Koine-specific.
         "grc" => Some("grc"),
         base => GUTENDEX_LANGS.iter().copied().find(|g| *g == base),
     }
@@ -291,12 +293,20 @@ mod tests {
     }
 
     #[test]
-    fn ancient_greek_falls_back_to_modern_greek_wikisource() {
+    fn koine_and_modern_greek_are_separate_languages() {
+        // Koine (Ancient) Greek: Koine-specific resources only — its own
+        // Gutenberg tag and catalog section, and no Modern Greek Wikisource.
         let grc = book_lang_profile("grc");
-        assert_eq!(grc.wikisource_subdomain.as_deref(), Some("el"));
-        // Gutenberg tags a few Ancient Greek works `grc`.
+        assert_eq!(grc.wikisource_subdomain, None);
         assert_eq!(grc.gutendex_lang.as_deref(), Some("grc"));
         assert_eq!(grc.catalog_section, Some("koine_greek"));
+
+        // Modern Greek: its own wiki, Gutenberg filter, and section — it
+        // shares nothing with Koine (like Turkish vs. French).
+        let el = book_lang_profile("el");
+        assert_eq!(el.wikisource_subdomain.as_deref(), Some("el"));
+        assert_eq!(el.gutendex_lang.as_deref(), Some("el"));
+        assert_eq!(el.catalog_section, Some("modern_greek"));
     }
 
     #[test]
