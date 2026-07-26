@@ -27,6 +27,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: software
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: |
@@ -34,19 +36,22 @@ jobs:
           sudo apt-get install -y \
             libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
             libxkbcommon-dev libssl-dev
+      # The Cargo workspace lives under software/; the binary lands in
+      # software/target/release. Licenses and docs stay at the repo root.
       - name: Build
+        working-directory: software
         run: cargo build --release -p shiori-gui
       # Windows ships shiori.exe in a .zip; Unix ships the `shiori` binary
       # in a .tar.gz. Both bundle the licenses and docs.
       - name: Package (Windows)
         if: runner.os == 'Windows'
-        run: Compress-Archive -Path target/release/shiori.exe, LICENSE-MIT, LICENSE-APACHE, README.md, CHANGELOG.md -DestinationPath shiori-${{ github.ref_name }}-${{ matrix.name }}.zip
+        run: Compress-Archive -Path software/target/release/shiori.exe, LICENSE-MIT, LICENSE-APACHE, README.md, CHANGELOG.md -DestinationPath shiori-${{ github.ref_name }}-${{ matrix.name }}.zip
       - name: Package (Unix)
         if: runner.os != 'Windows'
         run: |
           staging="shiori-${{ github.ref_name }}-${{ matrix.name }}"
           mkdir "$staging"
-          cp target/release/shiori LICENSE-MIT LICENSE-APACHE README.md CHANGELOG.md "$staging/"
+          cp software/target/release/shiori LICENSE-MIT LICENSE-APACHE README.md CHANGELOG.md "$staging/"
           tar czf "$staging.tar.gz" "$staging"
       - name: Upload artifact
         uses: actions/upload-artifact@v4

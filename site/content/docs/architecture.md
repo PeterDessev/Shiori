@@ -7,7 +7,7 @@ How Shiori is put together: an eleven-crate Cargo workspace over a single SQLite
 
 ## Workspace layout
 
-Eleven crates live under `crates/`, all sharing the workspace version, edition, and dependency set from the root `Cargo.toml`.
+Eleven crates live under `software/crates/`, all sharing the workspace version, edition, and dependency set from the workspace `software/Cargo.toml`.
 
 | Crate | Responsibility |
 |---|---|
@@ -49,11 +49,11 @@ shiori-packc ── shiori-pack             (CI tool, never shipped in the app)
 
 ## The LanguageService trait
 
-Since 0.2.0 every language behavior routes through one trait: `LanguageService` in `crates/shiori-lang/src/service.rs` — "everything Shiori asks of a language". Analysis (`analyze`, `tokenize_sentence`), phrase grouping and inflection description, the dictionary source, search transliteration (romaji → kana, betacode/Greeklish → polytonic Greek), lookup normalization, contractions, ruby annotation, and per-character reference cards are all trait methods; the defaults implement a plain alphabetic language, so implementations override only what their language actually needs. Two implementations exist: Japanese in `crates/shiori-nlp/src/japanese.rs` and the pack-backed `PackLanguage` in `crates/shiori-pack/src/language.rs`. `shiori-app` resolves the active language's service, and every import, lookup, and analysis flows through it.
+Since 0.2.0 every language behavior routes through one trait: `LanguageService` in `software/crates/shiori-lang/src/service.rs` — "everything Shiori asks of a language". Analysis (`analyze`, `tokenize_sentence`), phrase grouping and inflection description, the dictionary source, search transliteration (romaji → kana, betacode/Greeklish → polytonic Greek), lookup normalization, contractions, ruby annotation, and per-character reference cards are all trait methods; the defaults implement a plain alphabetic language, so implementations override only what their language actually needs. Two implementations exist: Japanese in `software/crates/shiori-nlp/src/japanese.rs` and the pack-backed `PackLanguage` in `software/crates/shiori-pack/src/language.rs`. `shiori-app` resolves the active language's service, and every import, lookup, and analysis flows through it.
 
 ## SQLite schema (v8)
 
-Defined in `crates/shiori-db/src/schema.rs`. Since v8 every user-facing table carries a language dimension and the reference caches are keyed by language or source, so a second language can neither collide with nor wipe another's data. Current tables:
+Defined in `software/crates/shiori-db/src/schema.rs`. Since v8 every user-facing table carries a language dimension and the reference caches are keyed by language or source, so a second language can neither collide with nor wipe another's data. Current tables:
 
 | Table | Purpose |
 |---|---|
@@ -88,7 +88,7 @@ When you change the schema: edit the base DDL to the new shape, bump `SCHEMA_VER
 
 ## GUI threading model
 
-The egui shell (`crates/shiori-gui/src/app.rs`) never blocks the UI thread. Anything slow — opening the database, first-run downloads, document import, dictionary/LLM calls, Ollama probing and pulls, Sources catalog fetches, backup/export, pack catalog fetches, pack installs/downloads/removals, Build-from-Wiktionary builds — runs on a spawned background thread that posts its result back over an `std::sync::mpsc` channel as a `Msg` variant (`AppOpened`, `ImportDone`, `ChatReply`, `OllamaPullProgress`, `TransferDone`, `PackCatalog`, …). The frame loop drains the receiver each frame and applies results to state. Startup itself is a small state machine (`Phase`: Starting → NeedsData → Downloading → Ready).
+The egui shell (`software/crates/shiori-gui/src/app.rs`) never blocks the UI thread. Anything slow — opening the database, first-run downloads, document import, dictionary/LLM calls, Ollama probing and pulls, Sources catalog fetches, backup/export, pack catalog fetches, pack installs/downloads/removals, Build-from-Wiktionary builds — runs on a spawned background thread that posts its result back over an `std::sync::mpsc` channel as a `Msg` variant (`AppOpened`, `ImportDone`, `ChatReply`, `OllamaPullProgress`, `TransferDone`, `PackCatalog`, …). The frame loop drains the receiver each frame and applies results to state. Startup itself is a small state machine (`Phase`: Starting → NeedsData → Downloading → Ready).
 
 ## Heavy work and build time
 
@@ -98,13 +98,17 @@ The egui shell (`crates/shiori-gui/src/app.rs`) never blocks the UI thread. Anyt
 
 ## Tests
 
+All cargo commands run from the `software/` directory, where the workspace
+lives.
+
 ```sh
+cd software
 cargo test --workspace                                # full suite
 cargo clippy --workspace --all-targets -- -D warnings # lints
 ```
 
 - **Unit tests** live inside each crate next to the code they cover (for example, the migration test in `shiori-db/src/schema.rs` verifies a v1 database gains the new columns and re-running `migrate` is a no-op).
-- **Integration test**: `crates/shiori-app/tests/pipeline.rs` exercises the whole pipeline end to end — the real lindera analyzer, an in-memory SQLite database, and fixture JMdict/frequency data — through import, lookup, status changes, and reviews.
-- **Golden token snapshot**: `crates/shiori-nlp/tests/token_snapshot.rs` (with its `fixtures/`) pins Japanese analysis output bit-for-bit, proving the `LanguageService` refactor changed nothing about tokenization.
-- **Real-database migration**: `crates/shiori-db/tests/real_db_migration.rs` runs the v8 migration against a real pre-0.2.0 database, including the `.v7-backup` safety copy.
+- **Integration test**: `software/crates/shiori-app/tests/pipeline.rs` exercises the whole pipeline end to end — the real lindera analyzer, an in-memory SQLite database, and fixture JMdict/frequency data — through import, lookup, status changes, and reviews.
+- **Golden token snapshot**: `software/crates/shiori-nlp/tests/token_snapshot.rs` (with its `fixtures/`) pins Japanese analysis output bit-for-bit, proving the `LanguageService` refactor changed nothing about tokenization.
+- **Real-database migration**: `software/crates/shiori-db/tests/real_db_migration.rs` runs the v8 migration against a real pre-0.2.0 database, including the `.v7-backup` safety copy.
 - **Smoke run** against real downloaded data: `cargo run -p shiori-app --example smoke -- <data-dir> <utf8-text-file> "<title>"`.

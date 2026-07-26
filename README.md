@@ -210,6 +210,7 @@ macOS; every tagged release builds and ships a binary for each platform.
 **Build from source**:
 
 ```sh
+cd software                           # the Cargo workspace lives here
 cargo build --release -p shiori-gui   # first build embeds the IPADIC
 ./target/release/shiori               # dictionary and needs network, once
 ```

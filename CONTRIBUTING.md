@@ -19,7 +19,12 @@ below exist to keep it that way.
   the MSVC C runtime — this is why the shipped exe runs without the VC++
   Redistributable.
 
+All cargo commands run from the `software/` directory, where the Cargo
+workspace lives (the root `.cargo/config.toml` still applies — cargo walks
+up to find it).
+
 ```sh
+cd software
 cargo build --release
 cargo run --release -p shiori-gui
 ```
@@ -42,7 +47,7 @@ cargo test --workspace                                 # tests
 
 New behavior needs tests. The pattern throughout the codebase is unit tests
 next to the code plus the end-to-end pipeline test in
-`crates/shiori-app/tests/pipeline.rs` — extend whichever fits.
+`software/crates/shiori-app/tests/pipeline.rs` — extend whichever fits.
 
 ## Commit style: atomic conventional commits
 

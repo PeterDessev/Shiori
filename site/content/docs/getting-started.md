@@ -26,6 +26,7 @@ The alternative to the release zip. You need Rust (rustc 1.88 or later) and
 a network connection for the first build.
 
 ```sh
+cd software
 cargo build --release -p shiori-gui
 cargo run --release -p shiori-gui
 ```

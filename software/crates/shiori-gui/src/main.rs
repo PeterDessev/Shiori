@@ -12,7 +12,7 @@ mod views;
 /// assets/icon/display/rounded-1024-light.png (no image decoder needed at runtime).
 fn app_icon() -> eframe::egui::IconData {
     eframe::egui::IconData {
-        rgba: include_bytes!("../../../assets/icon/desktop/shiori-64.rgba").to_vec(),
+        rgba: include_bytes!("../../../../assets/icon/desktop/shiori-64.rgba").to_vec(),
         width: 64,
         height: 64,
     }

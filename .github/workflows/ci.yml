@@ -17,12 +17,19 @@ jobs:
   lint:
     name: Format and lints (Linux)
     runs-on: ubuntu-latest
+    # The Cargo workspace lives under software/ (Project Organization
+    # Standard: host/pipeline code goes in software/).
+    defaults:
+      run:
+        working-directory: software
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: software
       - name: Install Linux dependencies
         run: |
           sudo apt-get update
@@ -41,9 +48,14 @@ jobs:
       fail-fast: false
       matrix:
         os: [windows-latest, macos-latest]
+    defaults:
+      run:
+        working-directory: software
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: software
       - name: Test
         run: cargo test --workspace

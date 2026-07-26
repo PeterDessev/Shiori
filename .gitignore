@@ -1,4 +1,5 @@
-/target
+# The Cargo workspace lives under software/ (Project Organization Standard).
+/software/target
 **/*.rs.bk
 *.pdb
 /data
