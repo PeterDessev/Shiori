@@ -83,6 +83,32 @@ pub(crate) struct ParsedFeed {
     pub entries: Vec<ParsedEntry>,
 }
 
+impl ParsedFeed {
+    /// For a navigation-only feed (a catalog root), the best subfeed to
+    /// browse into: one that looks like a popular / most-downloaded / all
+    /// listing, else the first navigation link. Used to reach the book
+    /// listing when the root only offers categories (e.g. Gutenberg's
+    /// Popular/Latest/Random).
+    pub fn browse_nav_href(&self) -> Option<&str> {
+        fn score(title: &str, href: &str) -> u8 {
+            let t = title.to_ascii_lowercase();
+            let h = href.to_ascii_lowercase();
+            if t.contains("popular") || h.contains("popular") || h.contains("download") {
+                0
+            } else if t.contains("all") || h.contains("all") {
+                1
+            } else {
+                2
+            }
+        }
+        self.entries
+            .iter()
+            .filter_map(|e| e.navigation_href().map(|h| (score(&e.title, h), h)))
+            .min_by_key(|(s, _)| *s)
+            .map(|(_, h)| h)
+    }
+}
+
 /// Resolve a (non-template) href against the feed's base URL.
 pub(crate) fn resolve(base: &Url, href: &str) -> String {
     base.join(href)
@@ -409,7 +435,48 @@ fn json_author(meta: &Value) -> String {
     }
 }
 
+/// Parse one OPDS 2.0 publication object into a [`ParsedEntry`]; `None`
+/// when it has no title.
+fn opds2_publication(p: &Value, base: &Url) -> Option<ParsedEntry> {
+    let meta = &p["metadata"];
+    let title = meta["title"]
+        .as_str()
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    if title.is_empty() {
+        return None;
+    }
+    let summary = meta["description"]
+        .as_str()
+        .or_else(|| meta["subtitle"].as_str())
+        .unwrap_or_default()
+        .to_string();
+    let mut links = Vec::new();
+    if let Some(ls) = p["links"].as_array() {
+        for l in ls {
+            if json_rel_contains(l, ACQUISITION_REL) || json_rel_contains(l, "acquisition") {
+                if let Some(href) = l["href"].as_str() {
+                    links.push(FeedLink {
+                        rel: ACQUISITION_REL.into(),
+                        mime: l["type"].as_str().unwrap_or_default().to_string(),
+                        href: resolve(base, href),
+                    });
+                }
+            }
+        }
+    }
+    Some(ParsedEntry {
+        title,
+        author: json_author(meta),
+        summary,
+        links,
+    })
+}
+
 /// Parse an OPDS 2.0 JSON feed into the shared [`ParsedFeed`] shape.
+/// Publications may be listed at the top level or nested inside `groups`
+/// (e.g. Open Library's "Trending"/"Classic" groups on its root feed).
 pub(crate) fn parse_opds2(v: &Value, base: &Url) -> ParsedFeed {
     let mut feed = ParsedFeed::default();
 
@@ -425,43 +492,16 @@ pub(crate) fn parse_opds2(v: &Value, base: &Url) -> ParsedFeed {
         }
     }
 
-    if let Some(pubs) = v["publications"].as_array() {
-        for p in pubs {
-            let meta = &p["metadata"];
-            let title = meta["title"]
-                .as_str()
-                .unwrap_or_default()
-                .trim()
-                .to_string();
-            if title.is_empty() {
-                continue;
+    for p in v["publications"].as_array().into_iter().flatten() {
+        if let Some(e) = opds2_publication(p, base) {
+            feed.entries.push(e);
+        }
+    }
+    for group in v["groups"].as_array().into_iter().flatten() {
+        for p in group["publications"].as_array().into_iter().flatten() {
+            if let Some(e) = opds2_publication(p, base) {
+                feed.entries.push(e);
             }
-            let summary = meta["description"]
-                .as_str()
-                .or_else(|| meta["subtitle"].as_str())
-                .unwrap_or_default()
-                .to_string();
-            let mut links = Vec::new();
-            if let Some(ls) = p["links"].as_array() {
-                for l in ls {
-                    if json_rel_contains(l, ACQUISITION_REL) || json_rel_contains(l, "acquisition")
-                    {
-                        if let Some(href) = l["href"].as_str() {
-                            links.push(FeedLink {
-                                rel: ACQUISITION_REL.into(),
-                                mime: l["type"].as_str().unwrap_or_default().to_string(),
-                                href: resolve(base, href),
-                            });
-                        }
-                    }
-                }
-            }
-            feed.entries.push(ParsedEntry {
-                title,
-                author: json_author(meta),
-                summary,
-                links,
-            });
         }
     }
     feed
@@ -605,5 +645,42 @@ mod tests {
         assert_eq!(hit.title, "Voyage au centre de la Terre");
         assert_eq!(hit.author, "Jules Verne");
         assert_eq!(hit.links[0].1, "https://example.org/assets/file.epub");
+    }
+
+    #[test]
+    fn parses_opds2_publications_nested_in_groups() {
+        // Open Library's root feed lists no top-level publications; the
+        // books live in `groups[].publications[]`.
+        let json = r#"{
+          "metadata": {"title": "Open Library"},
+          "publications": [],
+          "groups": [
+            {
+              "metadata": {"title": "Trending"},
+              "publications": [
+                {"metadata": {"title": "Book A", "author": {"name": "Author A"}},
+                 "links": [{"rel": "http://opds-spec.org/acquisition/open-access", "href": "/a.epub", "type": "application/epub+zip"}]},
+                {"metadata": {"title": "Borrow Only"},
+                 "links": [{"rel": "alternate", "href": "/loan", "type": "text/html"}]}
+              ]
+            },
+            {
+              "metadata": {"title": "Classic"},
+              "publications": [
+                {"metadata": {"title": "Book B", "author": [{"name": "Author B"}]},
+                 "links": [{"rel": "http://opds-spec.org/acquisition", "href": "/b.epub", "type": "application/epub+zip"}]}
+              ]
+            }
+          ]
+        }"#;
+        let v: Value = serde_json::from_str(json).unwrap();
+        let feed = parse_opds2(&v, &base());
+        // Three publications parsed across the two groups...
+        assert_eq!(feed.entries.len(), 3);
+        // ...but only the two with acquisition links are importable books.
+        let books: Vec<_> = feed.entries.iter().filter_map(|e| e.to_hit()).collect();
+        assert_eq!(books.len(), 2);
+        assert_eq!(books[0].title, "Book A");
+        assert_eq!(books[1].title, "Book B");
     }
 }

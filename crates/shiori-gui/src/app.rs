@@ -341,6 +341,13 @@ pub struct SourcesState {
     /// "Add distributor" form fields.
     pub new_opds_name: String,
     pub new_opds_url: String,
+    /// The browse key already auto-loaded for each source (e.g. "en" for
+    /// Gutenberg, or an OPDS feed URL), so an empty-query tab fetches its
+    /// browse listing exactly once — even when the listing comes back
+    /// empty — and reloads when the language or distributor changes.
+    pub gutendex_browsed: Option<String>,
+    pub ws_browsed: Option<String>,
+    pub opds_browsed: Option<String>,
 }
 
 impl SourcesState {
@@ -360,6 +367,9 @@ impl SourcesState {
         self.opds_selected = 0;
         self.new_opds_name.clear();
         self.new_opds_url.clear();
+        self.gutendex_browsed = None;
+        self.ws_browsed = None;
+        self.opds_browsed = None;
     }
 }
 
@@ -1510,9 +1520,10 @@ impl ShioriGui {
         });
     }
 
-    /// Search the active language's Wikisource in the background.
+    /// Search the active language's Wikisource in the background. An empty
+    /// query browses the most-viewed works.
     pub fn start_wikisource_search(&mut self, ctx: &egui::Context) {
-        if self.sources.ws_searching || self.sources.query.trim().is_empty() {
+        if self.sources.ws_searching {
             return;
         }
         let Some(app) = self.app.clone() else { return };
@@ -1531,9 +1542,10 @@ impl ShioriGui {
         });
     }
 
-    /// Search Project Gutenberg (Gutendex) for the active language.
+    /// Search Project Gutenberg (Gutendex) for the active language. An
+    /// empty query browses the most-downloaded books.
     pub fn start_gutendex_search(&mut self, ctx: &egui::Context) {
-        if self.sources.gutendex_searching || self.sources.query.trim().is_empty() {
+        if self.sources.gutendex_searching {
             return;
         }
         let Some(app) = self.app.clone() else { return };

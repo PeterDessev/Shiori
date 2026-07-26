@@ -52,6 +52,9 @@ pub struct WikisourceHit {
     pub title: String,
     pub snippet: String,
     pub wordcount: u64,
+    /// Daily pageviews, set for browse (most-viewed) results; `None` for
+    /// search results, which show a word count instead.
+    pub views: Option<u64>,
 }
 
 /// One Project Gutenberg book from a Gutendex search.
@@ -281,9 +284,13 @@ impl App {
     }
 
     /// Full-text search on the active language's Wikisource (mainspace),
-    /// with multi-part works collapsed to a single whole-book result.
+    /// with multi-part works collapsed to a single whole-book result. An
+    /// empty query browses the most-viewed works instead.
     pub fn search_wikisource(&self, query: &str) -> Result<Vec<WikisourceHit>> {
         let sub = self.wikisource_subdomain()?;
+        if query.trim().is_empty() {
+            return self.browse_wikisource(&sub);
+        }
         let api = format!("https://{sub}.wikisource.org/w/api.php");
         let response = agent()
             .get(&api)
@@ -310,6 +317,40 @@ impl App {
         let mut works = collapse_wikisource_hits(&hits);
         works.truncate(20);
         Ok(works)
+    }
+
+    /// Browse the active language's Wikisource by daily pageviews (the
+    /// PageViewInfo `mostviewed` list), restricted to mainspace works and
+    /// collapsed to whole works. Ranked most-viewed first.
+    fn browse_wikisource(&self, sub: &str) -> Result<Vec<WikisourceHit>> {
+        const TARGET: usize = 100;
+        let api = format!("https://{sub}.wikisource.org/w/api.php");
+        let json: serde_json::Value = agent()
+            .get(&api)
+            .query("action", "query")
+            .query("list", "mostviewed")
+            .query("pvimmetric", "pageviews")
+            .query("pvimlimit", "500")
+            // The Main Page is often the most-viewed page 0; fetch its
+            // title in the same call so it can be filtered out.
+            .query("meta", "siteinfo")
+            .query("siprop", "general")
+            .query("maxlag", "5")
+            .query("format", "json")
+            .query("formatversion", "2")
+            .call()
+            .map_err(|e| AppError::Invalid(format!("Wikisource browse failed: {e}")))?
+            .into_json()
+            .map_err(|e| AppError::Invalid(format!("Wikisource browse failed: {e}")))?;
+        let mainpage = json["query"]["general"]["mainpage"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
+        let entries = json["query"]["mostviewed"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        Ok(collapse_wikisource_views(&entries, &mainpage, TARGET))
     }
 
     /// Import a whole Wikisource work under the active language. The work
@@ -362,11 +403,16 @@ impl App {
     }
 
     /// Search Project Gutenberg through the Gutendex API, filtered to the
-    /// active language when Gutenberg indexes it.
+    /// active language when Gutenberg indexes it. An empty query browses
+    /// the most-downloaded books instead.
     pub fn search_gutendex(&self, query: &str) -> Result<Vec<GutendexHit>> {
+        let lang = books::book_lang_profile(self.active_lang()).gutendex_lang;
+        if query.trim().is_empty() {
+            return self.browse_gutendex(lang.as_deref());
+        }
         let mut req = agent().get(GUTENDEX_API).query("search", query);
-        if let Some(lang) = books::book_lang_profile(self.active_lang()).gutendex_lang {
-            req = req.query("languages", &lang);
+        if let Some(lang) = &lang {
+            req = req.query("languages", lang);
         }
         let json: serde_json::Value = req
             .call()
@@ -375,6 +421,47 @@ impl App {
             .map_err(|e| AppError::Invalid(format!("Gutenberg search failed: {e}")))?;
         let results = json["results"].as_array().cloned().unwrap_or_default();
         Ok(results.iter().filter_map(parse_gutendex_book).collect())
+    }
+
+    /// Browse Project Gutenberg's most-downloaded books for a language.
+    /// Gutendex sorts by descending `download_count` by default and pages
+    /// 32 at a time, so this follows the `next` links until it has ~100.
+    fn browse_gutendex(&self, lang: Option<&str>) -> Result<Vec<GutendexHit>> {
+        const TARGET: usize = 100;
+        let mut req = agent().get(GUTENDEX_API).query("sort", "popular");
+        if let Some(lang) = lang {
+            req = req.query("languages", lang);
+        }
+        let mut json: serde_json::Value = req
+            .call()
+            .map_err(|e| AppError::Invalid(format!("Gutenberg browse failed: {e}")))?
+            .into_json()
+            .map_err(|e| AppError::Invalid(format!("Gutenberg browse failed: {e}")))?;
+        let mut out = Vec::new();
+        loop {
+            for v in json["results"].as_array().into_iter().flatten() {
+                if let Some(hit) = parse_gutendex_book(v) {
+                    out.push(hit);
+                }
+            }
+            if out.len() >= TARGET {
+                break;
+            }
+            let Some(next) = json["next"].as_str().map(str::to_string) else {
+                break;
+            };
+            // A failed follow-up page ends the browse with what we have,
+            // rather than failing the whole listing.
+            json = match agent().get(&next).call() {
+                Ok(r) => match r.into_json() {
+                    Ok(j) => j,
+                    Err(_) => break,
+                },
+                Err(_) => break,
+            };
+        }
+        out.truncate(TARGET);
+        Ok(out)
     }
 
     /// Download a Gutenberg book and import it under the active language,
@@ -466,7 +553,27 @@ impl App {
         // No server search: list (and, with a query, locally filter) the
         // feed's own entries.
         let filter = (!query.is_empty()).then_some(query);
-        self.opds_hits(feed, &base, filter)
+        // Grab a browse-into link before `feed` is consumed, in case the
+        // root turns out to be navigation-only.
+        let browse_nav = query
+            .is_empty()
+            .then(|| feed.browse_nav_href().map(str::to_string))
+            .flatten();
+        let mut hits = self.opds_hits(feed, &base, filter)?;
+
+        // A navigation-only root (e.g. Project Gutenberg's OPDS, whose root
+        // is just Popular/Latest/Random) yields no books directly; dive one
+        // level into the most promising listing and resolve its books.
+        if hits.is_empty() {
+            if let Some(nav) = browse_nav {
+                if let Ok((c, b)) = fetch_opds(&nav) {
+                    let nav_base = Url::parse(&nav).unwrap_or_else(|_| base.clone());
+                    let listing = self.parse_opds_response(&c, &b, &nav_base);
+                    hits = self.opds_hits(listing, &nav_base, None)?;
+                }
+            }
+        }
+        Ok(hits)
     }
 
     /// Detect OPDS 2.0 (JSON) vs 1.x (Atom) from the content type/body and
@@ -491,11 +598,11 @@ impl App {
         base: &Url,
         filter: Option<&str>,
     ) -> Result<Vec<OpdsHit>> {
-        const MAX_HITS: usize = 50;
+        const MAX_HITS: usize = 100;
         // Number of navigation entries to follow when a feed lists only
         // subfeeds (bounded so a big catalog can't fan out into hundreds
         // of requests).
-        const MAX_FOLLOW: usize = 10;
+        const MAX_FOLLOW: usize = 25;
 
         let mut hits: Vec<OpdsHit> = feed.entries.iter().filter_map(|e| e.to_hit()).collect();
 
@@ -706,6 +813,7 @@ fn collapse_wikisource_hits(hits: &[serde_json::Value]) -> Vec<WikisourceHit> {
                     title: root.to_string(),
                     snippet: strip_tags(h["snippet"].as_str().unwrap_or("")),
                     wordcount,
+                    views: None,
                 },
             );
         }
@@ -714,6 +822,43 @@ fn collapse_wikisource_hits(hits: &[serde_json::Value]) -> Vec<WikisourceHit> {
         .into_iter()
         .filter_map(|r| by_root.remove(&r))
         .collect()
+}
+
+/// Collapse `mostviewed` entries into whole works ranked by pageviews:
+/// keep mainspace pages (`ns == 0`) other than the Main Page, dedupe to
+/// the root work (the highest-viewed part wins), and cap at `target`.
+fn collapse_wikisource_views(
+    entries: &[serde_json::Value],
+    mainpage: &str,
+    target: usize,
+) -> Vec<WikisourceHit> {
+    let mut seen = std::collections::HashSet::new();
+    let mut out = Vec::new();
+    for e in entries {
+        if e["ns"].as_i64() != Some(0) {
+            continue;
+        }
+        let Some(title) = e["title"].as_str() else {
+            continue;
+        };
+        if title == mainpage {
+            continue;
+        }
+        let root = title.split('/').next().unwrap_or(title).to_string();
+        if !seen.insert(root.clone()) {
+            continue;
+        }
+        out.push(WikisourceHit {
+            title: root,
+            snippet: String::new(),
+            wordcount: 0,
+            views: Some(e["count"].as_u64().unwrap_or(0)),
+        });
+        if out.len() >= target {
+            break;
+        }
+    }
+    out
 }
 
 /// A safe temp-download filename keyed on the book title, so concurrent
@@ -825,6 +970,32 @@ mod tests {
             "Alice_s_Adventures.epub"
         );
         assert_eq!(download_filename("", "pdf"), "opds.pdf");
+    }
+
+    #[test]
+    fn wikisource_browse_filters_and_ranks_by_views() {
+        let entries: Vec<serde_json::Value> = serde_json::from_str(
+            r#"[
+              {"ns": -1, "title": "Special:Search", "count": 43923},
+              {"ns": 0, "title": "Accueil", "count": 2148},
+              {"ns": 4, "title": "Wikisource:Accueil", "count": 900},
+              {"ns": 0, "title": "L'Odyssée/Chant I", "count": 500},
+              {"ns": 14, "title": "Catégorie:Romans", "count": 300},
+              {"ns": 0, "title": "L'Odyssée/Chant II", "count": 250},
+              {"ns": 0, "title": "Le Cimetière marin", "count": 192}
+            ]"#,
+        )
+        .unwrap();
+        let works = collapse_wikisource_views(&entries, "Accueil", 100);
+        // Special: (ns -1), Wikisource: (ns 4), Catégorie: (ns 14), and the
+        // Main Page ("Accueil") are all dropped; the two Odyssée chapters
+        // collapse to one work. Ranked by first-seen (most-viewed) order.
+        assert_eq!(works.len(), 2);
+        assert_eq!(works[0].title, "L'Odyssée");
+        assert_eq!(works[0].views, Some(500));
+        assert_eq!(works[0].wordcount, 0);
+        assert_eq!(works[1].title, "Le Cimetière marin");
+        assert_eq!(works[1].views, Some(192));
     }
 
     #[test]

@@ -103,9 +103,9 @@ impl ShioriGui {
                         "title, reading, or author — 坊っちゃん, なつめ…"
                     }
                     SourceTab::Aozora => "title, reading, or author…",
-                    SourceTab::Wikisource => "search this language's Wikisource…",
-                    SourceTab::Gutenberg => "search Project Gutenberg…",
-                    SourceTab::Opds => "search this catalog…",
+                    SourceTab::Wikisource => "search, or leave blank to browse popular…",
+                    SourceTab::Gutenberg => "search, or leave blank to browse popular…",
+                    SourceTab::Opds => "search, or leave blank to browse…",
                     SourceTab::Libraries => "",
                 };
                 ui.horizontal(|ui| {
@@ -194,9 +194,51 @@ impl ShioriGui {
                 }
                 _ => {}
             }
+        } else if self.sources.query.trim().is_empty() {
+            // Auto-browse: an empty query on a search tab loads a
+            // popularity-ranked listing, once per (tab, language,
+            // distributor), so the tab is never blank on open.
+            self.auto_browse(ctx, &code);
         }
         if let Some(job) = import {
             self.start_source_import(ctx, job);
+        }
+    }
+
+    /// Kick off a browse listing for the current tab if one hasn't been
+    /// loaded yet for this language/distributor.
+    fn auto_browse(&mut self, ctx: &egui::Context, code: &str) {
+        match self.sources.tab {
+            SourceTab::Wikisource => {
+                if !self.sources.ws_searching && self.sources.ws_browsed.as_deref() != Some(code) {
+                    self.sources.ws_browsed = Some(code.to_string());
+                    self.start_wikisource_search(ctx);
+                }
+            }
+            SourceTab::Gutenberg => {
+                if !self.sources.gutendex_searching
+                    && self.sources.gutendex_browsed.as_deref() != Some(code)
+                {
+                    self.sources.gutendex_browsed = Some(code.to_string());
+                    self.start_gutendex_search(ctx);
+                }
+            }
+            SourceTab::Opds => {
+                let url = self
+                    .settings
+                    .opds_for(code)
+                    .get(self.sources.opds_selected)
+                    .map(|c| c.url.clone());
+                if let Some(url) = url {
+                    if !self.sources.opds_searching
+                        && self.sources.opds_browsed.as_deref() != Some(url.as_str())
+                    {
+                        self.sources.opds_browsed = Some(url.clone());
+                        self.start_opds_search(ctx, url);
+                    }
+                }
+            }
+            _ => {}
         }
     }
 
@@ -217,8 +259,10 @@ impl ShioriGui {
         };
 
         let query = self.sources.query.trim();
-        let matches: Vec<&shiori_app::AozoraWork> = if query.is_empty() {
-            Vec::new()
+        // With no query, browse the first ~100 works; otherwise filter.
+        let browsing = query.is_empty();
+        let matches: Vec<&shiori_app::AozoraWork> = if browsing {
+            catalog.iter().take(100).collect()
         } else {
             catalog
                 .iter()
@@ -231,15 +275,15 @@ impl ShioriGui {
                 .collect()
         };
 
-        if query.is_empty() {
+        if browsing {
             ui.weak(format!(
-                "{} public-domain works available. Search by title, reading, \
-                 or author.",
+                "Browsing {} of {} public-domain works — search by title, \
+                 reading, or author to narrow.",
+                matches.len(),
                 catalog.len()
             ));
-            return;
-        }
-        if matches.is_empty() {
+            ui.add_space(4.0);
+        } else if matches.is_empty() {
             ui.weak("No matches in the catalog.");
             return;
         }
@@ -271,11 +315,15 @@ impl ShioriGui {
         import: &mut Option<SourceImport>,
     ) {
         if self.sources.ws_results.is_empty() {
-            ui.weak(format!(
-                "Search the {lang_name} Wikisource — classic literature, \
-                 historical documents, speeches, law texts. Multi-part books \
-                 are shown once and imported whole."
-            ));
+            if self.sources.ws_searching {
+                loading(ui, &format!("Loading the most-read {lang_name} works…"));
+            } else {
+                ui.weak(format!(
+                    "Search the {lang_name} Wikisource — classic literature, \
+                     historical documents, speeches, law texts. Multi-part books \
+                     are shown once and imported whole."
+                ));
+            }
             return;
         }
         egui::ScrollArea::vertical()
@@ -291,7 +339,10 @@ impl ShioriGui {
                             *import = Some(SourceImport::Wikisource(hit.title.clone()));
                         }
                         ui.label(egui::RichText::new(&hit.title).strong());
-                        ui.weak(format!("{} words", hit.wordcount));
+                        match hit.views {
+                            Some(v) => ui.weak(format!("{v} views/day")),
+                            None => ui.weak(format!("{} words", hit.wordcount)),
+                        };
                     });
                     if !hit.snippet.is_empty() {
                         ui.weak(&hit.snippet);
@@ -303,10 +354,14 @@ impl ShioriGui {
 
     fn gutendex_results(&mut self, ui: &mut egui::Ui, import: &mut Option<SourceImport>) {
         if self.sources.gutendex_results.is_empty() {
-            ui.weak(
-                "Search Project Gutenberg — tens of thousands of public-domain \
-                 books. Results are filtered to this language.",
-            );
+            if self.sources.gutendex_searching {
+                loading(ui, "Loading the most-downloaded books…");
+            } else {
+                ui.weak(
+                    "Search Project Gutenberg — tens of thousands of public-domain \
+                     books. Results are filtered to this language.",
+                );
+            }
             return;
         }
         egui::ScrollArea::vertical()
@@ -381,7 +436,14 @@ impl ShioriGui {
             ui.add_space(6.0);
 
             if self.sources.opds_results.is_empty() {
-                ui.weak("Enter a search above to query this distributor.");
+                if self.sources.opds_searching {
+                    loading(ui, "Loading books from this distributor…");
+                } else {
+                    ui.weak(
+                        "No books found in this distributor's feed. Try a search \
+                         above, or pick another distributor.",
+                    );
+                }
             } else {
                 egui::ScrollArea::vertical()
                     .auto_shrink([false; 2])
@@ -496,6 +558,14 @@ fn tab_label(tab: SourceTab) -> &'static str {
         SourceTab::Opds => "OPDS",
         SourceTab::Libraries => "Libraries",
     }
+}
+
+/// A spinner with a weak message, for pending network listings.
+fn loading(ui: &mut egui::Ui, msg: &str) {
+    ui.horizontal(|ui| {
+        ui.spinner();
+        ui.weak(msg);
+    });
 }
 
 fn library_row(ui: &mut egui::Ui, lib: &shiori_app::Library) {

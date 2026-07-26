@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Browse the book sources without searching.** Each tab in "Find books
+  online" now loads a listing as soon as you open it, with an empty search
+  box, ranked by popularity where the source exposes one: Project Gutenberg
+  by download count, Wikisource by daily pageviews (shown as "N views/day"),
+  OPDS by the distributor's feed (diving into a popular/most-downloaded
+  subfeed when the catalog root only offers categories, and reading OPDS 2.0
+  `groups`), and Aozora Bunko by catalog order. A listing loads once per
+  tab, language, and distributor, and refreshes when you switch either;
+  typing a query searches as before.
+
 ## [0.4.0] - 2026-07-22
 
 ### Added

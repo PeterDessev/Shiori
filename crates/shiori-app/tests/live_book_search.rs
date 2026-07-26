@@ -101,3 +101,73 @@ fn opds_openlibrary_json_search() {
     }
     assert!(!hits.is_empty(), "expected Open Library OPDS 2.0 results");
 }
+
+// ── Browse mode (empty query) ────────────────────────────────────────
+
+#[test]
+#[ignore = "hits gutendex.com"]
+fn gutendex_browse_ranks_by_downloads() {
+    let app = app();
+    let hits = app.search_gutendex("").expect("gutendex browse");
+    println!("gutendex browse (ja): {} books", hits.len());
+    assert!(!hits.is_empty(), "browse should list popular books");
+    // download_count must be non-increasing (ranked most-downloaded first).
+    for w in hits.windows(2) {
+        assert!(
+            w[0].download_count >= w[1].download_count,
+            "not sorted by downloads"
+        );
+    }
+    println!(
+        "  #1: {} ({} downloads)",
+        hits[0].title, hits[0].download_count
+    );
+}
+
+#[test]
+#[ignore = "hits ja.wikisource.org"]
+fn wikisource_browse_ranks_by_views() {
+    let app = app();
+    let hits = app.search_wikisource("").expect("wikisource browse");
+    println!("ja.wikisource browse: {} works", hits.len());
+    assert!(!hits.is_empty(), "browse should list most-viewed works");
+    assert!(
+        hits.iter()
+            .all(|h| h.views.is_some() && !h.title.contains('/')),
+        "browse results should carry view counts and be whole works"
+    );
+    println!(
+        "  #1: {} ({} views/day)",
+        hits[0].title,
+        hits[0].views.unwrap()
+    );
+}
+
+#[test]
+#[ignore = "hits www.gutenberg.org OPDS (nav-only, two-hop)"]
+fn opds_browse_gutenberg() {
+    let app = app();
+    let hits = app
+        .search_opds("https://www.gutenberg.org/ebooks.opds/", "")
+        .expect("opds browse gutenberg");
+    println!("opds browse gutenberg: {} books", hits.len());
+    assert!(
+        !hits.is_empty(),
+        "browsing the Gutenberg OPDS root should find books"
+    );
+    assert!(hits.iter().any(|h| h.best_link().is_some()));
+}
+
+#[test]
+#[ignore = "hits openlibrary.org OPDS 2.0 (groups)"]
+fn opds_browse_openlibrary_groups() {
+    let app = app();
+    let hits = app
+        .search_opds("https://openlibrary.org/opds", "")
+        .expect("opds browse openlibrary");
+    println!("opds browse openlibrary: {} downloadable books", hits.len());
+    assert!(
+        !hits.is_empty(),
+        "root groups should yield open-access books"
+    );
+}
