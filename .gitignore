@@ -11,5 +11,9 @@
 # Zola build output for the website
 /site/public
 
+# Packaged desktop artifacts (scripts/package-desktop.*, release.yml)
+/shiori-*.zip
+/shiori-*.tar.gz
+
 # README Gif Fabrication (lots of large files)
 /assets/Fabrication
